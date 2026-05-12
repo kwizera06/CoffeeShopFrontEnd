@@ -23,11 +23,11 @@
   --accent-bg:        rgba(196, 164, 132, 0.12);
   --accent-border:    rgba(196, 164, 132, 0.30);
 
-  /* Gradients */
+  /* Gradients - Brightened */
   --gradient-brand:   linear-gradient(135deg, #3E2723 0%, #2C1810 100%);
-  --gradient-caramel: linear-gradient(135deg, #6F4E37 0%, #5D3A1A 100%);
-  --gradient-warm:    linear-gradient(160deg, rgba(196,164,132,0.1) 0%, rgba(245,235,221,0) 60%);
-  --gradient-card:    linear-gradient(145deg, #2A1A0E 0%, #1E0E04 100%);
+  --gradient-caramel: linear-gradient(135deg, #6F4E37 0%, #B08D6A 100%);
+  --gradient-warm:    linear-gradient(160deg, rgba(196,164,132,0.05) 0%, rgba(245,235,221,0) 60%);
+  --gradient-card:    linear-gradient(145deg, #FFFFFF 0%, #FDFBF7 100%);
 
   /* Glass effect */
   --glass-bg:         rgba(255,255,255,0.07);
@@ -49,24 +49,24 @@
   --info-border:      rgba(33, 150, 243, 0.25);
 
   /* Surfaces */
-  --bg-page:          #120600; /* Deepest Espresso Black */
-  --bg-card:          #251508; /* Lifted Espresso Card — visible against page */
-  --bg-sidebar:       #0A0300; /* Almost Black Sidebar */
-  --bg-topbar:        #1E0C04;
-  --bg-input:         rgba(255, 255, 255, 0.07);
-  --bg-hover:         rgba(255, 255, 255, 0.08);
-  --bg-active:        rgba(196, 164, 132, 0.18);
+  --bg-page:          #FDFBF7; /* Soft Cream - lighter page */
+  --bg-card:          #FFFFFF; /* Pure White Card */
+  --bg-sidebar:       #2A1810; /* Keep elegant dark sidebar but refine */
+  --bg-topbar:        #FFFFFF; /* White topbar */
+  --bg-input:         #FFFFFF; /* White Inputs */
+  --bg-hover:         #F5EBDD; /* Cream hover */
+  --bg-active:        rgba(196, 164, 132, 0.22);
 
-  /* Text - inverted for dark mode */
-  --text-primary:     #F5EBDD; /* Cream text on dark */
-  --text-secondary:   #FFFFFF; 
-  --text-muted:       rgba(245, 235, 221, 0.6);
-  --text-on-dark:     #FFFFFF;
+  /* Text - even darker for maximum contrast */
+  --text-primary:     #1A0A02; /* Almost Black Coffee */
+  --text-secondary:   #2C1810; 
+  --text-muted:       rgba(26, 10, 2, 0.65);
+  --text-on-dark:     #FAF6F0;
 
   /* Borders */
-  --border:           rgba(196, 164, 132, 0.14);
-  --border-strong:    rgba(196, 164, 132, 0.28);
-  --border-focus:     #C4A484;
+  --border:           rgba(44, 24, 16, 0.08);
+  --border-strong:    rgba(44, 24, 16, 0.15);
+  --border-focus:     #6F4E37;
 
   /* Shadows */
   --shadow-sm:        0 1px 4px rgba(28, 10, 0, 0.06), 0 0 0 1px rgba(28,10,0,0.03);
@@ -233,7 +233,8 @@ body {
   gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  color: rgba(250, 246, 239, 0.5);
+  color: var(--text-on-dark);
+  opacity: 0.6;
   text-decoration: none;
   font-size: 13.5px;
   font-weight: 400;

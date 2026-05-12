@@ -76,8 +76,10 @@ export async function api(path, options = {}) {
     return null
   }
   const text = await res.text()
-  if (!text) {
-    return null
+  if (!text) return null;
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
   }
-  return JSON.parse(text)
 }

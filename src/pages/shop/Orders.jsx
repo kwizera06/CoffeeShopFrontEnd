@@ -16,7 +16,7 @@ export default function Orders() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const allowed = role === 'WAITER' || role === 'SHOP_ADMIN'
+  const allowed = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
   const shopName = context?.name
 
   const reloadMenu = useCallback(async () => {
@@ -135,37 +135,70 @@ export default function Orders() {
       {error ? <div className="error">{error}</div> : null}
 
       <div className="billing-grid">
-        <div className="menu-grid">
-          {menu.map((m) => {
-            const qty = qtyById[m.id] ?? 0
-            const getItemIcon = (name) => {
-              const n = name.toLowerCase();
-              if (n.includes('cake') || n.includes('muffin') || n.includes('croissant')) return '🥐';
-              if (n.includes('tea')) return '🍵';
-              if (n.includes('ice') || n.includes('cold') || n.includes('shake')) return '🥤';
-              if (n.includes('latte') || n.includes('capu') || n.includes('mocha')) return '☕';
-              if (n.includes('pizza') || n.includes('burger') || n.includes('food')) return '🍔';
-              return '☕';
-            }
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+          {['DRINK', 'FOOD'].map((group) => {
+            const groupTitle = group === 'DRINK' ? '☕ Drinks' : '🍔 Food';
+            const groupItems = menu.filter(m => (m.category_group || 'DRINK') === group);
+            if (groupItems.length === 0) return null;
+
+            // Sort and unique categories within the group
+            const categories = [...new Set(groupItems.map(m => m.category || 'Uncategorized'))].sort();
+
             return (
-              <div key={m.id} className={`menu-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
-                <div className="row-between">
-                  <div className="menu-card-emoji">{getItemIcon(m.name)}</div>
-                  {qty > 0 && <div className="menu-card-badge">{qty}</div>}
-                </div>
-                <div className="menu-card-title">{m.name}</div>
-                <div className="menu-card-footer">
-                  <div className="menu-card-price">{Number(m.price).toLocaleString()} RWF</div>
-                </div>
-                {qty > 0 && (
-                  <div className="qty-row" style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="qty-btn minus" onClick={() => setQty(m.id, qty - 1)}>−</button>
-                    <div className="qty-val">{qty}</div>
-                    <button type="button" className="qty-btn plus" onClick={() => setQty(m.id, qty + 1)}>+</button>
-                  </div>
-                )}
+              <div key={group} className="stack" style={{ gap: 20 }}>
+                <h2 style={{ fontSize: 24, paddingBottom: 8, borderBottom: '2px solid var(--caramel)', color: 'var(--mahogany)' }}>
+                   {groupTitle}
+                </h2>
+                
+                {categories.map(cat => {
+                   const catItems = groupItems.filter(m => (m.category || 'Uncategorized') === cat);
+                   return (
+                     <div key={cat} className="stack" style={{ gap: 12 }}>
+                        <h3 className="muted" style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                          — {cat}
+                        </h3>
+                        <div className="menu-grid">
+                          {catItems.map((m) => {
+                            const qty = qtyById[m.id] ?? 0;
+                            const getItemIcon = (name, category) => {
+                              const n = name.toLowerCase();
+                              const c = (category || '').toLowerCase();
+                              if (c.includes('coffee')) return '☕';
+                              if (c.includes('tea')) return '🍵';
+                              if (c.includes('soft') || c.includes('juice')) return '🥤';
+                              if (c.includes('beer') || c.includes('alcohol')) return '🍺';
+                              if (c.includes('fast') || c.includes('burger') || n.includes('burger')) return '🍔';
+                              if (c.includes('bakery') || c.includes('dessert')) return '🥐';
+                              if (c.includes('main') || c.includes('meal')) return '🍲';
+                              if (c.includes('snack')) return '🍿';
+                              return '☕';
+                            }
+                            return (
+                              <div key={m.id} className={`menu-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
+                                <div className="row-between">
+                                  <div className="menu-card-emoji">{getItemIcon(m.name, m.category)}</div>
+                                  {qty > 0 && <div className="menu-card-badge">{qty}</div>}
+                                </div>
+                                <div className="menu-card-title">{m.name}</div>
+                                <div className="menu-card-footer">
+                                  <div className="menu-card-price">{Number(m.price).toLocaleString()} RWF</div>
+                                </div>
+                                {qty > 0 && (
+                                  <div className="qty-row" style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                                    <button type="button" className="qty-btn minus" onClick={() => setQty(m.id, qty - 1)}>−</button>
+                                    <div className="qty-val">{qty}</div>
+                                    <button type="button" className="qty-btn plus" onClick={() => setQty(m.id, qty + 1)}>+</button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                     </div>
+                   );
+                })}
               </div>
-            )
+            );
           })}
         </div>
 

@@ -32,8 +32,8 @@ function Shell() {
     nav('/login', { replace: true })
   }
 
-  const showOrders = role === 'WAITER' || role === 'SHOP_ADMIN'
-  const showBilling = role === 'CASHIER' || role === 'SHOP_ADMIN' || role === 'WAITER'
+  const showOrders = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
+  const showBilling = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
   const showOwner = role === 'SHOP_ADMIN'
 
   // User avatar initials

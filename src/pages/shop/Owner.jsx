@@ -27,12 +27,32 @@ export default function Owner() {
   const [staff, setStaff] = useState([])
   const [ingredients, setIngredients] = useState([])
 
-  const [menuForm, setMenuForm] = useState({ id: '', name: '', price: '', available: true })
+  const [menuForm, setMenuForm] = useState({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
+  const [tempRecipeLine, setTempRecipeLine] = useState({ ingredient_id: '', quantity_required: '' })
+  
+  const SUB_CATEGORIES = [
+    'Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Soft Drinks', 
+    'Beer & Alcohol', 'Juice & Smoothies', 'Fast Food', 
+    'Main Food / Meals', 'Bakery & Desserts', 'Snacks'
+  ]
+
+  const CATEGORY_MAP = {
+    'Hot Coffee': 'DRINK',
+    'Iced Coffee': 'DRINK',
+    'Tea & Hot Drinks': 'DRINK',
+    'Soft Drinks': 'DRINK',
+    'Beer & Alcohol': 'DRINK',
+    'Juice & Smoothies': 'DRINK',
+    'Fast Food': 'FOOD',
+    'Main Food / Meals': 'FOOD',
+    'Bakery & Desserts': 'FOOD',
+    'Snacks': 'FOOD'
+  }
   const [staffForm, setStaffForm] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'WAITER',
+    role: 'CASHIER',
   })
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0 })
   
@@ -133,7 +153,10 @@ export default function Owner() {
     const payload = {
       name: menuForm.name,
       price: Number(menuForm.price),
+      category: menuForm.category,
+      category_group: CATEGORY_MAP[menuForm.category] || 'DRINK',
       available: menuForm.available,
+      recipe: menuForm.productRecipe
     }
     try {
       if (menuForm.id) {
@@ -141,7 +164,7 @@ export default function Owner() {
       } else {
         await api('/api/shop/menu', { method: 'POST', body: JSON.stringify(payload) })
       }
-      setMenuForm({ id: '', name: '', price: '', available: true })
+      setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true })
       setSelectedRecipeItem(null)
       await reloadCore()
     } catch (err) {
@@ -162,8 +185,20 @@ export default function Owner() {
     }
   }
 
-  function editMenu(mi) {
-    setMenuForm({ id: mi.id, name: mi.name, price: String(mi.price), available: mi.available })
+  async function editMenu(mi) {
+    let currentRecipe = [];
+    try {
+      currentRecipe = await api(`/api/shop/owner/recipes/${mi.id}`);
+    } catch(e) {}
+
+    setMenuForm({ 
+      id: mi.id, 
+      name: mi.name, 
+      price: String(mi.price), 
+      category: mi.category || 'Hot Coffee',
+      available: mi.available,
+      productRecipe: currentRecipe.map(r => ({ ingredient_id: r.ingredient_id, quantity_required: r.quantity_required, name: r.ingredients?.name, unit: r.ingredients?.unit }))
+    })
     setSelectedRecipeItem(mi)
   }
 
@@ -172,7 +207,7 @@ export default function Owner() {
     setError('')
     try {
       await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(staffForm) })
-      setStaffForm({ name: '', email: '', password: '', role: 'WAITER' })
+      setStaffForm({ name: '', email: '', password: '', role: 'CASHIER' })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -247,6 +282,15 @@ export default function Owner() {
               />
             </label>
             <label className="field">
+              <span>Category</span>
+              <select 
+                value={menuForm.category} 
+                onChange={(e) => setMenuForm((f) => ({ ...f, category: e.target.value }))}
+              >
+                {SUB_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </label>
+            <label className="field">
               <span>Price</span>
               <input
                 type="number"
@@ -265,13 +309,73 @@ export default function Owner() {
               />
               <span>Available</span>
             </label>
+            <div className="span-2 card" style={{ padding: 16, background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+               <h4 style={{ marginBottom: 12 }}>📜 Recipe (Inventory Deduction)</h4>
+               
+               <div className="grid-form" style={{ gridTemplateColumns: '2fr 1fr auto', alignItems: 'flex-end', gap: 10 }}>
+                  <label className="field">
+                    <span>Ingredient</span>
+                    <select 
+                      value={tempRecipeLine.ingredient_id} 
+                      onChange={e => setTempRecipeLine(f => ({ ...f, ingredient_id: e.target.value }))}
+                    >
+                      <option value="">-- Select --</option>
+                      {ingredients.map(ing => (
+                        <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Qty</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={tempRecipeLine.quantity_required} 
+                      onChange={e => setTempRecipeLine(f => ({ ...f, quantity_required: e.target.value }))} 
+                    />
+                  </label>
+                  <button 
+                    type="button" 
+                    className="btn ghost" 
+                    style={{ height: 42 }}
+                    onClick={() => {
+                      if (!tempRecipeLine.ingredient_id || !tempRecipeLine.quantity_required) return;
+                      const ing = ingredients.find(x => x.id === tempRecipeLine.ingredient_id);
+                      setMenuForm(f => ({
+                        ...f,
+                        productRecipe: [...f.productRecipe, { ...tempRecipeLine, name: ing?.name, unit: ing?.unit }]
+                      }))
+                      setTempRecipeLine({ ingredient_id: '', quantity_required: '' })
+                    }}
+                  >
+                    Add
+                  </button>
+               </div>
+
+               <div className="stack" style={{ marginTop: 12, gap: 8 }}>
+                 {menuForm.productRecipe.map((line, idx) => (
+                   <div key={idx} className="row-between" style={{ padding: '8px 12px', background: 'var(--bg-panel)', borderRadius: 8, fontSize: 13, border: '1px solid var(--border)' }}>
+                      <span><strong>{line.name}</strong>: {line.quantity_required} {line.unit}</span>
+                      <button 
+                        type="button" 
+                        className="btn warn tiny" 
+                        onClick={() => setMenuForm(f => ({ ...f, productRecipe: f.productRecipe.filter((_, i) => i !== idx) }))}
+                      >
+                        Remove
+                      </button>
+                   </div>
+                 ))}
+                 {menuForm.productRecipe.length === 0 && <div className="muted italic text-sm">No ingredients added yet.</div>}
+               </div>
+            </div>
+
             <div className="span-2 row-actions">
               <button className="btn primary xl" type="submit">
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
               {menuForm.id ? (
                 <button type="button" className="btn ghost" onClick={() => {
-                  setMenuForm({ id: '', name: '', price: '', available: true })
+                  setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
                   setSelectedRecipeItem(null)
                 }}>
                   Done / Close
@@ -363,6 +467,7 @@ export default function Owner() {
           <div className="table owner-menu-table">
             <div className="row head">
               <div>Name</div>
+              <div>Category</div>
               <div>Price</div>
               <div>Avail</div>
               <div></div>
@@ -370,6 +475,7 @@ export default function Owner() {
             {menu.map((m) => (
               <div key={m.id} className="row">
                 <div style={{ fontWeight: 600 }}>{m.name}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{m.category || 'Uncategorized'}</div>
                 <div>{Number(m.price).toLocaleString()} RWF</div>
                 <div>
                   <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`}>
@@ -418,8 +524,7 @@ export default function Owner() {
             <label className="field">
               <span>Role</span>
               <select value={staffForm.role} onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}>
-                <option value="WAITER">Waiter</option>
-                <option value="CASHIER">Cashier</option>
+                <option value="CASHIER">Shop Staff (Waiter + Billing)</option>
               </select>
             </label>
             <div className="span-2">
