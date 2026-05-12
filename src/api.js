@@ -49,6 +49,8 @@ async function parseError(res) {
   }
 }
 
+const BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export async function api(path, options = {}) {
   const token = getToken()
   const headers = new Headers(options.headers)
@@ -58,7 +60,11 @@ export async function api(path, options = {}) {
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
-  const res = await fetch(path, { ...options, headers })
+  
+  // Ensure we don't double up on /api/ if path already includes it
+  const fullPath = path.startsWith('http') ? path : `${BASE_URL}${path}`
+  
+  const res = await fetch(fullPath, { ...options, headers })
   if (res.status === 401) {
     clearSession()
   }

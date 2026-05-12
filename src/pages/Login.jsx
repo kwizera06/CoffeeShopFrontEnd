@@ -51,19 +51,7 @@ export default function Login() {
       if (!tok) {
         throw new Error('No Supabase session')
       }
-      const meRes = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${tok}` } })
-      const bodyText = await meRes.text()
-      if (!meRes.ok) {
-        let msg = bodyText || meRes.statusText
-        try {
-          const parsed = JSON.parse(bodyText)
-          msg = parsed.error ?? msg
-        } catch {
-          /* ignore */
-        }
-        throw new Error(msg || 'Could not load profile')
-      }
-      const me = JSON.parse(bodyText)
+      const me = await api('/api/auth/me', { headers: { Authorization: `Bearer ${tok}` } })
       setSession({
         token: tok,
         role: me.role,
