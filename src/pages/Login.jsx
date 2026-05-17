@@ -180,6 +180,8 @@ export default function Login() {
 function navigateByRole(nav, role) {
   if (role === 'PLATFORM_ADMIN') {
     nav('/admin', { replace: true })
+  } else if (role === 'SHOP_ADMIN') {
+    nav('/app/admin', { replace: true })
   } else if (role === 'CASHIER') {
     nav('/app/billing', { replace: true })
   } else {

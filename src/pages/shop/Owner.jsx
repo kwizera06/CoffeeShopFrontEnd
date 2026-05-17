@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
 import { supabase } from '../../supabaseClient'
 import {
@@ -14,18 +14,23 @@ import {
   Pie,
   Cell,
   Legend,
+  AreaChart,
+  Area,
 } from 'recharts'
 
 export default function Owner() {
   const nav = useNavigate()
   const { role } = getSession()
-  const [tab, setTab] = useState('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab') || 'overview'
+  const setTab = (t) => setSearchParams({ tab: t })
   const [error, setError] = useState('')
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
   const [staff, setStaff] = useState([])
   const [ingredients, setIngredients] = useState([])
+  const [requestedOrders, setRequestedOrders] = useState([])
 
   const [menuForm, setMenuForm] = useState({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
   const [tempRecipeLine, setTempRecipeLine] = useState({ ingredient_id: '', quantity_required: '' })
@@ -49,12 +54,13 @@ export default function Owner() {
     'Snacks': 'FOOD'
   }
   const [staffForm, setStaffForm] = useState({
+    id: '',
     name: '',
     email: '',
     password: '',
     role: 'CASHIER',
   })
-  const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0 })
+  const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })
   
   const [selectedRecipeItem, setSelectedRecipeItem] = useState(null)
   const [recipeLines, setRecipeLines] = useState([])
@@ -69,12 +75,15 @@ export default function Owner() {
   const [dailyRows, setDailyRows] = useState([])
   const [monthlyRows, setMonthlyRows] = useState([])
   const [charts, setCharts] = useState({ hourly: [], topProducts: [] })
+  const [shifts, setShifts] = useState([])
+  const [categorySales, setCategorySales] = useState({})
+  const [methodSales, setMethodSales] = useState({ Cash: 0, MoMo: 0, POS: 0, Total: 0 })
 
   const allowed = role === 'SHOP_ADMIN'
 
   const reloadCore = useCallback(async () => {
     const [o, m, s, i] = await Promise.all([
-      api('/api/shop/owner/overview'),
+      api(`/api/shop/owner/overview?date=${reportDay}`),
       api('/api/shop/menu'),
       api('/api/shop/staff'),
       api('/api/shop/owner/inventory'),
@@ -83,7 +92,7 @@ export default function Owner() {
     setMenu(m)
     setStaff(s)
     setIngredients(i)
-  }, [])
+  }, [reportDay])
 
   useEffect(() => {
     if (!allowed) {
@@ -131,21 +140,67 @@ export default function Owner() {
     if (!allowed) {
       return
     }
-    if (tab !== 'reports') {
+    if (tab !== 'reports' && tab !== 'overview') {
       return
     }
-    Promise.all([
-      api(`/api/shop/owner/reports/daily?date=${reportDay}`),
-      api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
-      api(`/api/shop/owner/reports/charts?date=${reportDay}`),
-    ])
-      .then(([d, moon, c]) => {
-        setDailyRows(d)
-        setMonthlyRows(moon)
-        setCharts(c)
-      })
-      .catch((e) => setError(e.message))
-  }, [allowed, tab, reportDay, month.year, month.month])
+      Promise.all([
+        api(`/api/shop/owner/reports/daily?date=${reportDay}`),
+        api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
+        api(`/api/shop/owner/reports/charts?date=${reportDay}`),
+        api(`/api/shop/shifts?date=${reportDay}`),
+      ])
+        .then(([d, moon, c, s]) => {
+          setDailyRows(d)
+          setMonthlyRows(moon)
+          setCharts(c)
+          setShifts(s)
+          
+          // Calculate Category & Method Sales from Daily
+          const catMap = {}
+          const metMap = { Cash: 0, MoMo: 0, POS: 0, Total: 0 }
+          d.forEach(row => {
+            metMap[row.methodLabel] = (metMap[row.methodLabel] || 0) + Number(row.amount)
+            metMap.Total += Number(row.amount)
+            if (row.rawItems) {
+              row.rawItems.forEach(item => {
+                const cat = item.category || 'Uncategorized'
+                catMap[cat] = (catMap[cat] || 0) + (Number(item.price) * (item.qty || 1))
+              })
+            }
+          })
+          setCategorySales(catMap)
+          setMethodSales(metMap)
+        })
+        .catch((e) => setError(e.message))
+    }, [allowed, tab, reportDay, month.year, month.month])
+
+  const fetchRequestedOrders = useCallback(async () => {
+    try {
+      const data = await api('/api/shop/requisitions');
+      setRequestedOrders(data || []);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (allowed && tab === 'requested_order') {
+      fetchRequestedOrders();
+    }
+  }, [allowed, tab, fetchRequestedOrders]);
+
+  async function updateRequestedOrderStatus(id, status) {
+    setError('');
+    try {
+      await api(`/api/shop/requisitions/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
+      await fetchRequestedOrders();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function saveMenu(e) {
     e.preventDefault()
@@ -202,12 +257,37 @@ export default function Owner() {
     setSelectedRecipeItem(mi)
   }
 
-  async function addStaff(e) {
+  async function saveStaff(e) {
     e.preventDefault()
     setError('')
     try {
-      await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(staffForm) })
-      setStaffForm({ name: '', email: '', password: '', role: 'CASHIER' })
+      if (staffForm.id) {
+        await api(`/api/shop/staff/${staffForm.id}`, { method: 'PUT', body: JSON.stringify(staffForm) })
+      } else {
+        await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(staffForm) })
+      }
+      setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })
+      await reloadCore()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function editStaff(u) {
+    setStaffForm({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      password: '', // Don't show hashed password, leave blank for 'no change'
+      role: u.role
+    })
+  }
+
+  async function deleteStaff(userId) {
+    if (!window.confirm('Are you sure you want to remove this staff member?')) return;
+    setError('')
+    try {
+      await api(`/api/shop/staff/${userId}`, { method: 'DELETE' })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -215,57 +295,291 @@ export default function Owner() {
   }
 
   return (
-    <div className="panel owner">
-      <h2>Admin</h2>
-      <div className="segmented xl owner-tabs">
-        <button type="button" className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>
-          <span>📊</span> Overview
-        </button>
-        <button type="button" className={tab === 'menu' ? 'on' : ''} onClick={() => setTab('menu')}>
-          <span>🍽️</span> Menu
-        </button>
-        <button type="button" className={tab === 'staff' ? 'on' : ''} onClick={() => setTab('staff')}>
-          <span>👥</span> Staff
-        </button>
-        <button type="button" className={tab === 'reports' ? 'on' : ''} onClick={() => setTab('reports')}>
-          <span>📈</span> Reports
-        </button>
-        <button type="button" className={tab === 'inventory' ? 'on' : ''} onClick={() => setTab('inventory')}>
-          <span>🧪</span> Inventory
-        </button>
-      </div>
-      {error ? <div className="error">{error}</div> : null}
+    <div className="panel owner" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
+      {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
 
       {tab === 'overview' ? (
         overview ? (
-          <section>
-            <div className="cards">
-              <div className="card animate-in stagger-1">
-                <div className="label">☕ Total Revenue</div>
-                <div className="v">{Number(overview?.todayRevenue ?? 0).toLocaleString()} RWF</div>
-                <div className="delta up"><span>↑</span> Warm sales today</div>
+          <section className="dashboard-overview animate-in">
+            {/* Dashboard Header */}
+            <header className="dashboard-header">
+              <div className="dashboard-title">
+                <h1>Admin Dashboard</h1>
+                <p>Here's what's happening with your coffee shop today.</p>
               </div>
-              <div className="card animate-in stagger-2">
-                <div className="label">🧾 Completed Orders</div>
-                <div className="v">{overview?.todayPaidOrdersCount ?? 0}</div>
-                <div className="delta up"><span>↑</span> Brewing fast</div>
+              <div className="date-selector" style={{ position: 'relative', cursor: 'pointer' }}>
+                <span>📅</span>
+                <span onClick={() => document.getElementById('dash-date').showPicker()}>
+                  {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </span>
+                <input 
+                  id="dash-date"
+                  type="date" 
+                  value={reportDay}
+                  onChange={(e) => setReportDay(e.target.value)}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', right: 0 }}
+                />
+                <span style={{ fontSize: 10, opacity: 0.5 }}>▼</span>
               </div>
-              <div className="card animate-in stagger-3">
-                <div className="label">♨️ In Preparation</div>
-                <div className="v">{overview?.pendingKitchenCount ?? 0}</div>
-                <div className="delta flat"><span>•</span> Freshly roasting</div>
+            </header>
+
+            {/* Top Metrics Row */}
+            <div className="metric-cards-grid" style={{ marginBottom: 24 }}>
+              <div className="m-card" onClick={() => setTab('reports')}>
+                <div className="m-card-header">
+                  <span className="m-icon">💰</span>
+                  <span className="m-title">TOTAL REVENUE</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayRevenue ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend positive">↑ Warm sales today</div>
               </div>
-              <div className="card animate-in stagger-4">
-                <div className="label">🛎️ Waiting for Pickup</div>
-                <div className="v">{overview?.readyCount ?? 0}</div>
-                <div className="delta flat"><span>•</span> Service is hot</div>
+              
+              <div className="m-card" onClick={() => setTab('reports')}>
+                <div className="m-card-header">
+                  <span className="m-icon">💵</span>
+                  <span className="m-title">CASH SALES</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend neutral">• Physical cash today</div>
+              </div>
+
+              <div className="m-card" onClick={() => setTab('reports')}>
+                <div className="m-card-header">
+                  <span className="m-icon">📱</span>
+                  <span className="m-title">MOMO SALES</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend neutral">• Mobile money today</div>
+              </div>
+
+              <div className="m-card" onClick={() => setTab('reports')}>
+                <div className="m-card-header">
+                  <span className="m-icon">💳</span>
+                  <span className="m-title">POS SALES</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend neutral">• Card payments today</div>
+              </div>
+
+              <div className="m-card" onClick={() => setTab('reports')}>
+                <div className="m-card-header">
+                  <span className="m-icon">📈</span>
+                  <span className="m-title">TODAY'S PROFIT</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayProfit ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend positive">↑ Revenue minus costs</div>
               </div>
             </div>
+
+            {/* Main Row: Chart + Status Cards */}
+            <div className="main-dashboard-grid">
+              <div className="chart-card" style={{ minWidth: 0 }}>
+                <h3>Sales Overview <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>Today ▼</span></h3>
+                <div style={{ width: '100%', height: 320, minWidth: 0 }}>
+                  <ResponsiveContainer>
+                    <AreaChart data={charts.hourly?.length > 0 ? charts.hourly : [{ hour: '6AM', total: 0 }, { hour: '9AM', total: 0 }, { hour: '12PM', total: 0 }, { hour: '3PM', total: 0 }, { hour: '6PM', total: 0 }, { hour: '9PM', total: 0 }]}>
+                      <defs>
+                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4CAF50" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#4CAF50" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F0EB" />
+                      <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#AAA' }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#AAA' }} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
+                      />
+                      <Area type="monotone" dataKey="total" name="Revenue (RWF)" stroke="#4CAF50" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="secondary-grid">
+                <div className="m-card mini" onClick={() => nav('/app/orders')}>
+                  <div className="m-card-header">
+                    <span className="m-icon">✅</span>
+                    <span className="m-title">COMPLETED</span>
+                  </div>
+                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.todayPaidOrdersCount ?? 0}</div>
+                  <div className="m-trend positive">↑ Serving fast</div>
+                </div>
+                <div className="m-card mini" onClick={() => nav('/app/orders')}>
+                  <div className="m-card-header">
+                    <span className="m-icon">♨️</span>
+                    <span className="m-title">IN PREP</span>
+                  </div>
+                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.pendingKitchenCount ?? 0}</div>
+                  <div className="m-trend neutral">• Freshly roasting</div>
+                </div>
+                <div className="m-card mini" onClick={() => nav('/app/orders')}>
+                  <div className="m-card-header">
+                    <span className="m-icon">🛎️</span>
+                    <span className="m-title">WAITING</span>
+                  </div>
+                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.readyCount ?? 0}</div>
+                  <div className="m-trend neutral">• Ready to serve</div>
+                </div>
+                <div className="m-card mini" onClick={() => setTab('inventory')}>
+                  <div className="m-card-header">
+                    <span className="m-icon">⚠️</span>
+                    <span className="m-title">LOW STOCK</span>
+                  </div>
+                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.lowStockCount ?? 0}</div>
+                  <div className="m-trend warning">Check inventory</div>
+                </div>
+                <div className="m-card mini span-2" onClick={() => setTab('inventory')}>
+                  <div className="m-card-header">
+                    <span className="m-icon">📦</span>
+                    <span className="m-title">INVENTORY VALUE</span>
+                  </div>
+                  <div className="m-value" style={{ fontSize: 24 }}>{Number(overview?.inventoryValue ?? 0).toLocaleString()} RWF</div>
+                  <div className="m-trend neutral">• Total asset value</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Top Items + Payment Donut + Activity + Actions */}
+            <div className="main-dashboard-grid" style={{ marginTop: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                {/* Top Items */}
+                <div className="chart-card">
+                  <h3>Top Selling Items <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>Today ▼</span></h3>
+                  <div className="top-items-list">
+                    {(charts.topProducts || []).slice(0, 5).map((item, idx) => (
+                      <div key={idx} className="top-item">
+                        <span className="top-item-rank">{idx + 1}</span>
+                        <div className="top-item-img">☕</div>
+                        <div className="top-item-info">
+                          <div className="top-item-name">{item.name}</div>
+                          <div className="top-item-qty">{item.value} sold</div>
+                        </div>
+                        <div className="top-item-val">{Number(item.revenue || 0).toLocaleString()} RWF</div>
+                      </div>
+                    ))}
+                    {(!charts.topProducts || charts.topProducts.length === 0) && <div className="muted italic" style={{ fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No sales data yet.</div>}
+                  </div>
+                </div>
+
+                {/* Sales by Payment Method */}
+                <div className="chart-card" style={{ minWidth: 0 }}>
+                   <h3>Sales by Payment Method</h3>
+                   <div style={{ height: 180, minWidth: 0 }}>
+                      <ResponsiveContainer>
+                        <PieChart>
+                          <Pie 
+                            data={[
+                              { name: 'Cash', value: overview?.todayCashSales || 0 },
+                              { name: 'MoMo', value: overview?.todayMomoSales || 0 },
+                              { name: 'POS', value: overview?.todayPosSales || 0 }
+                            ].filter(x => x.value > 0)}
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                             <Cell fill="#4CAF50" />
+                             <Cell fill="#3D1F08" />
+                             <Cell fill="#C3A68D" />
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                   </div>
+                   <div className="donut-legend">
+                      <div className="legend-item">
+                        <div className="legend-label"><span className="legend-color" style={{ background: '#4CAF50' }}></span> Cash</div>
+                        <div className="legend-val">{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</div>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-label"><span className="legend-color" style={{ background: '#3D1F08' }}></span> MoMo</div>
+                        <div className="legend-val">{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</div>
+                      </div>
+                      <div className="legend-item">
+                        <div className="legend-label"><span className="legend-color" style={{ background: '#C3A68D' }}></span> POS</div>
+                        <div className="legend-val">{Number(overview?.todayPosSales || 0).toLocaleString()} RWF</div>
+                      </div>
+                   </div>
+                </div>
+              </div>
+
+              <div className="stack" style={{ gap: 24 }}>
+                {/* Recent Activity */}
+                <div className="chart-card" style={{ flex: 1 }}>
+                  <div className="row-between" style={{ marginBottom: 20 }}>
+                    <h3 style={{ margin: 0 }}>Recent Activity</h3>
+                    <button className="btn outline tiny" style={{ fontSize: 10 }}>View all</button>
+                  </div>
+                  <div className="activity-list">
+                    {dailyRows.slice(0, 3).map((row, idx) => (
+                      <div key={idx} className="activity-item">
+                        <div className="activity-icon">💰</div>
+                        <div className="activity-info">
+                          <div className="activity-name">Payment received</div>
+                          <div className="activity-meta">#{row.orderId.slice(0, 8)} - {row.methodLabel}</div>
+                        </div>
+                        <div className="activity-time">{new Date(row.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    ))}
+                    
+                    {overview?.lowStockCount > 0 && (
+                      <div className="activity-item">
+                        <div className="activity-icon" style={{ background: '#FFF3E0' }}>⚠️</div>
+                        <div className="activity-info">
+                          <div className="activity-name">Low Stock Alert</div>
+                          <div className="activity-meta">{overview.lowStockCount} items need attention</div>
+                        </div>
+                        <div className="activity-time">Live</div>
+                      </div>
+                    )}
+
+                    {dailyRows.length === 0 && (
+                      <div className="activity-item">
+                        <div className="activity-icon">☕</div>
+                        <div className="activity-info">
+                          <div className="activity-name">Shop is open</div>
+                          <div className="activity-meta">Waiting for first order</div>
+                        </div>
+                        <div className="activity-time">Today</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="chart-card">
+                  <h3>Quick Actions</h3>
+                  <div className="quick-actions-grid">
+                    <div className="action-btn" onClick={() => nav('/app/orders')}>
+                       <span className="action-icon">🛒</span>
+                       <span className="action-text">New Order</span>
+                    </div>
+                    <div className="action-btn" onClick={() => setTab('inventory')}>
+                       <span className="action-icon">📦</span>
+                       <span className="action-text">Add Inventory</span>
+                    </div>
+                    <div className="action-btn" onClick={() => setTab('reports')}>
+                       <span className="action-icon">📊</span>
+                       <span className="action-text">View Reports</span>
+                    </div>
+                    <div className="action-btn" onClick={() => setTab('staff')}>
+                       <span className="action-icon">👥</span>
+                       <span className="action-text">Manage Staff</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <footer style={{ marginTop: 48, padding: '24px 0', borderTop: '1px solid #F5F0EB', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#AAA' }}>
+               <span>© 2025 Mama Prince's Coffee Shop. All rights reserved.</span>
+               <span>Made with ☕ and ❤️</span>
+            </footer>
           </section>
         ) : (
           <div className="loading-state">
             <div className="spinner" />
-            <span>Loading overview…</span>
+            <span>Loading premium insights…</span>
           </div>
         )
       ) : null}
@@ -494,7 +808,10 @@ export default function Owner() {
 
       {tab === 'staff' ? (
         <section className="stack">
-          <form onSubmit={addStaff} className="grid-form">
+          <form onSubmit={saveStaff} className="grid-form card" style={{ padding: 24, background: '#FFF' }}>
+            <h3 style={{ gridColumn: 'span 2', marginBottom: 12 }}>
+              {staffForm.id ? 'Edit Staff Member' : 'Add New Staff Member'}
+            </h3>
             <label className="field">
               <span>Name</span>
               <input
@@ -513,12 +830,12 @@ export default function Owner() {
               />
             </label>
             <label className="field">
-              <span>Temporary password</span>
+              <span>{staffForm.id ? 'New Password (leave blank to keep)' : 'Temporary password'}</span>
               <input
                 type="password"
                 value={staffForm.password}
                 onChange={(e) => setStaffForm((f) => ({ ...f, password: e.target.value }))}
-                required
+                required={!staffForm.id}
               />
             </label>
             <label className="field">
@@ -527,10 +844,15 @@ export default function Owner() {
                 <option value="CASHIER">Shop Staff (Waiter + Billing)</option>
               </select>
             </label>
-            <div className="span-2">
+            <div className="span-2" style={{ display: 'flex', gap: 12, marginTop: 8 }}>
               <button className="btn primary xl" type="submit">
-                Add staff
+                {staffForm.id ? 'Update Staff Member' : 'Register Staff'}
               </button>
+              {staffForm.id && (
+                <button type="button" className="btn ghost" onClick={() => setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })}>
+                  Cancel Edit
+                </button>
+              )}
             </div>
           </form>
 
@@ -539,13 +861,22 @@ export default function Owner() {
               <div>Name</div>
               <div>Email</div>
               <div>Role</div>
+              <div style={{ textAlign: 'right' }}>Actions</div>
             </div>
             {staff.map((u) => (
               <div key={u.id} className="row">
                 <div style={{ fontWeight: 600 }}>{u.name}</div>
                 <div className="muted">{u.email}</div>
                 <div>
-                  <span className="badge badge-neutral">{u.role}</span>
+                  <span className="badge badge-neutral">{u.role === 'SHOP_ADMIN' ? 'OWNER' : 'STAFF'}</span>
+                </div>
+                <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
+                   {u.role !== 'SHOP_ADMIN' && (
+                     <>
+                        <button type="button" className="btn ghost tiny" onClick={() => editStaff(u)}>Edit</button>
+                        <button type="button" className="btn warn tiny" onClick={() => deleteStaff(u.id)}>Remove</button>
+                     </>
+                   )}
                 </div>
               </div>
             ))}
@@ -582,10 +913,87 @@ export default function Owner() {
             </label>
           </div>
 
+          <div className="metric-cards-grid" style={{ marginBottom: 32 }}>
+            <div className="m-card mini" style={{ borderColor: '#4CAF50' }}>
+               <div className="m-label">Cash Revenue</div>
+               <div className="m-value small">{methodSales.Cash.toLocaleString()} RWF</div>
+            </div>
+            <div className="m-card mini" style={{ borderColor: '#2196F3' }}>
+               <div className="m-label">MoMo Revenue</div>
+               <div className="m-value small">{methodSales.MoMo.toLocaleString()} RWF</div>
+            </div>
+            <div className="m-card mini" style={{ borderColor: '#FF9800' }}>
+               <div className="m-label">POS/Card Revenue</div>
+               <div className="m-value small">{methodSales.POS.toLocaleString()} RWF</div>
+            </div>
+            <div className="m-card mini">
+               <div className="m-label">Total Day Sales</div>
+               <div className="m-value small">{methodSales.Total.toLocaleString()} RWF</div>
+            </div>
+          </div>
+
+          <div className="grid-2" style={{ gap: 24, marginBottom: 32 }}>
+             <div className="card">
+                <h3>Sales by Category</h3>
+                <div className="table tiny">
+                  <div className="row head">
+                     <div>Category</div>
+                     <div>Total Sold</div>
+                  </div>
+                  {Object.entries(categorySales).map(([cat, total]) => (
+                    <div key={cat} className="row">
+                       <div style={{ fontWeight: 600 }}>{cat}</div>
+                       <div>{total.toLocaleString()} RWF</div>
+                    </div>
+                  ))}
+                  {Object.keys(categorySales).length === 0 && <div className="muted pad italic">No sales yet today</div>}
+                </div>
+             </div>
+
+             <div className="card">
+                <h3>Shift Summary (Updated)</h3>
+                <div className="table tiny">
+                   <div className="row head">
+                      <div>Shift</div>
+                      <div>Expected</div>
+                      <div>Given</div>
+                      <div>Balance</div>
+                   </div>
+                     {shifts.map((s, idx) => {
+                       const exp = (s.total_cash_sales || 0) + (s.total_momo_sales || 0)
+                       const giv = (s.actual_cash_on_hand || 0) + (s.actual_momo_on_hand || 0)
+                       const bal = giv - exp
+                       return (
+                         <div key={idx} className="row" style={{ borderLeft: `4px solid ${bal === 0 ? '#4CAF50' : bal < 0 ? '#f44336' : '#FF9800'}` }}>
+                            <div style={{ fontSize: 11 }}>
+                               <strong>{s.opened_by?.name || 'Staff'}</strong><br/>
+                               <span className="muted">{new Date(s.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {s.closed_at ? new Date(s.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Open'}</span>
+                            </div>
+                            <div style={{ fontSize: 11 }}>
+                               Cash: {Number(s.total_cash_sales || 0).toLocaleString()}<br/>
+                               MoMo: {Number(s.total_momo_sales || 0).toLocaleString()}<br/>
+                               <span className="muted">POS (Info): {Number(s.total_pos_sales || 0).toLocaleString()}</span>
+                            </div>
+                            <div style={{ fontSize: 11 }}>
+                               Cash: {Number(s.actual_cash_on_hand || 0).toLocaleString()}<br/>
+                               MoMo: {Number(s.actual_momo_on_hand || 0).toLocaleString()}
+                            </div>
+                            <div style={{ fontWeight: 700, color: (bal >= 0 ? '#4CAF50' : '#f44336'), fontSize: 13 }}>
+                               {bal > 0 ? '+' : ''}{bal.toLocaleString()}
+                            </div>
+                         </div>
+                       )
+                     })}
+                   {shifts.length === 0 && <div className="muted pad italic">No shift reconciliation data yet</div>}
+                </div>
+             </div>
+          </div>
+
+
           <div className="grid-2 chart-row">
-            <div className="card chart-card">
+            <div className="card chart-card" style={{ minWidth: 0 }}>
               <h3>Hourly Sales Volume</h3>
-              <div style={{ width: '100%', minHeight: 300 }}>
+              <div style={{ width: '100%', minHeight: 300, minWidth: 0 }}>
                 {charts.hourly?.length > 0 && (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={charts.hourly}>
@@ -603,9 +1011,9 @@ export default function Owner() {
               </div>
             </div>
 
-            <div className="card chart-card">
+            <div className="card chart-card" style={{ minWidth: 0 }}>
               <h3>Top Selling Products</h3>
-              <div style={{ width: '100%', minHeight: 300 }}>
+              <div style={{ width: '100%', minHeight: 300, minWidth: 0 }}>
                 {charts.topProducts?.length > 0 && (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -639,15 +1047,30 @@ export default function Owner() {
             <div className="row head">
               <div>Time</div>
               <div>Order</div>
+              <div>Products</div>
               <div>Method</div>
               <div>Amount</div>
             </div>
             {dailyRows.map((r) => (
               <div key={`${r.at}-${r.orderId}`} className="row">
                 <div>{new Date(r.at).toLocaleString()}</div>
-                <div>#{String(r.orderId).slice(0, 8)}</div>
+                <div><span className="muted">#</span>{String(r.orderId).slice(0, 8)}</div>
+                <div style={{ fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {r.rawItems && Object.entries(r.rawItems.reduce((acc, curr) => {
+                    const cat = curr.category || 'Uncategorized';
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(`${curr.qty}x ${curr.name}`);
+                    return acc;
+                  }, {})).map(([cat, prods]) => (
+                    <div key={cat}>
+                      <span style={{ fontWeight: 600, color: '#C4A484', fontSize: '11px', textTransform: 'uppercase' }}>{cat}:</span>{' '}
+                      <span className="muted">{prods.join(', ')}</span>
+                    </div>
+                  ))}
+                  {!r.rawItems && <div className="muted">{r.items || 'No items'}</div>}
+                </div>
                 <div>{r.methodLabel}</div>
-                <div>{Number(r.amount).toFixed(2)}</div>
+                <div className="bold">{Number(r.amount).toLocaleString()} RWF</div>
               </div>
             ))}
           </div>
@@ -657,15 +1080,30 @@ export default function Owner() {
             <div className="row head">
               <div>Time</div>
               <div>Order</div>
+              <div>Products</div>
               <div>Method</div>
               <div>Amount</div>
             </div>
             {monthlyRows.map((r) => (
               <div key={`${r.at}-${r.orderId}`} className="row">
                 <div>{new Date(r.at).toLocaleString()}</div>
-                <div>#{String(r.orderId).slice(0, 8)}</div>
+                <div><span className="muted">#</span>{String(r.orderId).slice(0, 8)}</div>
+                <div style={{ fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {r.rawItems && Object.entries(r.rawItems.reduce((acc, curr) => {
+                    const cat = curr.category || 'Uncategorized';
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(`${curr.qty}x ${curr.name}`);
+                    return acc;
+                  }, {})).map(([cat, prods]) => (
+                    <div key={cat}>
+                      <span style={{ fontWeight: 600, color: '#C4A484', fontSize: '11px', textTransform: 'uppercase' }}>{cat}:</span>{' '}
+                      <span className="muted">{prods.join(', ')}</span>
+                    </div>
+                  ))}
+                  {!r.rawItems && <div className="muted">{r.items || 'No items'}</div>}
+                </div>
                 <div>{r.methodLabel}</div>
-                <div>{Number(r.amount).toFixed(2)}</div>
+                <div className="bold">{Number(r.amount).toLocaleString()} RWF</div>
               </div>
             ))}
           </div>
@@ -678,7 +1116,7 @@ export default function Owner() {
             e.preventDefault();
             try {
               await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
-              setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0 });
+              setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 });
               await reloadCore();
             } catch(err) { setError(err.message) }
           }} className="grid-form">
@@ -704,6 +1142,10 @@ export default function Owner() {
               <span>Min threshold (Warning)</span>
               <input type="number" value={ingForm.min_threshold} onChange={e => setIngForm(f => ({...f, min_threshold: Number(e.target.value)}))} />
             </label>
+            <label className="field">
+              <span>Unit Price (RWF)</span>
+              <input type="number" value={ingForm.buying_price} onChange={e => setIngForm(f => ({...f, buying_price: Number(e.target.value)}))} />
+            </label>
             <div className="span-2">
               <button className="btn primary xl" type="submit">{ingForm.id ? 'Update' : 'Add Ingredient'}</button>
             </div>
@@ -714,6 +1156,7 @@ export default function Owner() {
               <div>Ingredient</div>
               <div>Current Stock</div>
               <div>Min</div>
+              <div>Price</div>
               <div>Status</div>
               <div></div>
             </div>
@@ -724,18 +1167,69 @@ export default function Owner() {
                   <div style={{ fontWeight: 600 }}>{ing.name}</div>
                   <div>{ing.stock_level} {ing.unit}</div>
                   <div className="muted">{ing.min_threshold}</div>
+                  <div className="muted">{ing.buying_price || 0} RWF</div>
                   <div>
                     <span className={`badge ${isLow ? 'badge-danger' : 'badge-success'}`}>
                       {isLow ? 'LOW STOCK' : 'HEALTHY'}
                     </span>
                   </div>
                   <div className="row-actions">
-                    <button className="btn ghost" onClick={() => setIngForm(ing)}>Edit</button>
+                    <button className="btn ghost" onClick={() => setIngForm(ing)}>📝 Edit</button>
                   </div>
                 </div>
               )
             })}
           </div>
+        </section>
+      ) : null}
+
+      {tab === 'requested_order' ? (
+        <section className="stack">
+          <h3>Requested Orders</h3>
+          {requestedOrders.length === 0 ? (
+            <p className="muted">No requested orders found.</p>
+          ) : (
+            <div className="grid-2">
+              {requestedOrders.map(req => (
+                <div key={req.id} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h4 style={{ margin: 0, color: '#2D1A11' }}>Req #{String(req.id).slice(0, 8)}</h4>
+                      <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+                        By {req.users?.name || 'Staff'} on {new Date(req.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <span className={`badge badge-${req.status.toLowerCase()}`}>{req.status}</span>
+                  </div>
+                  
+                  {req.notes && (
+                    <div style={{ fontSize: '13px', background: 'rgba(0,0,0,0.03)', padding: '8px', borderRadius: '4px' }}>
+                      <strong>Notes:</strong> {req.notes}
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: '12px', flex: 1 }}>
+                    <strong style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666' }}>Requested Items:</strong>
+                    <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '14px', color: '#444' }}>
+                      {req.requisition_items?.map(item => (
+                        <li key={item.id}>
+                          {item.quantity} {item.unit} x <strong>{item.item_name}</strong>
+                          {item.estimated_price > 0 && ` (Est: ${item.estimated_price} RWF)`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {req.status === 'PENDING' && (
+                    <div className="row-actions" style={{ marginTop: '16px' }}>
+                      <button className="btn success" onClick={() => updateRequestedOrderStatus(req.id, 'APPROVED')}>✅ Approve</button>
+                      <button className="btn danger outline" onClick={() => updateRequestedOrderStatus(req.id, 'REJECTED')}>❌ Reject</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
     </div>

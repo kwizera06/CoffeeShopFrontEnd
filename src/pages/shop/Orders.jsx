@@ -15,13 +15,26 @@ export default function Orders() {
   const [qtyById, setQtyById] = useState({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [search, setSearch] = useState('')
+  const [staff, setStaff] = useState([])
+  const [selectedWaiter, setSelectedWaiter] = useState('')
 
   const allowed = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
   const shopName = context?.name
 
   const reloadMenu = useCallback(async () => {
-    const items = await api('/api/shop/menu')
+    const [items, staffData] = await Promise.all([
+       api('/api/shop/menu'),
+       api('/api/shop/staff')
+    ])
     setMenu(items.filter((m) => m.available))
+    setStaff(staffData || [])
+    
+    // Default to self if current user is a waiter
+    const myId = getSession().userId
+    if (staffData?.some(s => s.id === myId)) {
+       setSelectedWaiter(myId)
+    }
   }, [])
 
   useEffect(() => {
@@ -76,6 +89,10 @@ export default function Orders() {
 
   async function sendToKitchen() {
     setError('')
+    if (!selectedWaiter) {
+      setError('Please select a waiter (Served By) first')
+      return
+    }
     const tn = Number(tableNumber)
     if (!Number.isFinite(tn) || tn < 1) {
       setError('Pick a table number')
@@ -92,13 +109,14 @@ export default function Orders() {
     try {
       const created = await api('/api/shop/orders', {
         method: 'POST',
-        body: JSON.stringify({ tableNumber: tn, items }),
+        body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
       })
       const submitted = await api(`/api/shop/orders/${created.id}/submit-kitchen`, { method: 'POST' })
       printKitchenTicket({
         orderId: submitted.id,
         tableNumber: submitted.tableNumber,
         shopName,
+        waiterName: submitted.waiterName,
         createdAt: submitted.createdAt,
         lines: submitted.lines.map((l) => ({ itemName: l.itemName, quantity: l.quantity })),
       })
@@ -115,20 +133,47 @@ export default function Orders() {
     <div className="panel animate-in">
       <div className="section-header">
         <div>
-          <h2>Orders</h2>
-          <p className="muted">Build the order and send to kitchen</p>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26 }}>Orders</h2>
+          <p className="muted" style={{ fontSize: 13 }}>Build the order and send to kitchen</p>
         </div>
-        <div style={{ width: 120 }}>
-          <label className="field" style={{ marginBottom: 0 }}>
-            <span>Table</span>
-            <input
-              type="number"
-              min="1"
-              style={{ textAlign: 'center', fontSize: 18, fontWeight: 700 }}
-              value={tableNumber}
-              onChange={(e) => setTableNumber(e.target.value)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ position: 'relative', width: 240 }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search products or category..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ paddingLeft: 40, borderRadius: 12, fontSize: 14 }}
             />
-          </label>
+          </div>
+          <div style={{ width: 100 }}>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span style={{ fontSize: 10 }}>TABLE</span>
+              <input
+                type="number"
+                min="1"
+                style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, borderRadius: 12 }}
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+              />
+            </label>
+          </div>
+          <div style={{ width: 160 }}>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span style={{ fontSize: 10 }}>SERVED BY (WAITER)</span>
+              <select
+                style={{ fontSize: 14, fontWeight: 600, borderRadius: 12, height: 44 }}
+                value={selectedWaiter}
+                onChange={(e) => setSelectedWaiter(e.target.value)}
+              >
+                <option value="">Select Waiter...</option>
+                {staff.map(s => (
+                   <option key={s.id} value={s.id}>{s.name} ({s.role.replace('SHOP_', '')})</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -138,7 +183,12 @@ export default function Orders() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {['DRINK', 'FOOD'].map((group) => {
             const groupTitle = group === 'DRINK' ? '☕ Drinks' : '🍔 Food';
-            const groupItems = menu.filter(m => (m.category_group || 'DRINK') === group);
+            const s = search.toLowerCase();
+            const groupItems = menu.filter(m => {
+              const matchesGroup = (m.category_group || 'DRINK') === group;
+              const matchesSearch = !s || m.name.toLowerCase().includes(s) || (m.category || '').toLowerCase().includes(s);
+              return matchesGroup && matchesSearch;
+            });
             if (groupItems.length === 0) return null;
 
             // Sort and unique categories within the group
@@ -175,10 +225,8 @@ export default function Orders() {
                             }
                             return (
                               <div key={m.id} className={`menu-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
-                                <div className="row-between">
-                                  <div className="menu-card-emoji">{getItemIcon(m.name, m.category)}</div>
-                                  {qty > 0 && <div className="menu-card-badge">{qty}</div>}
-                                </div>
+                                <div className="menu-card-emoji">{getItemIcon(m.name, m.category)}</div>
+                                {qty > 0 && <div className="menu-card-badge">{qty}</div>}
                                 <div className="menu-card-title">{m.name}</div>
                                 <div className="menu-card-footer">
                                   <div className="menu-card-price">{Number(m.price).toLocaleString()} RWF</div>
@@ -202,16 +250,19 @@ export default function Orders() {
           })}
         </div>
 
-        <aside className="detail">
-          <div className="detail-title">Current Ticket</div>
+        <aside className="detail" style={{ border: '1px solid #E5E0DA', padding: 0, overflow: 'hidden' }}>
+          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11' }}>
+            Current Ticket
+          </div>
           
-          {lines.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-icon">🛒</span>
-              <h4>Cart is empty</h4>
-              <p className="muted">Select items from the menu to start an order.</p>
-            </div>
-          ) : (
+          <div style={{ padding: 24 }}>
+            {lines.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon">🛒</span>
+                <h4>Cart is empty</h4>
+                <p className="muted">Select items from the menu to start an order.</p>
+              </div>
+            ) : (
             <div className="stack">
               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 {lines.map((l) => (
@@ -246,6 +297,7 @@ export default function Orders() {
               </button>
             </div>
           )}
+          </div>
         </aside>
       </div>
     </div>

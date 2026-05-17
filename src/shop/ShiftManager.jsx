@@ -7,7 +7,9 @@ export default function ShiftManager() {
     const [busy, setBusy] = useState(false)
     const [showModal, setShowModal] = useState(false)
     const [initialCash, setInitialCash] = useState('0')
+    const [initialMomo, setInitialMomo] = useState('0')
     const [actualCash, setActualCash] = useState('0')
+    const [actualMomo, setActualMomo] = useState('0')
     const [notes, setNotes] = useState('')
 
     async function handleOpen() {
@@ -15,7 +17,10 @@ export default function ShiftManager() {
         try {
             await api('/api/shop/shifts/open', {
                 method: 'POST',
-                body: JSON.stringify({ initialCash: Number(initialCash) })
+                body: JSON.stringify({ 
+                    initialCash: Number(initialCash),
+                    initialMomo: Number(initialMomo)
+                })
             })
             setShowModal(false)
             await reload()
@@ -31,7 +36,11 @@ export default function ShiftManager() {
         try {
             await api('/api/shop/shifts/close', {
                 method: 'POST',
-                body: JSON.stringify({ actualCash: Number(actualCash), notes })
+                body: JSON.stringify({ 
+                    actualCash: Number(actualCash), 
+                    actualMomo: Number(actualMomo),
+                    notes 
+                })
             })
             setShowModal(false)
             setShift(null)
@@ -52,6 +61,7 @@ export default function ShiftManager() {
                 </div>
                 <button className="btn good" style={{ padding: '6px 18px', fontSize: 13 }} onClick={() => {
                     setInitialCash('0')
+                    setInitialMomo('0')
                     setShowModal(true)
                 }}>Open Shift</button>
 
@@ -63,6 +73,10 @@ export default function ShiftManager() {
                             <label className="field">
                                 <span>Initial Cash in Drawer (RWF)</span>
                                 <input type="number" value={initialCash} onChange={e => setInitialCash(e.target.value)} />
+                            </label>
+                            <label className="field">
+                                <span>Initial Mobile Money Balance (RWF)</span>
+                                <input type="number" value={initialMomo} onChange={e => setInitialMomo(e.target.value)} />
                             </label>
                             <div className="row-actions">
                                 <button className="btn good" disabled={busy} onClick={handleOpen}>✅ Confirm Open</button>
@@ -82,12 +96,13 @@ export default function ShiftManager() {
                 <span>
                     Shift ACTIVE · Started {new Date(shift.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
                     <span className="muted" style={{ marginLeft: 8, opacity: 0.8, fontWeight: 400 }}>
-                        by {shift.opened_by_user?.name || 'Staff'}
+                        by {shift.opened_by_user?.name || 'Staff'} (Cash: {shift.initial_cash} | MoMo: {shift.initial_momo})
                     </span>
                 </span>
             </div>
             <button className="btn warn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => {
                 setActualCash('0')
+                setActualMomo('0')
                 setShowModal(true)
             }}>Close Shift</button>
 
@@ -99,6 +114,10 @@ export default function ShiftManager() {
                         <label className="field">
                             <span>Actual Cash in Drawer (Physical Count)</span>
                             <input type="number" value={actualCash} onChange={e => setActualCash(e.target.value)} />
+                        </label>
+                        <label className="field">
+                            <span>Actual Mobile Money Balance (Phone Count)</span>
+                            <input type="number" value={actualMomo} onChange={e => setActualMomo(e.target.value)} />
                         </label>
                         <label className="field">
                             <span>End of Day Notes</span>

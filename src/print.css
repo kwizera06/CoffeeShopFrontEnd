@@ -1,17 +1,32 @@
 @media print {
-  body * {
-    visibility: hidden;
+  /* Hide everything except the ticket */
+  body > *:not(#print-root):not(style) {
+    display: none !important;
   }
-  #print-root,
-  #print-root * {
-    visibility: visible;
+
+  /* Default page margins to zero — the @page size rule in printUtil.js overrides per ticket */
+  @page {
+    margin: 0;
   }
+
   #print-root {
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
-    width: 100%;
-    padding: 12mm;
-    font-family: system-ui, sans-serif;
+    width: 80mm;
+    padding: 3mm 4mm;
+    box-sizing: border-box;   /* padding included in 80mm */
+    margin: 0;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11pt;
+    color: #000 !important;
+    background: #fff;
+  }
+
+  #print-root * {
+    color: #000 !important;
+    visibility: visible !important;
+    box-sizing: border-box;
   }
 }
+

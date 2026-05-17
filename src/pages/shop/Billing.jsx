@@ -90,6 +90,16 @@ export default function Billing() {
     }
   }
 
+  function handlePrintProForma() {
+    if (!selected) return
+    // Print without method to show as pro-forma/unpaid
+    printReceipt({ 
+      shopName: context?.name, 
+      order: selected, 
+      paymentMethod: 'UNPAID (PRO-FORMA)' 
+    })
+  }
+
   return (
     <div className="panel animate-in">
       <div className="section-header">
@@ -157,13 +167,26 @@ export default function Billing() {
           ) : null}
         </div>
 
-        <aside className="detail">
-          <div className="detail-title">Order Checkout</div>
-          {!selected ? (
-             <div className="empty-state" style={{ padding: '20px 0' }}>
-               <p className="muted">Select an order from the list to view details and process payment.</p>
-             </div>
-          ) : (
+        <aside className="detail" style={{ border: '1px solid #E5E0DA', padding: 0, overflow: 'hidden' }}>
+          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Order Checkout</span>
+            {selected && (
+              <button 
+                className="btn ghost" 
+                style={{ fontSize: 11, padding: '4px 10px' }}
+                onClick={handlePrintProForma}
+              >
+                🖨️ Print Bill
+              </button>
+            )}
+          </div>
+          
+          <div style={{ padding: 24 }}>
+             {!selected ? (
+               <div className="empty-state" style={{ padding: '20px 0' }}>
+                 <p className="muted">Select an order from the list to view details and process payment.</p>
+               </div>
+             ) : (
             <div className="stack">
               <div className="row-between" style={{ marginBottom: 12 }}>
                 <div>
@@ -200,11 +223,20 @@ export default function Billing() {
                     <button
                       type="button"
                       className="btn outline xl block"
-                      style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)' }}
+                      style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
                       disabled={busy}
                       onClick={() => pay('MOBILE_MONEY')}
                     >
                        📱 Mobile Money
+                    </button>
+                    <button
+                      type="button"
+                      className="btn outline xl block"
+                      style={{ borderColor: '#666', color: '#666' }}
+                      disabled={busy}
+                      onClick={() => pay('POS')}
+                    >
+                       💳 Pay with POS (Card)
                     </button>
                   </>
                 ) : (
@@ -215,6 +247,7 @@ export default function Billing() {
               </div>
             </div>
           )}
+          </div>
         </aside>
       </div>
     </div>
