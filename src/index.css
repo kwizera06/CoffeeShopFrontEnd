@@ -1018,8 +1018,15 @@ select {
 
 /* ΓöÇΓöÇ Print Styles ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 @media print {
+  @page {
+    margin: 0;
+    size: 80mm auto; /* Standard 80mm continuous roll */
+  }
+
   body {
     background: white !important;
+    margin: 0;
+    padding: 0;
   }
 
   body * {
@@ -1035,9 +1042,12 @@ select {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 78mm; /* Strictly fit within 80mm */
+    margin: 0;
+    padding: 2mm;
     font-family: 'Courier New', Courier, monospace !important;
     color: black !important;
+    overflow: hidden;
   }
 
   .shop-topbar,
