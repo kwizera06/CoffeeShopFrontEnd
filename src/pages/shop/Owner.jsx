@@ -17,6 +17,27 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
+import { 
+  HiOutlineCalendarDays,
+  HiOutlineCurrencyDollar,
+  HiOutlineBanknotes,
+  HiOutlineDevicePhoneMobile,
+  HiOutlineCreditCard,
+  HiOutlineArrowTrendingUp,
+  HiOutlineCheckCircle,
+  HiOutlineBell,
+  HiOutlineExclamationTriangle,
+  HiOutlineArchiveBox,
+  HiOutlineShoppingCart,
+  HiOutlinePlusCircle,
+  HiOutlineChartBar,
+  HiOutlineUsers,
+  HiOutlineDocumentText,
+  HiOutlineChevronDown,
+  HiOutlineFire
+} from 'react-icons/hi2'
+import { IoCafeOutline } from 'react-icons/io5'
+import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/md'
 
 export default function Owner() {
   const nav = useNavigate()
@@ -307,9 +328,9 @@ export default function Owner() {
                 <h1>Admin Dashboard</h1>
                 <p>Here's what's happening with your coffee shop today.</p>
               </div>
-              <div className="date-selector" style={{ position: 'relative', cursor: 'pointer' }}>
-                <span>📅</span>
-                <span onClick={() => document.getElementById('dash-date').showPicker()}>
+              <div className="date-selector" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('dash-date').showPicker()}>
+                <HiOutlineCalendarDays />
+                <span>
                   {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </span>
                 <input 
@@ -319,7 +340,7 @@ export default function Owner() {
                   onChange={(e) => setReportDay(e.target.value)}
                   style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', right: 0 }}
                 />
-                <span style={{ fontSize: 10, opacity: 0.5 }}>▼</span>
+                <HiOutlineChevronDown style={{ fontSize: 10, opacity: 0.5 }} />
               </div>
             </header>
 
@@ -327,7 +348,7 @@ export default function Owner() {
             <div className="metric-cards-grid" style={{ marginBottom: 24 }}>
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon">💰</span>
+                  <span className="m-icon"><HiOutlineCurrencyDollar /></span>
                   <span className="m-title">TOTAL REVENUE</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayRevenue ?? 0).toLocaleString()} RWF</div>
@@ -336,7 +357,7 @@ export default function Owner() {
               
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon">💵</span>
+                  <span className="m-icon"><HiOutlineBanknotes /></span>
                   <span className="m-title">CASH SALES</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()} RWF</div>
@@ -345,7 +366,7 @@ export default function Owner() {
 
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon">📱</span>
+                  <span className="m-icon"><HiOutlineDevicePhoneMobile /></span>
                   <span className="m-title">MOMO SALES</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()} RWF</div>
@@ -354,7 +375,7 @@ export default function Owner() {
 
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon">💳</span>
+                  <span className="m-icon"><HiOutlineCreditCard /></span>
                   <span className="m-title">POS SALES</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
@@ -363,7 +384,7 @@ export default function Owner() {
 
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon">📈</span>
+                  <span className="m-icon"><HiOutlineArrowTrendingUp /></span>
                   <span className="m-title">TODAY'S PROFIT</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayProfit ?? 0).toLocaleString()} RWF</div>
@@ -399,7 +420,7 @@ export default function Owner() {
               <div className="secondary-grid">
                 <div className="m-card mini" onClick={() => nav('/app/orders')}>
                   <div className="m-card-header">
-                    <span className="m-icon">✅</span>
+                    <span className="m-icon"><HiOutlineCheckCircle /></span>
                     <span className="m-title">COMPLETED</span>
                   </div>
                   <div className="m-value" style={{ fontSize: 24 }}>{overview?.todayPaidOrdersCount ?? 0}</div>
@@ -407,7 +428,7 @@ export default function Owner() {
                 </div>
                 <div className="m-card mini" onClick={() => nav('/app/orders')}>
                   <div className="m-card-header">
-                    <span className="m-icon">♨️</span>
+                    <span className="m-icon"><HiOutlineFire /></span>
                     <span className="m-title">IN PREP</span>
                   </div>
                   <div className="m-value" style={{ fontSize: 24 }}>{overview?.pendingKitchenCount ?? 0}</div>
@@ -415,7 +436,7 @@ export default function Owner() {
                 </div>
                 <div className="m-card mini" onClick={() => nav('/app/orders')}>
                   <div className="m-card-header">
-                    <span className="m-icon">🛎️</span>
+                    <span className="m-icon"><HiOutlineBell /></span>
                     <span className="m-title">WAITING</span>
                   </div>
                   <div className="m-value" style={{ fontSize: 24 }}>{overview?.readyCount ?? 0}</div>
@@ -423,7 +444,7 @@ export default function Owner() {
                 </div>
                 <div className="m-card mini" onClick={() => setTab('inventory')}>
                   <div className="m-card-header">
-                    <span className="m-icon">⚠️</span>
+                    <span className="m-icon"><HiOutlineExclamationTriangle /></span>
                     <span className="m-title">LOW STOCK</span>
                   </div>
                   <div className="m-value" style={{ fontSize: 24 }}>{overview?.lowStockCount ?? 0}</div>
@@ -431,7 +452,7 @@ export default function Owner() {
                 </div>
                 <div className="m-card mini span-2" onClick={() => setTab('inventory')}>
                   <div className="m-card-header">
-                    <span className="m-icon">📦</span>
+                    <span className="m-icon"><HiOutlineArchiveBox /></span>
                     <span className="m-title">INVENTORY VALUE</span>
                   </div>
                   <div className="m-value" style={{ fontSize: 24 }}>{Number(overview?.inventoryValue ?? 0).toLocaleString()} RWF</div>
@@ -450,7 +471,7 @@ export default function Owner() {
                     {(charts.topProducts || []).slice(0, 5).map((item, idx) => (
                       <div key={idx} className="top-item">
                         <span className="top-item-rank">{idx + 1}</span>
-                        <div className="top-item-img">☕</div>
+                        <div className="top-item-img"><IoCafeOutline /></div>
                         <div className="top-item-info">
                           <div className="top-item-name">{item.name}</div>
                           <div className="top-item-qty">{item.value} sold</div>
@@ -513,7 +534,7 @@ export default function Owner() {
                   <div className="activity-list">
                     {dailyRows.slice(0, 3).map((row, idx) => (
                       <div key={idx} className="activity-item">
-                        <div className="activity-icon">💰</div>
+                        <div className="activity-icon"><MdOutlineReceiptLong /></div>
                         <div className="activity-info">
                           <div className="activity-name">Payment received</div>
                           <div className="activity-meta">#{row.orderId.slice(0, 8)} - {row.methodLabel}</div>
@@ -524,7 +545,7 @@ export default function Owner() {
                     
                     {overview?.lowStockCount > 0 && (
                       <div className="activity-item">
-                        <div className="activity-icon" style={{ background: '#FFF3E0' }}>⚠️</div>
+                        <div className="activity-icon" style={{ background: '#FFF3E0' }}><HiOutlineExclamationTriangle style={{ color: '#E67E22' }} /></div>
                         <div className="activity-info">
                           <div className="activity-name">Low Stock Alert</div>
                           <div className="activity-meta">{overview.lowStockCount} items need attention</div>
@@ -532,10 +553,10 @@ export default function Owner() {
                         <div className="activity-time">Live</div>
                       </div>
                     )}
-
+ 
                     {dailyRows.length === 0 && (
                       <div className="activity-item">
-                        <div className="activity-icon">☕</div>
+                        <div className="activity-icon"><IoCafeOutline /></div>
                         <div className="activity-info">
                           <div className="activity-name">Shop is open</div>
                           <div className="activity-meta">Waiting for first order</div>
@@ -551,19 +572,19 @@ export default function Owner() {
                   <h3>Quick Actions</h3>
                   <div className="quick-actions-grid">
                     <div className="action-btn" onClick={() => nav('/app/orders')}>
-                       <span className="action-icon">🛒</span>
+                       <span className="action-icon"><HiOutlineShoppingCart /></span>
                        <span className="action-text">New Order</span>
                     </div>
                     <div className="action-btn" onClick={() => setTab('inventory')}>
-                       <span className="action-icon">📦</span>
+                       <span className="action-icon"><HiOutlinePlusCircle /></span>
                        <span className="action-text">Add Inventory</span>
                     </div>
                     <div className="action-btn" onClick={() => setTab('reports')}>
-                       <span className="action-icon">📊</span>
+                       <span className="action-icon"><HiOutlineChartBar /></span>
                        <span className="action-text">View Reports</span>
                     </div>
                     <div className="action-btn" onClick={() => setTab('staff')}>
-                       <span className="action-icon">👥</span>
+                       <span className="action-icon"><HiOutlineUsers /></span>
                        <span className="action-text">Manage Staff</span>
                     </div>
                   </div>
@@ -624,7 +645,9 @@ export default function Owner() {
               <span>Available</span>
             </label>
             <div className="span-2 card" style={{ padding: 16, background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-               <h4 style={{ marginBottom: 12 }}>📜 Recipe (Inventory Deduction)</h4>
+               <h4 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                 <HiOutlineDocumentText /> Recipe (Inventory Deduction)
+               </h4>
                
                <div className="grid-form" style={{ gridTemplateColumns: '2fr 1fr auto', alignItems: 'flex-end', gap: 10 }}>
                   <label className="field">

@@ -70,7 +70,9 @@ export async function api(path, options = {}) {
   }
   if (!res.ok) {
     const msg = await parseError(res)
-    throw new Error(msg || 'Request failed')
+    const err = new Error(msg || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
   }
   if (res.status === 204) {
     return null

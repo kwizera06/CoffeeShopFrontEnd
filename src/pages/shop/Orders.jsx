@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api, getSession } from '../../api'
-import { printKitchenTicket } from '../../printUtil'
+import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
 
 export default function Orders() {
   const nav = useNavigate()
+  const location = useLocation()
+  const editId = new URLSearchParams(location.search).get('edit')
   const { role } = getSession()
   const { context, shift } = useShopContext()
 
@@ -43,7 +45,10 @@ export default function Orders() {
       return
     }
 
-    void reloadMenu().catch((e) => setError(e.message))
+    void reloadMenu().catch((e) => {
+      // Don't surface menu loading errors when editing an existing order
+      if (!editId) setError(e.message)
+    })
 
     if (!supabase) return
 
@@ -68,6 +73,26 @@ export default function Orders() {
     }
   }, [allowed, nav, reloadMenu])
 
+  useEffect(() => {
+    if (!editId) return
+    setError('') // clear any stale error from previous requests
+    api(`/api/shop/orders/${editId}`)
+      .then(order => {
+        setError('') // explicitly clear on success
+        setTableNumber(String(order.tableNumber))
+        setSelectedWaiter(order.waiterId || '')
+        const qtys = {}
+        order.lines.forEach(l => {
+          qtys[l.menuItemId] = l.quantity
+        })
+        setQtyById(qtys)
+      })
+      .catch(() => {
+        // Order not found or access denied — go back to billing
+        nav('/app/billing', { replace: true })
+      })
+  }, [editId, nav])
+
   function setQty(id, next) {
     setQtyById((m) => {
       const copy = { ...m, [id]: next }
@@ -89,7 +114,8 @@ export default function Orders() {
 
   async function sendToKitchen() {
     setError('')
-    if (!selectedWaiter) {
+    // Waiter required only for new orders; edits preserve existing waiter on backend
+    if (!editId && !selectedWaiter) {
       setError('Please select a waiter (Served By) first')
       return
     }
@@ -107,26 +133,49 @@ export default function Orders() {
     }
     setBusy(true)
     try {
-      const created = await api('/api/shop/orders', {
-        method: 'POST',
-        body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
-      })
-      const submitted = await api(`/api/shop/orders/${created.id}/submit-kitchen`, { method: 'POST' })
-      printKitchenTicket({
-        orderId: submitted.id,
-        tableNumber: submitted.tableNumber,
-        shopName,
-        waiterName: submitted.waiterName,
-        createdAt: submitted.createdAt,
-        lines: submitted.lines.map((l) => ({ itemName: l.itemName, quantity: l.quantity })),
-      })
-      setQtyById({})
-      setTableNumber('1')
+      if (editId) {
+        const updated = await api(`/api/shop/orders/${editId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
+        })
+        // No automatic printing
+        nav('/app/billing')
+      } else {
+        const created = await api('/api/shop/orders', {
+          method: 'POST',
+          body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
+        })
+        // Move from DRAFT -> PENDING by submitting to kitchen (NO PRINT)
+        await api(`/api/shop/orders/${created.id}/submit-kitchen`, { method: 'POST' })
+        
+        setQtyById({})
+        setTableNumber('1')
+      }
     } catch (e) {
       setError(e.message)
     } finally {
       setBusy(false)
     }
+  }
+  
+  function handleManualPrint() {
+    const items = lines.map(l => ({
+      ...l,
+      price: menu.find(x => x.id === l.menuItemId)?.price || 0,
+      itemName: l.name
+    }))
+    
+    printReceipt({
+      shopName,
+      order: {
+        id: editId || 'DRAFT',
+        tableNumber,
+        lines: items,
+        total: items.reduce((acc, i) => acc + (i.quantity * i.price), 0),
+        waiterName: staff.find(s => s.id === selectedWaiter)?.name || 'Staff'
+      },
+      paymentMethod: 'CASH' // Preview default
+    })
   }
 
   return (
@@ -177,7 +226,7 @@ export default function Orders() {
         </div>
       </div>
 
-      {error ? <div className="error">{error}</div> : null}
+      {error && !editId ? <div className="error">{error}</div> : null}
 
       <div className="billing-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -251,8 +300,9 @@ export default function Orders() {
         </div>
 
         <aside className="detail" style={{ border: '1px solid #E5E0DA', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11' }}>
-            Current Ticket
+          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{editId ? 'Editing Order' : 'Current Ticket'}</span>
+            {editId && <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => nav('/app/billing')}>Cancel</button>}
           </div>
           
           <div style={{ padding: 24 }}>
@@ -288,12 +338,21 @@ export default function Orders() {
 
               <button 
                 type="button" 
-                className="btn primary xl block" 
+                className={`btn ${editId ? 'secondary' : 'primary'} xl block`} 
                 style={{ marginTop: 12 }}
                 disabled={busy || !shift} 
                 onClick={sendToKitchen}
               >
-                {!shift ? '⚠️ Shift is CLOSED' : '⚡ Subimt to Kitchen'}
+                {!shift ? '⚠️ Shift is CLOSED' : editId ? '💾 Update Order' : '⚡ Submit to Kitchen'}
+              </button>
+
+              <button 
+                type="button" 
+                className="btn outline block" 
+                style={{ marginTop: 12, borderColor: '#ccc' }}
+                onClick={handleManualPrint}
+              >
+                🖨️ Print Ticket (Preview)
               </button>
             </div>
           )}

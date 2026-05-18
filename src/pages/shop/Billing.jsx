@@ -45,7 +45,7 @@ export default function Billing() {
         {
           event: '*',
           schema: 'public',
-          table: 'shop_orders',
+          table: 'orders',
           filter: `tenant_id=eq.${getSession().tenantId}`,
         },
         () => {
@@ -238,11 +238,30 @@ export default function Billing() {
                     >
                        💳 Pay with POS (Card)
                     </button>
+                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                    <button
+                      type="button"
+                      className="btn outline xl block"
+                      style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
+                      onClick={() => nav(`/app/orders?edit=${selected.id}`)}
+                    >
+                      ✏️ Edit Order (Client Consumed Less)
+                    </button>
                   </>
                 ) : (
-                  <button type="button" className="btn good xl block" onClick={() => markReady(selected.id)}>
-                    ✨ Mark as Ready to Pay
-                  </button>
+                  <div className="stack" style={{ gap: 12 }}>
+                    <button type="button" className="btn good xl block" onClick={() => markReady(selected.id)}>
+                      ✨ Mark as Ready to Pay
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn outline xl block" 
+                      style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
+                      onClick={() => nav(`/app/orders?edit=${selected.id}`)}
+                    >
+                      ✏️ Edit Order Items
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
