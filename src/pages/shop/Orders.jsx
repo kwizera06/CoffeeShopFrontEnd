@@ -107,7 +107,7 @@ export default function Orders() {
     return Object.entries(qtyById)
       .map(([menuItemId, quantity]) => {
         const mi = menu.find((x) => x.id === menuItemId)
-        return mi ? { menuItemId: mi.id, quantity, name: mi.name } : null
+        return mi ? { menuItemId: mi.id, quantity, name: mi.name, ingredients: mi.ingredients } : null
       })
       .filter(Boolean)
   }, [qtyById, menu])
