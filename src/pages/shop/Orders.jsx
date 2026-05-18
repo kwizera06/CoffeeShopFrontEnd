@@ -212,8 +212,9 @@ export default function Orders() {
             <label className="field" style={{ marginBottom: 0 }}>
               <span style={{ fontSize: 10 }}>SERVED BY (WAITER)</span>
               <select
-                style={{ fontSize: 14, fontWeight: 600, borderRadius: 12, height: 44 }}
+                style={{ fontSize: 14, fontWeight: 600, borderRadius: 12, height: 44, cursor: editId ? 'not-allowed' : 'pointer' }}
                 value={selectedWaiter}
+                disabled={!!editId}
                 onChange={(e) => setSelectedWaiter(e.target.value)}
               >
                 <option value="">Select Waiter...</option>

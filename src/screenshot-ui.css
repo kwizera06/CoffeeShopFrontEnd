@@ -696,16 +696,21 @@
 
 /* ── Mobile Responsiveness ── */
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .main-dashboard-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .shop-top-header {
     padding: 0 16px;
     height: 60px;
+  }
+  
+  .sidebar-brand {
+    min-width: auto;
+    gap: 8px;
   }
   
   .header-search, .search-shortcut {

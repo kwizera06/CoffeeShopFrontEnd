@@ -396,8 +396,8 @@ export default function Owner() {
             <div className="main-dashboard-grid">
               <div className="chart-card" style={{ minWidth: 0 }}>
                 <h3>Sales Overview <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>Today ▼</span></h3>
-                <div style={{ width: '100%', height: 320, minWidth: 0 }}>
-                  <ResponsiveContainer>
+                <div style={{ width: '100%', height: 320, minWidth: 0, position: 'relative' }}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <AreaChart data={charts.hourly?.length > 0 ? charts.hourly : [{ hour: '6AM', total: 0 }, { hour: '9AM', total: 0 }, { hour: '12PM', total: 0 }, { hour: '3PM', total: 0 }, { hour: '6PM', total: 0 }, { hour: '9PM', total: 0 }]}>
                       <defs>
                         <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
@@ -486,8 +486,8 @@ export default function Owner() {
                 {/* Sales by Payment Method */}
                 <div className="chart-card" style={{ minWidth: 0 }}>
                    <h3>Sales by Payment Method</h3>
-                   <div style={{ height: 180, minWidth: 0 }}>
-                      <ResponsiveContainer>
+                   <div style={{ height: 180, minWidth: 0, position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <PieChart>
                           <Pie 
                             data={[
@@ -1016,9 +1016,9 @@ export default function Owner() {
           <div className="grid-2 chart-row">
             <div className="card chart-card" style={{ minWidth: 0 }}>
               <h3>Hourly Sales Volume</h3>
-              <div style={{ width: '100%', minHeight: 300, minWidth: 0 }}>
+              <div style={{ width: '100%', height: 300, minWidth: 0, position: 'relative' }}>
                 {charts.hourly?.length > 0 && (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart data={charts.hourly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(245,235,221,0.08)" vertical={false} />
                       <XAxis dataKey="hour" fontSize={11} tick={{ fill: 'rgba(245,235,221,0.45)' }} axisLine={false} tickLine={false} />
@@ -1036,9 +1036,9 @@ export default function Owner() {
 
             <div className="card chart-card" style={{ minWidth: 0 }}>
               <h3>Top Selling Products</h3>
-              <div style={{ width: '100%', minHeight: 300, minWidth: 0 }}>
+              <div style={{ width: '100%', height: 300, minWidth: 0, position: 'relative' }}>
                 {charts.topProducts?.length > 0 && (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <PieChart>
                       <Pie
                         data={charts.topProducts}

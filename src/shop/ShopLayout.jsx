@@ -78,6 +78,102 @@ function Shell() {
 
   return (
     <div className="shop-app-wrapper">
+      {/* Global Hamburger Drawer Overlay - Universal for all devices */}
+      {isMenuOpen && (
+        <div className="pos-universal-nav-overlay" onClick={() => setIsMenuOpen(false)}>
+          <div className="pos-universal-nav-content" onClick={(e) => e.stopPropagation()}>
+             <div className="mobile-menu-header">
+               <div className="sidebar-logo">MP</div>
+               <button className="close-drawer-btn" style={{ color: 'white', background: 'transparent', border: 'none', fontSize: '24px' }} onClick={() => setIsMenuOpen(false)}>
+                  <HiOutlineXMark />
+               </button>
+             </div>
+             
+             <div className="mobile-menu-body" style={{ flex: 1, overflowY: 'auto' }}>
+               <nav className="mobile-nav-list">
+                 {showOwner && (
+                   <NavLink to="/app/admin?tab=overview" 
+                     className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                     onClick={() => setIsMenuOpen(false)}
+                   >
+                      <HiOutlineChartBar /> Overview
+                   </NavLink>
+                 )}
+                 {showOwner && (
+                   <NavLink to="/app/admin?tab=menu" 
+                     className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                     onClick={() => setIsMenuOpen(false)}
+                   >
+                      <IoRestaurantOutline /> Menu
+                   </NavLink>
+                 )}
+                 {showOwner && (
+                   <NavLink to="/app/admin?tab=staff" 
+                     className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                     onClick={() => setIsMenuOpen(false)}
+                   >
+                      <HiOutlineUsers /> Staff
+                   </NavLink>
+                 )}
+                 {showOwner && (
+                   <NavLink to="/app/admin?tab=reports" 
+                     className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                     onClick={() => setIsMenuOpen(false)}
+                   >
+                      <HiOutlineDocumentChartBar /> Reports
+                   </NavLink>
+                 )}
+                 {showOwner && (
+                    <NavLink to="/app/admin?tab=inventory" 
+                      className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                       <HiOutlineArchiveBox /> Inventory
+                    </NavLink>
+                  )}
+                  {showOwner && (
+                    <NavLink to="/app/admin?tab=requested_order" 
+                      className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                       <HiOutlineQueueList /> Requisitions
+                    </NavLink>
+                  )}
+                 
+                 <div className="mobile-divider" style={{ margin: '16px 0', opacity: 0.1, background: '#fff', height: 1 }} />
+                 
+                 <NavLink to="/app/orders" 
+                   className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                   onClick={() => setIsMenuOpen(false)}
+                 >
+                    <HiOutlineClipboardDocumentList /> Orders
+                 </NavLink>
+                 <NavLink to="/app/billing" 
+                   className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                   onClick={() => setIsMenuOpen(false)}
+                 >
+                    <HiOutlineCreditCard /> Billing
+                 </NavLink>
+                 {showSupplies && (
+                   <NavLink to="/app/supplies" 
+                     className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                     onClick={() => setIsMenuOpen(false)}
+                   >
+                      <HiOutlineCube /> Supplies
+                   </NavLink>
+                 )}
+                 
+                 <div className="mobile-divider" style={{ margin: '16px 0', opacity: 0.1, background: '#fff', height: 1 }} />
+                 
+                 <div className="m-link logout" onClick={logout} style={{ color: '#ef9a9a' }}>
+                    <HiOutlineArrowRightOnRectangle /> Logout
+                 </div>
+               </nav>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="shop-top-header">
          <div className="sidebar-brand">
@@ -149,135 +245,69 @@ function Shell() {
       </header>
 
       <div className="app-layout-main">
-        {/* Full-screen Mobile Overlay Menu */}
-        {isMenuOpen && (
-          <div className="mobile-menu-overlay animate-fade-in" onClick={() => setIsMenuOpen(false)}>
-            <div className="mobile-menu-content animate-slide-up" onClick={e => e.stopPropagation()}>
-               <div className="mobile-menu-header">
-                  <div className="sidebar-logo">MP</div>
-                  <button className="close-menu-btn" onClick={() => setIsMenuOpen(false)}><HiOutlineXMark /></button>
-               </div>
-               <nav className="mobile-nav-list">
-                 {showOwner && (
-                   <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                      <HiOutlineChartBar /> Overview
-                   </NavLink>
-                 )}
-                 {showOwner && (
-                   <NavLink to="/app/admin?tab=menu" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                      <IoRestaurantOutline /> Menu
-                   </NavLink>
-                 )}
-                 {showOwner && (
-                   <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                      <HiOutlineUsers /> Staff
-                   </NavLink>
-                 )}
-                 {showOwner && (
-                   <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                      <HiOutlineDocumentChartBar /> Reports
-                   </NavLink>
-                 )}
-                 {showOwner && (
-                    <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                       <HiOutlineArchiveBox /> Inventory
-                    </NavLink>
-                  )}
-                  {showOwner && (
-                    <NavLink to="/app/admin?tab=requested_order" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                       <HiOutlineQueueList /> Requisitions
-                    </NavLink>
-                  )}
-                 
-                 <div className="mobile-divider" />
-                 
-                 <NavLink to="/app/orders" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineClipboardDocumentList /> Orders
-                 </NavLink>
-                 <NavLink to="/app/billing" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineCreditCard /> Billing
-                 </NavLink>
-                 {showSupplies && (
-                   <NavLink to="/app/supplies" className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}>
-                      <HiOutlineCube /> Supplies
-                   </NavLink>
-                 )}
-                 
-                 <div className="mobile-divider" />
-                 
-                 <div className="m-link logout" onClick={logout}>
-                    <HiOutlineArrowRightOnRectangle /> Logout
-                 </div>
-               </nav>
-            </div>
-          </div>
-        )}
-
-        {/* Vertical Sidebar - Visible for ADMIN or on desktop */}
-        {role === 'SHOP_ADMIN' && (
-          <aside className="shop-vertical-sidebar desktop-only">
-             <nav className="sidebar-nav-v">
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineChartBar /> Overview
-                 </NavLink>
-               )}
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=menu" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <IoRestaurantOutline /> Menu
-                 </NavLink>
-               )}
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineUsers /> Staff
-                 </NavLink>
-               )}
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineDocumentChartBar /> Reports
-                 </NavLink>
-               )}
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineArchiveBox /> Inventory
-                 </NavLink>
-               )}
-               {showOwner && (
-                 <NavLink to="/app/admin?tab=requested_order" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineQueueList /> Requisitions
-                 </NavLink>
-               )}
-               
-               <div className="mobile-only-divider" style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '12px 0' }} />
-               
-               <NavLink to="/app/orders" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                  <HiOutlineClipboardDocumentList /> Orders
+        {/* Vertical Sidebar - Visible on desktop for all staff */}
+        <aside className="shop-vertical-sidebar desktop-only">
+           <nav className="sidebar-nav-v">
+             {showOwner && (
+               <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineChartBar /> Overview
                </NavLink>
-               <NavLink to="/app/billing" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                  <HiOutlineCreditCard /> Billing
-               </NavLink>
-               {showSupplies && (
-                 <NavLink to="/app/supplies" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
-                    <HiOutlineCube /> Supplies
-                 </NavLink>
-               )}
-               
-               <div className="v-link" onClick={logout} style={{ color: '#ef9a9a' }}>
-                  <HiOutlineArrowRightOnRectangle /> Logout
-               </div>
-             </nav>
-
-             {role === 'SHOP_ADMIN' && (
-               <div className="sidebar-promo">
-                  <div className="promo-box">
-                    <span className="promo-icon">☕</span>
-                    <h4>Great day for coffee!</h4>
-                    <p>Delivering warmth, one cup at a time.</p>
-                  </div>
-               </div>
              )}
-          </aside>
-        )}
+             {showOwner && (
+               <NavLink to="/app/admin?tab=menu" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <IoRestaurantOutline /> Menu
+               </NavLink>
+             )}
+             {showOwner && (
+               <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineUsers /> Staff
+               </NavLink>
+             )}
+             {showOwner && (
+               <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineDocumentChartBar /> Reports
+               </NavLink>
+             )}
+             {showOwner && (
+               <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineArchiveBox /> Inventory
+               </NavLink>
+             )}
+             {showOwner && (
+               <NavLink to="/app/admin?tab=requested_order" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineQueueList /> Requisitions
+               </NavLink>
+             )}
+             
+             <div className="mobile-only-divider" style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '12px 0' }} />
+             
+             <NavLink to="/app/orders" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineClipboardDocumentList /> Orders
+             </NavLink>
+             <NavLink to="/app/billing" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineCreditCard /> Billing
+             </NavLink>
+             {showSupplies && (
+               <NavLink to="/app/supplies" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineCube /> Supplies
+               </NavLink>
+             )}
+             
+             <div className="v-link" onClick={logout} style={{ color: '#ef9a9a' }}>
+                <HiOutlineArrowRightOnRectangle /> Logout
+             </div>
+           </nav>
+
+           {role === 'SHOP_ADMIN' && (
+             <div className="sidebar-promo">
+                <div className="promo-box">
+                  <span className="promo-icon">☕</span>
+                  <h4>Great day for coffee!</h4>
+                  <p>Delivering warmth, one cup at a time.</p>
+                </div>
+             </div>
+           )}
+        </aside>
 
         <main className="shop-main-viewport">
           {role !== 'SHOP_ADMIN' && <ShiftManager />}
