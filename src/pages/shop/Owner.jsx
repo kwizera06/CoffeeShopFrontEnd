@@ -60,7 +60,7 @@ export default function Owner() {
   const SUB_CATEGORIES = [
     'Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Soft Drinks', 
     'Beer & Alcohol', 'Juice & Smoothies', 'Fast Food', 
-    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks',
+    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks','Accompaniments'
   ]
 
   const CATEGORY_MAP = {
