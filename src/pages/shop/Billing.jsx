@@ -4,6 +4,17 @@ import { api, getSession } from '../../api'
 import { printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
+import { 
+  HiOutlineBanknotes, 
+  HiOutlineDevicePhoneMobile, 
+  HiOutlineCreditCard, 
+  HiOutlinePencilSquare, 
+  HiOutlineClock, 
+  HiOutlineCheckCircle, 
+  HiOutlineFolderOpen, 
+  HiOutlinePrinter,
+  HiOutlineUserGroup
+} from 'react-icons/hi2'
 
 export default function Billing() {
   const nav = useNavigate()
@@ -16,6 +27,8 @@ export default function Billing() {
   const [selected, setSelected] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [clientName, setClientName] = useState('')
+  const [isLoanMode, setIsLoanMode] = useState(false)
 
   const allowed = role === 'CASHIER' || role === 'SHOP_ADMIN'
 
@@ -76,12 +89,20 @@ export default function Billing() {
     setBusy(true)
     setError('')
     try {
+      if (method === 'LOAN' && !clientName.trim()) {
+        setError('Please enter client name for credit/loan')
+        setBusy(false)
+        return
+      }
+
       const paid = await api(`/api/shop/orders/${selected.id}/pay`, {
         method: 'POST',
-        body: JSON.stringify({ method }),
+        body: JSON.stringify({ method, clientName: method === 'LOAN' ? clientName : undefined }),
       })
       printReceipt({ shopName: context?.name, order: paid, paymentMethod: method })
       setSelected(null)
+      setClientName('')
+      setIsLoanMode(false)
       await load()
     } catch (e) {
       setError(e.message)
@@ -111,10 +132,10 @@ export default function Billing() {
 
       <div className="segmented xl">
         <button type="button" className={tab === 'pending' ? 'on' : ''} onClick={() => setTab('pending')}>
-          <span>⏳</span> Pending
+          <HiOutlineClock /> Pending
         </button>
         <button type="button" className={tab === 'ready' ? 'on' : ''} onClick={() => setTab('ready')}>
-          <span>✅</span> Ready
+          <HiOutlineCheckCircle /> Ready
         </button>
       </div>
 
@@ -161,7 +182,7 @@ export default function Billing() {
           ))}
           {(tab === 'pending' ? pending : ready).length === 0 ? (
             <div className="empty-state">
-              <span className="empty-icon">📂</span>
+              <span className="empty-icon"><HiOutlineFolderOpen /></span>
               <p className="muted">No {tab} orders at the moment.</p>
             </div>
           ) : null}
@@ -217,41 +238,70 @@ export default function Billing() {
               <div className="detail-actions" style={{ marginTop: 16 }}>
                 {tab === 'ready' ? (
                   <>
-                    <button type="button" className="btn primary xl block" disabled={busy} onClick={() => pay('CASH')}>
-                       💵 Pay with Cash
-                    </button>
-                    <button
-                      type="button"
-                      className="btn outline xl block"
-                      style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
-                      disabled={busy}
-                      onClick={() => pay('MOBILE_MONEY')}
-                    >
-                       📱 Mobile Money
-                    </button>
-                    <button
-                      type="button"
-                      className="btn outline xl block"
-                      style={{ borderColor: '#666', color: '#666' }}
-                      disabled={busy}
-                      onClick={() => pay('POS')}
-                    >
-                       💳 Pay with POS (Card)
-                    </button>
-                    <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                    {!isLoanMode ? (
+                      <>
+                        <button type="button" className="btn primary xl block" disabled={busy} onClick={() => pay('CASH')}>
+                           <HiOutlineBanknotes /> Pay with Cash
+                        </button>
+                        <button
+                          type="button"
+                          className="btn outline xl block"
+                          style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
+                          disabled={busy}
+                          onClick={() => pay('MOBILE_MONEY')}
+                        >
+                           <HiOutlineDevicePhoneMobile /> Mobile Money
+                        </button>
+                        <button
+                          type="button"
+                          className="btn outline xl block"
+                          style={{ borderColor: '#666', color: '#666' }}
+                          disabled={busy}
+                          onClick={() => pay('POS')}
+                        >
+                           <HiOutlineCreditCard /> Pay with POS (Card)
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost xl block"
+                          style={{ color: 'var(--mahogany)', marginTop: 8 }}
+                          onClick={() => setIsLoanMode(true)}
+                        >
+                          <HiOutlineUserGroup /> Give Credit / Loan
+                        </button>
+                      </>
+                    ) : (
+                      <div className="stack" style={{ gap: 12, padding: 16, background: '#FFF3E0', borderRadius: 12 }}>
+                        <h4 style={{ margin: 0, fontSize: 14 }}>Credit Details</h4>
+                        <input 
+                          type="text" 
+                          placeholder="Client Name (Required)" 
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          style={{ borderColor: 'var(--caramel)' }}
+                        />
+                        <button type="button" className="btn primary block" onClick={() => pay('LOAN')}>
+                          Confirm Loan
+                        </button>
+                        <button type="button" className="btn ghost block" onClick={() => { setIsLoanMode(false); setClientName(''); }}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
                     <button
                       type="button"
                       className="btn outline xl block"
                       style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
                       onClick={() => nav(`/app/orders?edit=${selected.id}`)}
                     >
-                      ✏️ Edit Order (Client Consumed Less)
+                      <HiOutlinePencilSquare /> Edit Order (Reduced)
                     </button>
                   </>
                 ) : (
                   <div className="stack" style={{ gap: 12 }}>
                     <button type="button" className="btn good xl block" onClick={() => markReady(selected.id)}>
-                      ✨ Mark as Ready to Pay
+                      <HiOutlineCheckCircle /> Mark as Ready to Pay
                     </button>
                     <button 
                       type="button" 
@@ -259,7 +309,7 @@ export default function Billing() {
                       style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
                       onClick={() => nav(`/app/orders?edit=${selected.id}`)}
                     >
-                      ✏️ Edit Order Items
+                      <HiOutlinePencilSquare /> Edit Order Items
                     </button>
                   </div>
                 )}

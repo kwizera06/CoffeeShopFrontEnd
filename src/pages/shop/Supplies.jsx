@@ -10,16 +10,49 @@ export default function Supplies() {
   const [supplyItems, setSupplyItems] = useState([])
   const [newSupply, setNewSupply] = useState({ name: '', quantity: '', unit: 'pcs', price: '' })
   const [supplyNotes, setSupplyNotes] = useState('')
-
   const [success, setSuccess] = useState(false)
-
   const allowed = role === 'CASHIER' || role === 'SHOP_ADMIN' || role === 'WAITER'
 
+  const [requisitions, setRequisitions] = useState([])
+  
   function addSupplyItem() {
     if (!newSupply.name || !newSupply.quantity) return
     setSupplyItems([...supplyItems, { ...newSupply }])
     setNewSupply({ name: '', quantity: '', unit: 'pcs', price: '' })
   }
+  
+  const loadRequisitions = useCallback(async () => {
+    try {
+      const data = await api('/api/shop/requisitions')
+      setRequisitions(data)
+    } catch(e) { /* ignore silent */ }
+  }, [])
+
+  useEffect(() => {
+    if (!allowed) return
+    void loadRequisitions()
+
+    if (!supabase) return
+    const channel = supabase
+      .channel('staff-requisitions')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'requisitions',
+          filter: `tenant_id=eq.${getSession().tenantId}`,
+        },
+        () => {
+          void loadRequisitions().catch(() => {})
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [allowed, loadRequisitions])
 
   async function submitRequisition() {
     if (supplyItems.length === 0) return
@@ -35,6 +68,7 @@ export default function Supplies() {
       setSupplyNotes('')
       setSuccess(true)
       setTimeout(() => setSuccess(false), 4000)
+      void loadRequisitions()
     } catch (e) {
       setError(e.message)
     } finally {

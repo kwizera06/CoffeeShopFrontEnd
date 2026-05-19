@@ -52,6 +52,7 @@ export default function Owner() {
   const [staff, setStaff] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [requestedOrders, setRequestedOrders] = useState([])
+  const [loans, setLoans] = useState([])
 
   const [menuForm, setMenuForm] = useState({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
   const [tempRecipeLine, setTempRecipeLine] = useState({ ingredient_id: '', quantity_required: '' })
@@ -59,7 +60,7 @@ export default function Owner() {
   const SUB_CATEGORIES = [
     'Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Soft Drinks', 
     'Beer & Alcohol', 'Juice & Smoothies', 'Fast Food', 
-    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks'
+    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks',
   ]
 
   const CATEGORY_MAP = {
@@ -100,19 +101,27 @@ export default function Owner() {
   const [categorySales, setCategorySales] = useState({})
   const [methodSales, setMethodSales] = useState({ Cash: 0, MoMo: 0, POS: 0, Total: 0 })
 
-  const allowed = role === 'SHOP_ADMIN'
+  const [menuSearch, setMenuSearch] = useState('')
+  const [menuPage, setMenuPage] = useState(1)
+  
+  const [inventorySearch, setInventorySearch] = useState('')
+  const [inventoryPage, setInventoryPage] = useState(1)
+
+  const allowed = role === 'SHOP_ADMIN' || role === 'CASHIER'
 
   const reloadCore = useCallback(async () => {
-    const [o, m, s, i] = await Promise.all([
+    const [o, m, s, i, l] = await Promise.all([
       api(`/api/shop/owner/overview?date=${reportDay}`),
       api('/api/shop/menu'),
       api('/api/shop/staff'),
       api('/api/shop/owner/inventory'),
+      api('/api/shop/loans'),
     ])
     setOverview(o)
     setMenu(m)
     setStaff(s)
     setIngredients(i)
+    setLoans(l || [])
   }, [reportDay])
 
   useEffect(() => {
@@ -124,22 +133,29 @@ export default function Owner() {
 
     if (!supabase) return
 
-    // Subscribe to payments to refresh overview cards in real-time
+    // Subscribe to all relevant tables to refresh core data in real-time
     const channel = supabase
-      .channel('owner-realtime')
+      .channel('owner-all-sync')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'payments',
-          filter: `tenant_id=eq.${getSession().tenantId}`,
         },
-        () => {
-          void reloadCore().catch(() => {})
+        (payload) => {
+          // If the change belongs to this tenant, refresh
+          if (payload.new?.tenant_id === getSession().tenantId || payload.old?.tenant_id === getSession().tenantId) {
+            void reloadCore().catch(() => {})
+          }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Owner Dashboard subscribed to real-time updates')
+        } else {
+          console.log('⚠️ Owner realtime status:', status)
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)
@@ -240,7 +256,7 @@ export default function Owner() {
       } else {
         await api('/api/shop/menu', { method: 'POST', body: JSON.stringify(payload) })
       }
-      setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true })
+      setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
       setSelectedRecipeItem(null)
       await reloadCore()
     } catch (err) {
@@ -319,7 +335,7 @@ export default function Owner() {
     <div className="panel owner" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
       {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
 
-      {tab === 'overview' ? (
+      {tab === 'overview' && role === 'SHOP_ADMIN' ? (
         overview ? (
           <section className="dashboard-overview animate-in">
             {/* Dashboard Header */}
@@ -375,11 +391,20 @@ export default function Owner() {
 
               <div className="m-card" onClick={() => setTab('reports')}>
                 <div className="m-card-header">
-                  <span className="m-icon"><HiOutlineCreditCard /></span>
-                  <span className="m-title">POS SALES</span>
+                  <span className="m-icon" style={{ background: 'rgba(33, 150, 243, 0.1)', color: '#2196F3' }}><HiOutlineCreditCard /></span>
+                  <span className="m-title">POS / CARD</span>
                 </div>
                 <div className="m-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend neutral">• Card payments today</div>
+                <div className="m-trend neutral" style={{ color: '#2196F3' }}>• Bank & POS sales</div>
+              </div>
+
+              <div className="m-card" onClick={() => setTab('loans')}>
+                <div className="m-card-header">
+                  <span className="m-icon" style={{ background: 'rgba(121, 85, 72, 0.1)', color: '#795548' }}><HiOutlineUsers /></span>
+                  <span className="m-title">CREDIT / LOANS</span>
+                </div>
+                <div className="m-value">{Number(overview?.todayLoanSales ?? 0).toLocaleString()} RWF</div>
+                <div className="m-trend neutral" style={{ color: '#795548' }}>• Unpaid client credit</div>
               </div>
 
               <div className="m-card" onClick={() => setTab('reports')}>
@@ -605,7 +630,7 @@ export default function Owner() {
         )
       ) : null}
 
-      {tab === 'menu' ? (
+      {tab === 'menu' && role === 'SHOP_ADMIN' ? (
         <section className="stack">
           <form onSubmit={saveMenu} className="grid-form">
             <label className="field span-2">
@@ -801,6 +826,19 @@ export default function Owner() {
             </div>
           )}
 
+          <div className="row-between" style={{ marginBottom: 12 }}>
+             <h3 style={{ margin: 0 }}>Menu List</h3>
+             <div style={{ position: 'relative', width: 250 }}>
+               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+               <input 
+                 type="text" 
+                 placeholder="Search menu..." 
+                 value={menuSearch}
+                 onChange={(e) => { setMenuSearch(e.target.value); setMenuPage(1); }}
+                 style={{ paddingLeft: 32, borderRadius: 20, width: '100%', height: 36, fontSize: 13 }}
+               />
+             </div>
+          </div>
           <div className="table owner-menu-table">
             <div className="row head">
               <div>Name</div>
@@ -809,7 +847,10 @@ export default function Owner() {
               <div>Avail</div>
               <div></div>
             </div>
-            {menu.map((m) => (
+            {menu
+              .filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase()))
+              .slice((menuPage - 1) * 10, menuPage * 10)
+              .map((m) => (
               <div key={m.id} className="row">
                 <div style={{ fontWeight: 600 }}>{m.name}</div>
                 <div className="muted" style={{ fontSize: 13 }}>{m.category || 'Uncategorized'}</div>
@@ -826,10 +867,17 @@ export default function Owner() {
               </div>
             ))}
           </div>
+          <div className="row-between" style={{ marginTop: 16 }}>
+            <span className="muted text-sm">Showing page {menuPage} of {Math.ceil(menu.filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase())).length / 10) || 1}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn outline tiny" disabled={menuPage === 1} onClick={() => setMenuPage(p => Math.max(1, p - 1))}>Prev</button>
+              <button className="btn outline tiny" disabled={menuPage * 10 >= menu.filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase())).length} onClick={() => setMenuPage(p => p + 1)}>Next</button>
+            </div>
+          </div>
         </section>
       ) : null}
 
-      {tab === 'staff' ? (
+      {tab === 'staff' && role === 'SHOP_ADMIN' ? (
         <section className="stack">
           <form onSubmit={saveStaff} className="grid-form card" style={{ padding: 24, background: '#FFF' }}>
             <h3 style={{ gridColumn: 'span 2', marginBottom: 12 }}>
@@ -907,7 +955,7 @@ export default function Owner() {
         </section>
       ) : null}
 
-      {tab === 'reports' ? (
+      {tab === 'reports' && role === 'SHOP_ADMIN' ? (
         <section className="stack">
           <div className="grid-2">
             <label className="field">
@@ -1133,7 +1181,7 @@ export default function Owner() {
         </section>
       ) : null}
 
-      {tab === 'inventory' ? (
+      {tab === 'inventory' && role === 'SHOP_ADMIN' ? (
         <section className="stack">
           <form onSubmit={async (e) => {
             e.preventDefault();
@@ -1174,6 +1222,19 @@ export default function Owner() {
             </div>
           </form>
 
+          <div className="row-between" style={{ marginBottom: 12 }}>
+             <h3 style={{ margin: 0 }}>Inventory List</h3>
+             <div style={{ position: 'relative', width: 250 }}>
+               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+               <input 
+                 type="text" 
+                 placeholder="Search inventory..." 
+                 value={inventorySearch}
+                 onChange={(e) => { setInventorySearch(e.target.value); setInventoryPage(1); }}
+                 style={{ paddingLeft: 32, borderRadius: 20, width: '100%', height: 36, fontSize: 13 }}
+               />
+             </div>
+          </div>
           <div className="table inventory-table">
             <div className="row head">
               <div>Ingredient</div>
@@ -1183,7 +1244,10 @@ export default function Owner() {
               <div>Status</div>
               <div></div>
             </div>
-            {ingredients.map(ing => {
+            {ingredients
+              .filter(ing => ing.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+              .slice((inventoryPage - 1) * 10, inventoryPage * 10)
+              .map(ing => {
               const isLow = ing.stock_level < ing.min_threshold;
               return (
                 <div key={ing.id} className={`row ${isLow ? 'warn-row' : ''}`}>
@@ -1203,10 +1267,17 @@ export default function Owner() {
               )
             })}
           </div>
+          <div className="row-between" style={{ marginTop: 16 }}>
+            <span className="muted text-sm">Showing page {inventoryPage} of {Math.ceil(ingredients.filter(i => i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length / 10) || 1}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn outline tiny" disabled={inventoryPage === 1} onClick={() => setInventoryPage(p => Math.max(1, p - 1))}>Prev</button>
+              <button className="btn outline tiny" disabled={inventoryPage * 10 >= ingredients.filter(i => i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setInventoryPage(p => p + 1)}>Next</button>
+            </div>
+          </div>
         </section>
       ) : null}
 
-      {tab === 'requested_order' ? (
+      {tab === 'requested_order' && role === 'SHOP_ADMIN' ? (
         <section className="stack">
           <h3>Requested Orders</h3>
           {requestedOrders.length === 0 ? (
@@ -1253,6 +1324,76 @@ export default function Owner() {
               ))}
             </div>
           )}
+        </section>
+      ) : null}
+
+      {tab === 'loans' ? (
+        <section className="stack animate-in">
+          <div className="section-header">
+            <div>
+              <h3>Client Credits & Loans</h3>
+              <p className="muted">Track and manage unpaid client bills</p>
+            </div>
+            <div className="row-actions">
+              <span className="badge badge-warning">{loans.filter(l => l.status !== 'PAID').length} Active Loans</span>
+            </div>
+          </div>
+
+          <div className="m-table">
+            <div className="m-table-header" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr' }}>
+              <div>CLIENT NAME</div>
+              <div>AMOUNT</div>
+              <div>PAID</div>
+              <div>STATUS</div>
+              <div>DATE</div>
+            </div>
+            {loans.length === 0 ? (
+              <div className="empty-state" style={{ padding: '40px 0' }}>
+                <HiOutlineUsers size={48} style={{ opacity: 0.2, marginBottom: 12 }} />
+                <p className="muted">No client loans recorded yet.</p>
+              </div>
+            ) : (
+              loans.map(loan => {
+                const totalPaid = (loan.loan_payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0)
+                const balance = parseFloat(loan.amount) - totalPaid
+                return (
+                  <div key={loan.id} className="m-table-row" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 600 }}>{loan.client_name}</div>
+                    <div style={{ fontWeight: 600 }}>{Number(loan.amount).toLocaleString()} RWF</div>
+                    <div style={{ color: 'var(--success)' }}>{Number(totalPaid).toLocaleString()} RWF</div>
+                    <div>
+                      <span className={`badge ${loan.status === 'PAID' ? 'badge-success' : (loan.status === 'PARTIAL' ? 'badge-warning' : 'badge-danger')}`}>
+                        {loan.status}
+                      </span>
+                    </div>
+                    <div className="muted">{new Date(loan.created_at).toLocaleDateString()}</div>
+                    {loan.status !== 'PAID' && (
+                      <div className="row-actions" style={{ gridColumn: '1 / -1', marginTop: 8, background: '#FAF6F0', padding: 12, borderRadius: 8 }}>
+                         <span style={{ fontSize: 13 }}>Remaining Balance: <strong>{Number(balance).toLocaleString()} RWF</strong></span>
+                         <button 
+                           className="btn tiny healthy" 
+                           style={{ marginLeft: 'auto' }}
+                           onClick={async () => {
+                             const amt = window.prompt(`Enter payment amount for ${loan.client_name}:`, balance)
+                             if (!amt) return
+                             try {
+                               await api(`/api/shop/loans/${loan.id}/pay`, {
+                                 method: 'POST',
+                                 body: JSON.stringify({ amount: Number(amt), method: 'CASH' })
+                               })
+                               await reloadCore()
+                             } catch(e) { alert(e.message) }
+                           }}
+                         >
+                           Record Payment
+                         </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
         </section>
       ) : null}
     </div>

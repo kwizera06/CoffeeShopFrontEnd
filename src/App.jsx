@@ -6,6 +6,7 @@ import Orders from './pages/shop/Orders.jsx'
 import Billing from './pages/shop/Billing.jsx'
 import Supplies from './pages/shop/Supplies.jsx'
 import Owner from './pages/shop/Owner.jsx'
+import ChefDashboard from './pages/shop/ChefDashboard.jsx'
 import { getSession } from './api'
 import './screenshot-ui.css'
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="billing" element={<Billing />} />
           <Route path="supplies" element={<Supplies />} />
           <Route path="admin" element={<Owner />} />
+          <Route path="chef" element={<ChefDashboard />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

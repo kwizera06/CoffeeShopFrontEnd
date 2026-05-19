@@ -4,6 +4,21 @@ import { api, getSession } from '../../api'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
+import { 
+  HiOutlineMagnifyingGlass, 
+  HiOutlineShoppingCart, 
+  HiOutlinePrinter,
+  HiOutlineExclamationTriangle
+} from 'react-icons/hi2'
+import { 
+  IoCafeOutline, 
+  IoFastFoodOutline, 
+  IoBeerOutline, 
+  IoWineOutline, 
+  IoBowlingBallOutline,
+  IoIceCreamOutline
+} from 'react-icons/io5'
+import { MdOutlineLocalDrink, MdOutlineDinnerDining, MdBakeryDining } from 'react-icons/md'
 
 export default function Orders() {
   const nav = useNavigate()
@@ -66,7 +81,11 @@ export default function Orders() {
           void reloadMenu().catch(() => {})
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Orders page subscribed to menu changes')
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)
@@ -187,7 +206,7 @@ export default function Orders() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ position: 'relative', width: 240 }}>
-            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}><HiOutlineMagnifyingGlass /></span>
             <input 
               type="text" 
               placeholder="Search products or category..." 
@@ -232,7 +251,7 @@ export default function Orders() {
       <div className="billing-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {['DRINK', 'FOOD'].map((group) => {
-            const groupTitle = group === 'DRINK' ? '☕ Drinks' : '🍔 Food';
+           const groupTitle = group === 'DRINK' ? <><IoCafeOutline /> Drinks</> : <><IoFastFoodOutline /> Food</>;
             const s = search.toLowerCase();
             const groupItems = menu.filter(m => {
               const matchesGroup = (m.category_group || 'DRINK') === group;
@@ -263,15 +282,16 @@ export default function Orders() {
                             const getItemIcon = (name, category) => {
                               const n = name.toLowerCase();
                               const c = (category || '').toLowerCase();
-                              if (c.includes('coffee')) return '☕';
-                              if (c.includes('tea')) return '🍵';
-                              if (c.includes('soft') || c.includes('juice')) return '🥤';
-                              if (c.includes('beer') || c.includes('alcohol')) return '🍺';
-                              if (c.includes('fast') || c.includes('burger') || n.includes('burger')) return '🍔';
-                              if (c.includes('bakery') || c.includes('dessert')) return '🥐';
-                              if (c.includes('main') || c.includes('meal')) return '🍲';
-                              if (c.includes('snack')) return '🍿';
-                              return '☕';
+                              if (c.includes('coffee')) return <IoCafeOutline />;
+                              if (c.includes('tea')) return <IoCafeOutline />;
+                              if (c.includes('soft') || c.includes('juice')) return <MdOutlineLocalDrink />;
+                              if (c.includes('beer') || c.includes('alcohol')) return <IoBeerOutline />;
+                              if (c.includes('wine')) return <IoWineOutline />;
+                              if (c.includes('fast') || c.includes('burger') || n.includes('burger')) return <IoFastFoodOutline />;
+                              if (c.includes('bakery') || c.includes('dessert')) return <MdBakeryDining />;
+                              if (c.includes('main') || c.includes('meal')) return <MdOutlineDinnerDining />;
+                              if (c.includes('snack')) return <IoIceCreamOutline />;
+                              return <IoCafeOutline />;
                             }
                             return (
                               <div key={m.id} className={`menu-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
@@ -309,7 +329,7 @@ export default function Orders() {
           <div style={{ padding: 24 }}>
             {lines.length === 0 ? (
               <div className="empty-state">
-                <span className="empty-icon">🛒</span>
+                <span className="empty-icon"><HiOutlineShoppingCart /></span>
                 <h4>Cart is empty</h4>
                 <p className="muted">Select items from the menu to start an order.</p>
               </div>
@@ -344,17 +364,17 @@ export default function Orders() {
                 disabled={busy || !shift} 
                 onClick={sendToKitchen}
               >
-                {!shift ? '⚠️ Shift is CLOSED' : editId ? '💾 Update Order' : '⚡ Submit to Kitchen'}
+                {!shift ? <><HiOutlineExclamationTriangle /> Shift is CLOSED</> : editId ? '💾 Update Order' : '⚡ Submit to Kitchen'}
               </button>
-
-              <button 
-                type="button" 
-                className="btn outline block" 
-                style={{ marginTop: 12, borderColor: '#ccc' }}
-                onClick={handleManualPrint}
-              >
-                🖨️ Print Ticket (Preview)
-              </button>
+ 
+               <button 
+                 type="button" 
+                 className="btn outline block" 
+                 style={{ marginTop: 12, borderColor: '#ccc' }}
+                 onClick={handleManualPrint}
+               >
+                 <HiOutlinePrinter /> Print Ticket (Preview)
+               </button>
             </div>
           )}
           </div>

@@ -19,7 +19,7 @@ import {
   HiOutlineBell,
   HiOutlineMagnifyingGlass
 } from 'react-icons/hi2'
-import { IoRestaurantOutline } from 'react-icons/io5'
+import { IoRestaurantOutline, IoCafeOutline } from 'react-icons/io5'
 
 function Shell() {
   const nav = useNavigate()
@@ -66,7 +66,8 @@ function Shell() {
 
   const showOrders = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
   const showBilling = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
-  const showSupplies = role === 'CASHIER' || role === 'WAITER'
+  const showSupplies = role === 'CASHIER' || role === 'WAITER' || role === 'CHEF'
+  const showChef = role === 'CHEF' || role === 'SHOP_ADMIN'
   const showOwner = role === 'SHOP_ADMIN'
 
   // User avatar initials
@@ -139,6 +140,22 @@ function Shell() {
                        <HiOutlineQueueList /> Requisitions
                     </NavLink>
                   )}
+                  {(showOwner || role === 'CASHIER') && (
+                    <NavLink to="/app/admin?tab=loans" 
+                      className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                       <HiOutlineUsers /> Loans
+                    </NavLink>
+                  )}
+                  {showChef && (
+                    <NavLink to="/app/chef" 
+                      className={({ isActive }) => `m-link ${isActive ? 'active' : ''}`}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                       <IoRestaurantOutline /> Kitchen Management
+                    </NavLink>
+                  )}
                  
                  <div className="mobile-divider" style={{ margin: '16px 0', opacity: 0.1, background: '#fff', height: 1 }} />
                  
@@ -208,7 +225,7 @@ function Shell() {
                
                <div className="header-notif-container">
                   <div className="header-notif" onClick={() => setShowNotif(!showNotif)}>
-                    <HiOutlineBell /> <span className="notif-badge">3</span>
+                    <HiOutlineBell /> <span className="notif-badge">{context?.lowStockCount > 0 ? context.lowStockCount : 0}</span>
                   </div>
                   
                   {showNotif && (
@@ -278,6 +295,16 @@ function Shell() {
                   <HiOutlineQueueList /> Requisitions
                </NavLink>
              )}
+
+             <NavLink to="/app/admin?tab=loans" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineUsers /> Loans
+             </NavLink>
+
+             {showChef && (
+               <NavLink to="/app/chef" className={({ isActive }) => `v-link ${isActive ? 'active' : ''}`}>
+                  <IoRestaurantOutline /> Kitchen Management
+               </NavLink>
+             )}
              
              <div className="mobile-only-divider" style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '12px 0' }} />
              
@@ -301,7 +328,7 @@ function Shell() {
            {role === 'SHOP_ADMIN' && (
              <div className="sidebar-promo">
                 <div className="promo-box">
-                  <span className="promo-icon">☕</span>
+                  <span className="promo-icon"><IoCafeOutline /></span>
                   <h4>Great day for coffee!</h4>
                   <p>Delivering warmth, one cup at a time.</p>
                 </div>
@@ -314,20 +341,41 @@ function Shell() {
           <Outlet />
         </main>
 
-        {/* Mobile Bottom Navigation */}
+        {/* Mobile Bottom Navigation - Dynamic based on role */}
         <nav className="mobile-bottom-nav">
-          <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
-            <HiOutlineChartBar />
-            <span>Overview</span>
-          </NavLink>
-          <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
-            <HiOutlineDocumentChartBar />
-            <span>Reports</span>
-          </NavLink>
-          <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
-            <HiOutlineArchiveBox />
-            <span>Inventory</span>
-          </NavLink>
+          {showOwner ? (
+            <>
+              <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineChartBar />
+                <span>Overview</span>
+              </NavLink>
+              <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineDocumentChartBar />
+                <span>Reports</span>
+              </NavLink>
+              <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineArchiveBox />
+                <span>Inventory</span>
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink to="/app/orders" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineClipboardDocumentList />
+                <span>Orders</span>
+              </NavLink>
+              <NavLink to="/app/billing" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                <HiOutlineCreditCard />
+                <span>Billing</span>
+              </NavLink>
+              {showSupplies && (
+                <NavLink to="/app/supplies" className={({ isActive }) => `b-link ${isActive ? 'active' : ''}`}>
+                  <HiOutlineCube />
+                  <span>Supplies</span>
+                </NavLink>
+              )}
+            </>
+          )}
         </nav>
       </div>
     </div>

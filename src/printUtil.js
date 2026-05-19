@@ -32,11 +32,20 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   const timeStr = d.toLocaleTimeString()
 
   const rows = lines.map((l) => {
+    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
+    const ingText = ings.length > 0
+      ? `<div style="font-size: 11pt; padding-left: 20px; font-style: italic; text-align: left;">
+          ${ings.map(i => `* ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
+         </div>`
+      : ''
+
     return `
-      <div style="display:flex; justify-content:flex-start; gap: 16px; margin: 8px 0; font-size: 14pt;">
+      <div style="display:flex; justify-content:flex-start; gap: 16px; margin: 8px 0 0 0; font-size: 14pt;">
          <span style="min-width: 24px;">${esc(String(l.quantity))}</span>
          <span>${esc(l.itemName)}</span>
-      </div>`
+      </div>
+      ${ingText}
+    `
   }).join('')
 
   root.innerHTML = `
@@ -98,15 +107,24 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   const dateStr = d.toLocaleDateString()
   const timeStr = d.toLocaleTimeString()
 
-  const rows = (order?.lines ?? []).map((l) => `
-    <div style="display:flex; justify-content:space-between; margin: 6px 0; font-size: 12pt;">
+  const rows = (order?.lines ?? []).map((l) => {
+    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
+    const ingText = ings.length > 0
+      ? `<div style="font-size: 11pt; padding-left: 32px; font-style: italic; text-align: left;">
+          ${ings.map(i => `* ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
+         </div>`
+      : ''
+
+    return `
+    <div style="display:flex; justify-content:space-between; margin: 6px 0 0 0; font-size: 12pt;">
        <div style="display:flex; gap: 12px; max-width: 65%;">
           <span style="min-width: 20px;">${esc(String(l.quantity))}</span>
           <span style="word-wrap:break-word;">${esc(l.itemName)}</span>
        </div>
        <div>${Number(l.price).toLocaleString()}</div>
     </div>
-  `).join('')
+    ${ingText}
+  `}).join('')
 
   const total = Number(order?.total ?? 0).toLocaleString()
   const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH')

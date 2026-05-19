@@ -78,8 +78,8 @@ small {
 
 /* ΓöÇΓöÇ Panel Containers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 .panel {
-  width: min(1300px, 96%);
-  margin: 32px auto;
+  width: min(1500px, 98%);
+  margin: 24px auto;
   background: var(--bg-card);
   border: 1px solid rgba(196, 164, 132, 0.18);
   border-radius: var(--radius-xl);
