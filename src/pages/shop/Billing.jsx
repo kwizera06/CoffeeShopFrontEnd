@@ -13,7 +13,7 @@ import {
   HiOutlineCheckCircle, 
   HiOutlineFolderOpen, 
   HiOutlinePrinter,
-  HiOutlineUserGroup
+  HiOutlineUsers
 } from 'react-icons/hi2'
 
 export default function Billing() {
@@ -65,7 +65,11 @@ export default function Billing() {
           void load().catch(() => {})
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Billing page subscribed to order changes')
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)

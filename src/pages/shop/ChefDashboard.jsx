@@ -51,7 +51,11 @@ export default function ChefDashboard() {
           void loadInventory().catch(() => {})
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Chef Dashboard subscribed to inventory changes')
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)

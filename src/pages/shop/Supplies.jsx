@@ -47,7 +47,11 @@ export default function Supplies() {
           void loadRequisitions().catch(() => {})
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Supplies page subscribed to requisition changes')
+        }
+      })
 
     return () => {
       void supabase.removeChannel(channel)
