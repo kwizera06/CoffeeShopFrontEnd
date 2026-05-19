@@ -31,6 +31,7 @@ export default function Orders() {
   const [tableNumber, setTableNumber] = useState('1')
   const [qtyById, setQtyById] = useState({})
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [staff, setStaff] = useState([])
@@ -157,7 +158,6 @@ export default function Orders() {
           method: 'PATCH',
           body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
         })
-        // No automatic printing
         nav('/app/billing')
       } else {
         const created = await api('/api/shop/orders', {
@@ -169,6 +169,8 @@ export default function Orders() {
         
         setQtyById({})
         setTableNumber('1')
+        setSuccessMsg('✅ Order successfully sent to kitchen!')
+        setTimeout(() => setSuccessMsg(''), 4000)
       }
     } catch (e) {
       setError(e.message)
@@ -247,6 +249,8 @@ export default function Orders() {
       </div>
 
       {error && !editId ? <div className="error">{error}</div> : null}
+      {successMsg && !editId ? <div style={{ padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>{successMsg}</div> : null}
+
 
       <div className="billing-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>

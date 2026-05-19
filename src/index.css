@@ -2007,3 +2007,22 @@ select {
     display: block;
   }
 }
+
+/* ΓöÇΓöÇ Global Button Interaction Feedback ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+.btn:active, button[type="button"]:active, button[type="submit"]:active {
+  transform: scale(0.96) !important;
+  transition: transform 0.05s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+@keyframes processing-pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.85; }
+  100% { opacity: 0.6; }
+}
+
+.btn:disabled, button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed !important;
+  animation: processing-pulse 1.5s infinite ease-in-out;
+  pointer-events: none !important; /* Forces prevention of double click */
+}
