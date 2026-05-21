@@ -201,10 +201,13 @@ function withThermalPage(printFn) {
       body > *:not(#print-root) { display: none !important; }
       #print-root {
         display: block !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
         width: 80mm !important;
         max-width: 80mm !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding: 0 0 30mm 0 !important; /* Huge bottom padding to feed paper past cutter */
       }
     }
   `
