@@ -960,12 +960,20 @@ export default function Owner() {
 
                 <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
                   <div className="table modern-list-table">
-                    <div className="row head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', background: 'rgba(255,255,255,0.02)', padding: '16px 24px' }}>
-                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
-                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Price</div>
-                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
-                      <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Actions</div>
-                    </div>
+                    {(() => {
+                      const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(cat);
+                      const gridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
+                      return (
+                        <div className="row head" style={{ gridTemplateColumns: gridCols, background: 'rgba(255,255,255,0.02)', padding: '16px 24px' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
+                          {isSimpleListing && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</div>}
+                          {isSimpleListing && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</div>}
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</div>
+                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
+                          <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Actions</div>
+                        </div>
+                      )
+                    })()}
                     {items
                       .filter(i => 
                         i.name.toLowerCase().includes(menuSearch.toLowerCase()) || 
@@ -982,9 +990,11 @@ export default function Owner() {
                         const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category);
                         
                         const isRecipeBased = (m.is_recipe || hasRecipeArray || isRecipeCategory) && !isSimpleCategory;
+                        const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(m.category);
+                        const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
 
                         return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent' }}>
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {m.name}
@@ -1009,6 +1019,16 @@ export default function Owner() {
                                 )}
                               </div>
                             </div>
+                            {isSimpleListing && (
+                              <div style={{ color: 'rgba(52, 152, 219, 1)', fontWeight: 600, alignSelf: 'center' }}>
+                                {m.stock_level !== undefined && m.stock_level !== null ? m.stock_level : 0}
+                              </div>
+                            )}
+                            {isSimpleListing && (
+                              <div style={{ color: 'rgba(255,255,255,0.7)', alignSelf: 'center' }}>
+                                {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
+                              </div>
+                            )}
                             <div style={{ color: '#4CAF50', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
                             <div style={{ alignSelf: 'center' }}>
                               <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
