@@ -182,9 +182,7 @@ function navigateByRole(nav, role) {
     nav('/admin', { replace: true })
   } else if (role === 'SHOP_ADMIN') {
     nav('/app/admin', { replace: true })
-  } else if (role === 'CASHIER') {
-    nav('/app/billing', { replace: true })
   } else {
-    nav('/app/orders', { replace: true })
+    nav('/app/cashier', { replace: true })
   }
 }

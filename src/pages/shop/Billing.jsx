@@ -13,7 +13,8 @@ import {
   HiOutlineCheckCircle, 
   HiOutlineFolderOpen, 
   HiOutlinePrinter,
-  HiOutlineUsers
+  HiOutlineUsers,
+  HiOutlineTrash
 } from 'react-icons/hi2'
 
 export default function Billing() {
@@ -28,7 +29,7 @@ export default function Billing() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [clientName, setClientName] = useState('')
-  const [isLoanMode, setIsLoanMode] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState(null)
 
   const allowed = role === 'CASHIER' || role === 'SHOP_ADMIN'
 
@@ -80,7 +81,19 @@ export default function Billing() {
     setError('')
     try {
       await api(`/api/shop/orders/${orderId}/mark-ready`, { method: 'POST' })
-      await load()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function cancelOrderRequest(orderId) {
+    if (!window.confirm('Are you sure you want to cancel this order?')) {
+      return
+    }
+    setError('')
+    try {
+      await api(`/api/shop/orders/${orderId}`, { method: 'DELETE' })
+      setSelected(null)
     } catch (e) {
       setError(e.message)
     }
@@ -106,8 +119,7 @@ export default function Billing() {
       printReceipt({ shopName: context?.name, order: paid, paymentMethod: method })
       setSelected(null)
       setClientName('')
-      setIsLoanMode(false)
-      await load()
+      setPaymentMethod(null)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -152,7 +164,7 @@ export default function Billing() {
               key={o.id}
               className={`list-item ${selected?.id === o.id ? 'active' : ''}`}
               role="presentation"
-              onClick={() => setSelected(o)}
+              onClick={() => { setSelected(o); setPaymentMethod(null); setClientName(''); }}
             >
               <div className="row-between" style={{ marginBottom: 8 }}>
                 <div>
@@ -242,64 +254,65 @@ export default function Billing() {
               <div className="detail-actions" style={{ marginTop: 16 }}>
                 {tab === 'ready' ? (
                   <>
-                    {!isLoanMode ? (
-                      <>
-                        <button type="button" className="btn primary xl block" disabled={busy} onClick={() => pay('CASH')}>
-                           <HiOutlineBanknotes /> Pay with Cash
+                    <div>
+                      <h4 style={{ margin: '0 0 12px 0', fontSize: 13, color: '#666' }}>Select Payment Method</h4>
+                      <div className="stack" style={{ gap: 8, marginBottom: 16 }}>
+                        <button
+                          type="button"
+                          className={`btn ${paymentMethod === 'CASH' ? 'primary' : 'outline'} xl block`}
+                          onClick={() => setPaymentMethod('CASH')}
+                          style={paymentMethod === 'CASH' ? {} : { borderColor: '#ccc', color: '#333' }}
+                        >
+                           <HiOutlineBanknotes /> Cash
                         </button>
                         <button
                           type="button"
-                          className="btn outline xl block"
-                          style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
-                          disabled={busy}
-                          onClick={() => pay('MOBILE_MONEY')}
+                          className={`btn ${paymentMethod === 'MOBILE_MONEY' ? 'primary' : 'outline'} xl block`}
+                          onClick={() => setPaymentMethod('MOBILE_MONEY')}
+                          style={paymentMethod === 'MOBILE_MONEY' ? {} : { borderColor: '#ccc', color: '#333' }}
                         >
                            <HiOutlineDevicePhoneMobile /> Mobile Money
                         </button>
                         <button
                           type="button"
-                          className="btn outline xl block"
-                          style={{ borderColor: '#666', color: '#666' }}
-                          disabled={busy}
-                          onClick={() => pay('POS')}
+                          className={`btn ${paymentMethod === 'POS' ? 'primary' : 'outline'} xl block`}
+                          onClick={() => setPaymentMethod('POS')}
+                          style={paymentMethod === 'POS' ? {} : { borderColor: '#ccc', color: '#333' }}
                         >
-                           <HiOutlineCreditCard /> Pay with POS (Card)
+                           <HiOutlineCreditCard /> POS (Card)
                         </button>
                         <button
                           type="button"
-                          className="btn ghost xl block"
-                          style={{ color: 'var(--mahogany)', marginTop: 8 }}
-                          onClick={() => setIsLoanMode(true)}
+                          className={`btn ${paymentMethod === 'LOAN' ? 'primary' : 'outline'} xl block`}
+                          onClick={() => setPaymentMethod('LOAN')}
+                          style={paymentMethod === 'LOAN' ? {} : { borderColor: '#ccc', color: '#333' }}
                         >
-                          <HiOutlineUserGroup /> Give Credit / Loan
-                        </button>
-                      </>
-                    ) : (
-                      <div className="stack" style={{ gap: 12, padding: 16, background: '#FFF3E0', borderRadius: 12 }}>
-                        <h4 style={{ margin: 0, fontSize: 14 }}>Credit Details</h4>
-                        <input 
-                          type="text" 
-                          placeholder="Client Name (Required)" 
-                          value={clientName}
-                          onChange={(e) => setClientName(e.target.value)}
-                          style={{ borderColor: 'var(--caramel)' }}
-                        />
-                        <button type="button" className="btn primary block" onClick={() => pay('LOAN')}>
-                          Confirm Loan
-                        </button>
-                        <button type="button" className="btn ghost block" onClick={() => { setIsLoanMode(false); setClientName(''); }}>
-                          Cancel
+                          <HiOutlineUsers /> Credit / Loan
                         </button>
                       </div>
-                    )}
+
+                      {paymentMethod === 'LOAN' && (
+                        <div className="stack" style={{ gap: 12, padding: 16, background: '#FFF3E0', borderRadius: 12, marginBottom: 16 }}>
+                          <h4 style={{ margin: 0, fontSize: 14 }}>Credit Details</h4>
+                          <input 
+                            type="text" 
+                            placeholder="Client Name (Required)" 
+                            value={clientName}
+                            onChange={(e) => setClientName(e.target.value)}
+                            style={{ borderColor: 'var(--caramel)' }}
+                          />
+                        </div>
+                      )}
+                    </div>
                     <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
                     <button
                       type="button"
                       className="btn outline xl block"
-                      style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
-                      onClick={() => nav(`/app/orders?edit=${selected.id}`)}
+                      style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
+                      disabled={!paymentMethod || busy}
+                      onClick={() => pay(paymentMethod)}
                     >
-                      <HiOutlinePencilSquare /> Edit Order (Reduced)
+                      <HiOutlinePrinter /> Generate Final Ticket
                     </button>
                   </>
                 ) : (
@@ -314,6 +327,14 @@ export default function Billing() {
                       onClick={() => nav(`/app/orders?edit=${selected.id}`)}
                     >
                       <HiOutlinePencilSquare /> Edit Order Items
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn outline xl block" 
+                      style={{ borderColor: '#E53935', color: '#E53935' }}
+                      onClick={() => cancelOrderRequest(selected.id)}
+                    >
+                      <HiOutlineTrash /> Cancel Order
                     </button>
                   </div>
                 )}

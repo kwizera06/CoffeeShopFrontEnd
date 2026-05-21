@@ -162,10 +162,8 @@ export default function Orders() {
       } else {
         const created = await api('/api/shop/orders', {
           method: 'POST',
-          body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter }),
+          body: JSON.stringify({ tableNumber: tn, items, waiterId: selectedWaiter, submitToKitchen: true }),
         })
-        // Move from DRAFT -> PENDING by submitting to kitchen (NO PRINT)
-        await api(`/api/shop/orders/${created.id}/submit-kitchen`, { method: 'POST' })
         
         setQtyById({})
         setTableNumber('1')

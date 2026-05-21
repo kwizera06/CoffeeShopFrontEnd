@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
 import { supabase } from '../../supabaseClient'
@@ -34,10 +35,13 @@ import {
   HiOutlineUsers,
   HiOutlineDocumentText,
   HiOutlineChevronDown,
-  HiOutlineFire
+  HiOutlineFire,
+  HiOutlineMagnifyingGlass
 } from 'react-icons/hi2'
 import { IoCafeOutline } from 'react-icons/io5'
 import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/md'
+
+import './OwnerModern.css'
 
 export default function Owner() {
   const nav = useNavigate()
@@ -46,6 +50,7 @@ export default function Owner() {
   const tab = searchParams.get('tab') || 'overview'
   const setTab = (t) => setSearchParams({ tab: t })
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
@@ -54,7 +59,17 @@ export default function Owner() {
   const [requestedOrders, setRequestedOrders] = useState([])
   const [loans, setLoans] = useState([])
 
-  const [menuForm, setMenuForm] = useState({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
+  const [menuForm, setMenuForm] = useState({ 
+    id: '', 
+    name: '', 
+    price: '', 
+    category: 'Hot Coffee', 
+    available: true, 
+    productRecipe: [],
+    isRecipe: false,
+    stockLevel: '',
+    buyingPrice: ''
+  })
   const [tempRecipeLine, setTempRecipeLine] = useState({ ingredient_id: '', quantity_required: '' })
   
   const SUB_CATEGORIES = [
@@ -100,13 +115,25 @@ export default function Owner() {
   const [shifts, setShifts] = useState([])
   const [categorySales, setCategorySales] = useState({})
   const [methodSales, setMethodSales] = useState({ Cash: 0, MoMo: 0, POS: 0, Total: 0 })
+  const [topStaff, setTopStaff] = useState([])
 
   const [menuSearch, setMenuSearch] = useState('')
   const [menuPage, setMenuPage] = useState(1)
   
   const [inventorySearch, setInventorySearch] = useState('')
-  const [inventoryPage, setInventoryPage] = useState(1)
+  const [criticalPage, setCriticalPage] = useState(1);
+  const [healthyPage, setHealthyPage] = useState(1);
+  
+  const [loanSearch, setLoanSearch] = useState('')
+  const [loanFilter, setLoanFilter] = useState('ALL')
+  const [loanForm, setLoanForm] = useState({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' })
 
+  const [reqSearch, setReqSearch] = useState('')
+  const [reqFilter, setReqFilter] = useState('ALL')
+  
+  const [staffSearch, setStaffSearch] = useState('')
+  const [staffFilter, setStaffFilter] = useState('ALL')
+  
   const allowed = role === 'SHOP_ADMIN' || role === 'CASHIER'
 
   const reloadCore = useCallback(async () => {
@@ -195,9 +222,18 @@ export default function Owner() {
           // Calculate Category & Method Sales from Daily
           const catMap = {}
           const metMap = { Cash: 0, MoMo: 0, POS: 0, Total: 0 }
+          const staffMap = {}
+          
           d.forEach(row => {
             metMap[row.methodLabel] = (metMap[row.methodLabel] || 0) + Number(row.amount)
             metMap.Total += Number(row.amount)
+            
+            // Staff
+            const sName = row.waiterName || 'Unknown'
+            if (!staffMap[sName]) staffMap[sName] = { name: sName, amount: 0, count: 0 }
+            staffMap[sName].amount += Number(row.amount)
+            staffMap[sName].count += 1
+
             if (row.rawItems) {
               row.rawItems.forEach(item => {
                 const cat = item.category || 'Uncategorized'
@@ -207,6 +243,7 @@ export default function Owner() {
           })
           setCategorySales(catMap)
           setMethodSales(metMap)
+          setTopStaff(Object.values(staffMap).sort((a,b) => b.amount - a.amount).slice(0, 5))
         })
         .catch((e) => setError(e.message))
     }, [allowed, tab, reportDay, month.year, month.month])
@@ -248,7 +285,10 @@ export default function Owner() {
       category: menuForm.category,
       category_group: CATEGORY_MAP[menuForm.category] || 'DRINK',
       available: menuForm.available,
-      recipe: menuForm.productRecipe
+      is_recipe: menuForm.isRecipe,
+      stock_level: Number(menuForm.stockLevel || 0),
+      buying_price: Number(menuForm.buyingPrice || 0),
+      recipe: menuForm.isRecipe ? menuForm.productRecipe : []
     }
     try {
       if (menuForm.id) {
@@ -256,7 +296,10 @@ export default function Owner() {
       } else {
         await api('/api/shop/menu', { method: 'POST', body: JSON.stringify(payload) })
       }
-      setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
+      setMenuForm({ 
+        id: '', name: '', price: '', category: 'Hot Coffee', 
+        available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' 
+      })
       setSelectedRecipeItem(null)
       await reloadCore()
     } catch (err) {
@@ -283,13 +326,41 @@ export default function Owner() {
       currentRecipe = await api(`/api/shop/owner/recipes/${mi.id}`);
     } catch(e) {}
 
+    const isBeverage = ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water'].includes(mi.category);
+    let autoStock = mi.stock_level || '';
+    let autoBuyingPrice = mi.buying_price || '';
+
+    // If it's a beverage, try to pull the REAL data from inventory
+    if (isBeverage) {
+      if (currentRecipe.length > 0 && currentRecipe[0].ingredients) {
+        // Option A: Pull from existing recipe link
+        autoStock = currentRecipe[0].ingredients.stock_level;
+        autoBuyingPrice = currentRecipe[0].ingredients.buying_price;
+      } else {
+        // Option B: Fallback - Match by Name in the ingredients list
+        const matchedIng = ingredients.find(ing => ing.name.toLowerCase() === mi.name.toLowerCase());
+        if (matchedIng) {
+          autoStock = matchedIng.stock_level;
+          autoBuyingPrice = matchedIng.buying_price;
+        }
+      }
+    }
+
     setMenuForm({ 
       id: mi.id, 
       name: mi.name, 
       price: String(mi.price), 
       category: mi.category || 'Hot Coffee',
       available: mi.available,
-      productRecipe: currentRecipe.map(r => ({ ingredient_id: r.ingredient_id, quantity_required: r.quantity_required, name: r.ingredients?.name, unit: r.ingredients?.unit }))
+      productRecipe: currentRecipe.map(r => ({ 
+        ingredient_id: r.ingredient_id, 
+        quantity_required: r.quantity_required, 
+        name: r.ingredients?.name, 
+        unit: r.ingredients?.unit 
+      })),
+      isRecipe: mi.is_recipe || currentRecipe.length > 0,
+      stockLevel: autoStock,
+      buyingPrice: autoBuyingPrice
     })
     setSelectedRecipeItem(mi)
   }
@@ -332,417 +403,423 @@ export default function Owner() {
   }
 
   return (
-    <div className="panel owner" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
-      {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
+    <div className="panel owner am-content-wrapper" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
+      <div className="am-dashboard-content owner-modern-page am-animate">
+        {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
 
       {tab === 'overview' && role === 'SHOP_ADMIN' ? (
         overview ? (
-          <section className="dashboard-overview animate-in">
-            {/* Dashboard Header */}
-            <header className="dashboard-header">
-              <div className="dashboard-title">
+          <>
+            {/* Header */}
+            <header className="am-header">
+              <div className="am-title">
                 <h1>Admin Dashboard</h1>
-                <p>Here's what's happening with your coffee shop today.</p>
+                <p>Welcome back! Here's what's happening today.</p>
               </div>
-              <div className="date-selector" style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('dash-date').showPicker()}>
+              <div className="am-date-picker" onClick={() => document.getElementById('modern-date').showPicker()}>
                 <HiOutlineCalendarDays />
-                <span>
-                  {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </span>
+                <span>{new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <HiOutlineChevronDown style={{ fontSize: 10 }} />
                 <input 
-                  id="dash-date"
+                  id="modern-date" 
                   type="date" 
-                  value={reportDay}
-                  onChange={(e) => setReportDay(e.target.value)}
-                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', right: 0 }}
+                  value={reportDay} 
+                  onChange={e => setReportDay(e.target.value)} 
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                 />
-                <HiOutlineChevronDown style={{ fontSize: 10, opacity: 0.5 }} />
               </div>
             </header>
 
-            {/* Top Metrics Row */}
-            <div className="metric-cards-grid" style={{ marginBottom: 24 }}>
-              <div className="m-card" onClick={() => setTab('reports')}>
-                <div className="m-card-header">
-                  <span className="m-icon"><HiOutlineCurrencyDollar /></span>
-                  <span className="m-title">TOTAL REVENUE</span>
+            {/* Metrics Row 1: Top 4 */}
+            <div className="am-metrics-grid-top">
+              <div className="am-metric-card" onClick={() => setTab('reports')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineCurrencyDollar /></div>
+                  TOTAL REVENUE
                 </div>
-                <div className="m-value">{Number(overview?.todayRevenue ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend positive">↑ Warm sales today</div>
-              </div>
-              
-              <div className="m-card" onClick={() => setTab('reports')}>
-                <div className="m-card-header">
-                  <span className="m-icon"><HiOutlineBanknotes /></span>
-                  <span className="m-title">CASH SALES</span>
-                </div>
-                <div className="m-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend neutral">• Physical cash today</div>
+                <div className="am-metric-value">{Number(overview?.todayRevenue ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> +12% vs yesterday</div>
               </div>
 
-              <div className="m-card" onClick={() => setTab('reports')}>
-                <div className="m-card-header">
-                  <span className="m-icon"><HiOutlineDevicePhoneMobile /></span>
-                  <span className="m-title">MOMO SALES</span>
+              <div className="am-metric-card" onClick={() => setTab('reports')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineBanknotes /></div>
+                  CASH SALES
                 </div>
-                <div className="m-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend neutral">• Mobile money today</div>
+                <div className="am-metric-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neu">• Physical cash today</div>
               </div>
 
-              <div className="m-card" onClick={() => setTab('reports')}>
-                <div className="m-card-header">
-                  <span className="m-icon" style={{ background: 'rgba(33, 150, 243, 0.1)', color: '#2196F3' }}><HiOutlineCreditCard /></span>
-                  <span className="m-title">POS / CARD</span>
+              <div className="am-metric-card" onClick={() => setTab('reports')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineDevicePhoneMobile /></div>
+                  MOMO SALES
                 </div>
-                <div className="m-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend neutral" style={{ color: '#2196F3' }}>• Bank & POS sales</div>
+                <div className="am-metric-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neu">• Mobile money today</div>
               </div>
 
-              <div className="m-card" onClick={() => setTab('loans')}>
-                <div className="m-card-header">
-                  <span className="m-icon" style={{ background: 'rgba(121, 85, 72, 0.1)', color: '#795548' }}><HiOutlineUsers /></span>
-                  <span className="m-title">CREDIT / LOANS</span>
+              <div className="am-metric-card" onClick={() => setTab('reports')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineCreditCard /></div>
+                  POS / CARD
                 </div>
-                <div className="m-value">{Number(overview?.todayLoanSales ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend neutral" style={{ color: '#795548' }}>• Unpaid client credit</div>
-              </div>
-
-              <div className="m-card" onClick={() => setTab('reports')}>
-                <div className="m-card-header">
-                  <span className="m-icon"><HiOutlineArrowTrendingUp /></span>
-                  <span className="m-title">TODAY'S PROFIT</span>
-                </div>
-                <div className="m-value">{Number(overview?.todayProfit ?? 0).toLocaleString()} RWF</div>
-                <div className="m-trend positive">↑ Revenue minus costs</div>
+                <div className="am-metric-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neu">• Bank & POS sales</div>
               </div>
             </div>
 
-            {/* Main Row: Chart + Status Cards */}
-            <div className="main-dashboard-grid">
-              <div className="chart-card" style={{ minWidth: 0 }}>
-                <h3>Sales Overview <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>Today ▼</span></h3>
-                <div style={{ width: '100%', height: 320, minWidth: 0, position: 'relative' }}>
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                    <AreaChart data={charts.hourly?.length > 0 ? charts.hourly : [{ hour: '6AM', total: 0 }, { hour: '9AM', total: 0 }, { hour: '12PM', total: 0 }, { hour: '3PM', total: 0 }, { hour: '6PM', total: 0 }, { hour: '9PM', total: 0 }]}>
-                      <defs>
-                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4CAF50" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#4CAF50" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F0EB" />
-                      <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#AAA' }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#AAA' }} />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
-                      />
-                      <Area type="monotone" dataKey="total" name="Revenue (RWF)" stroke="#4CAF50" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+            {/* Metrics Row 2: Bottom 3 */}
+            <div className="am-metrics-grid-mid">
+              <div className="am-metric-card" onClick={() => setTab('loans')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineUsers /></div>
+                  CREDIT / LOANS
                 </div>
+                <div className="am-metric-value">{Number(overview?.todayLoanSales ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neu" style={{ color: '#E67E22' }}><HiOutlineExclamationTriangle /> Unpaid credit</div>
               </div>
 
-              <div className="secondary-grid">
-                <div className="m-card mini" onClick={() => nav('/app/orders')}>
-                  <div className="m-card-header">
-                    <span className="m-icon"><HiOutlineCheckCircle /></span>
-                    <span className="m-title">COMPLETED</span>
-                  </div>
-                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.todayPaidOrdersCount ?? 0}</div>
-                  <div className="m-trend positive">↑ Serving fast</div>
+              <div className="am-metric-card" onClick={() => setTab('reports')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon"><HiOutlineArrowTrendingUp /></div>
+                  TODAY'S PROFIT
                 </div>
-                <div className="m-card mini" onClick={() => nav('/app/orders')}>
-                  <div className="m-card-header">
-                    <span className="m-icon"><HiOutlineFire /></span>
-                    <span className="m-title">IN PREP</span>
-                  </div>
-                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.pendingKitchenCount ?? 0}</div>
-                  <div className="m-trend neutral">• Freshly roasting</div>
+                <div className="am-metric-value">{Number(overview?.todayProfit ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> Revenue minus costs</div>
+              </div>
+
+              <div className="am-metric-card" onClick={() => setTab('inventory')}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon" style={{ background: 'rgba(255, 193, 7, 0.1)', color: '#FFC107' }}><HiOutlineArchiveBox /></div>
+                  STOCK VALUE
                 </div>
-                <div className="m-card mini" onClick={() => nav('/app/orders')}>
-                  <div className="m-card-header">
-                    <span className="m-icon"><HiOutlineBell /></span>
-                    <span className="m-title">WAITING</span>
-                  </div>
-                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.readyCount ?? 0}</div>
-                  <div className="m-trend neutral">• Ready to serve</div>
-                </div>
-                <div className="m-card mini" onClick={() => setTab('inventory')}>
-                  <div className="m-card-header">
-                    <span className="m-icon"><HiOutlineExclamationTriangle /></span>
-                    <span className="m-title">LOW STOCK</span>
-                  </div>
-                  <div className="m-value" style={{ fontSize: 24 }}>{overview?.lowStockCount ?? 0}</div>
-                  <div className="m-trend warning">Check inventory</div>
-                </div>
-                <div className="m-card mini span-2" onClick={() => setTab('inventory')}>
-                  <div className="m-card-header">
-                    <span className="m-icon"><HiOutlineArchiveBox /></span>
-                    <span className="m-title">INVENTORY VALUE</span>
-                  </div>
-                  <div className="m-value" style={{ fontSize: 24 }}>{Number(overview?.inventoryValue ?? 0).toLocaleString()} RWF</div>
-                  <div className="m-trend neutral">• Total asset value</div>
-                </div>
+                <div className="am-metric-value">{Number(overview?.inventoryValue ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neu">• Total inventory worth</div>
               </div>
             </div>
 
-            {/* Bottom Row: Top Items + Payment Donut + Activity + Actions */}
-            <div className="main-dashboard-grid" style={{ marginTop: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                {/* Top Items */}
-                <div className="chart-card">
-                  <h3>Top Selling Items <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>Today ▼</span></h3>
-                  <div className="top-items-list">
-                    {(charts.topProducts || []).slice(0, 5).map((item, idx) => (
-                      <div key={idx} className="top-item">
-                        <span className="top-item-rank">{idx + 1}</span>
-                        <div className="top-item-img"><IoCafeOutline /></div>
-                        <div className="top-item-info">
-                          <div className="top-item-name">{item.name}</div>
-                          <div className="top-item-qty">{item.value} sold</div>
+            {/* Main Content Grid */}
+            <div className="am-main-grid">
+              {/* Left Column: Chart & Recent Orders */}
+              <div className="am-left-col">
+                <div className="am-chart-card">
+                  <div className="am-chart-header">
+                    <h3>Sales Overview</h3>
+                    <div className="am-chart-tabs">
+                      <div className="am-chart-tab active">Today</div>
+                      <div className="am-chart-tab">Week</div>
+                      <div className="am-chart-tab">Month</div>
+                    </div>
+                  </div>
+                  <div style={{ width: '100%', height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={charts.hourly?.slice(6, 22) || []}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 10 }} />
+                        <YAxis hide />
+                        <Tooltip 
+                          cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                          contentStyle={{ background: '#161716', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                        />
+                        <Bar dataKey="total" fill="var(--admin-accent-green)" radius={[4, 4, 0, 0]} barSize={30} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="am-table-card">
+                  <div className="am-chart-header">
+                    <h3>Recent Orders</h3>
+                    <button className="btn ghost tiny" onClick={() => nav('/app/orders')}>View all</button>
+                  </div>
+                  <div className="am-order-list">
+                    {dailyRows.slice(0, 5).map((row, idx) => (
+                      <div key={idx} className="am-order-row">
+                        <div className="am-order-main">
+                          <div className="am-order-tbl">Tbl {idx + 1}</div>
+                          <div className="am-order-items">{row.items.length > 40 ? row.items.slice(0, 40) + '...' : row.items}</div>
                         </div>
-                        <div className="top-item-val">{Number(item.revenue || 0).toLocaleString()} RWF</div>
+                        <div className="am-order-right">
+                          <div className="am-order-total">{Number(row.amount).toLocaleString()} RWF</div>
+                          <div className="am-status-badge done">Done</div>
+                        </div>
                       </div>
                     ))}
-                    {(!charts.topProducts || charts.topProducts.length === 0) && <div className="muted italic" style={{ fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No sales data yet.</div>}
+                    {dailyRows.length === 0 && <div className="muted pad text-center">No orders yet today.</div>}
                   </div>
-                </div>
-
-                {/* Sales by Payment Method */}
-                <div className="chart-card" style={{ minWidth: 0 }}>
-                   <h3>Sales by Payment Method</h3>
-                   <div style={{ height: 180, minWidth: 0, position: 'relative' }}>
-                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                        <PieChart>
-                          <Pie 
-                            data={[
-                              { name: 'Cash', value: overview?.todayCashSales || 0 },
-                              { name: 'MoMo', value: overview?.todayMomoSales || 0 },
-                              { name: 'POS', value: overview?.todayPosSales || 0 }
-                            ].filter(x => x.value > 0)}
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
-                             <Cell fill="#4CAF50" />
-                             <Cell fill="#3D1F08" />
-                             <Cell fill="#C3A68D" />
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                   </div>
-                   <div className="donut-legend">
-                      <div className="legend-item">
-                        <div className="legend-label"><span className="legend-color" style={{ background: '#4CAF50' }}></span> Cash</div>
-                        <div className="legend-val">{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</div>
-                      </div>
-                      <div className="legend-item">
-                        <div className="legend-label"><span className="legend-color" style={{ background: '#3D1F08' }}></span> MoMo</div>
-                        <div className="legend-val">{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</div>
-                      </div>
-                      <div className="legend-item">
-                        <div className="legend-label"><span className="legend-color" style={{ background: '#C3A68D' }}></span> POS</div>
-                        <div className="legend-val">{Number(overview?.todayPosSales || 0).toLocaleString()} RWF</div>
-                      </div>
-                   </div>
                 </div>
               </div>
 
-              <div className="stack" style={{ gap: 24 }}>
-                {/* Recent Activity */}
-                <div className="chart-card" style={{ flex: 1 }}>
-                  <div className="row-between" style={{ marginBottom: 20 }}>
-                    <h3 style={{ margin: 0 }}>Recent Activity</h3>
-                    <button className="btn outline tiny" style={{ fontSize: 10 }}>View all</button>
+              {/* Right Column: Mini Cards & Lists */}
+              <div className="am-info-stack">
+                <div className="am-mini-status" onClick={() => nav('/app/orders?status=READY')}>
+                   <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#4CAF50' }}><HiOutlineCheckCircle /></div>
+                   <div className="am-status-info">
+                     <h4>{overview?.todayPaidOrdersCount ?? 0}</h4>
+                     <p>Completed Orders</p>
+                   </div>
+                </div>
+
+                <div className="am-mini-status" onClick={() => nav('/app/chef')}>
+                   <div className="am-status-icon" style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3' }}><HiOutlineFire /></div>
+                   <div className="am-status-info">
+                     <h4>{overview?.pendingKitchenCount ?? 0}</h4>
+                     <p>In Prep (Kitchen)</p>
+                   </div>
+                </div>
+
+                <div className="am-mini-status" onClick={() => setTab('inventory')}>
+                   <div className="am-status-icon" style={{ background: 'rgba(255,87,34,0.1)', color: '#FF5722' }}><HiOutlineExclamationTriangle /></div>
+                   <div className="am-status-info">
+                     <h4>{overview?.lowStockCount ?? 0}</h4>
+                     <p>Low Stock Items</p>
+                   </div>
+                </div>
+
+                <div className="am-table-card" style={{ marginTop: 0, cursor: 'pointer' }} onClick={() => setTab('reports')}>
+                  <h3>Payment Methods</h3>
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#4CAF50' }} /></div>
                   </div>
-                  <div className="activity-list">
-                    {dailyRows.slice(0, 3).map((row, idx) => (
-                      <div key={idx} className="activity-item">
-                        <div className="activity-icon"><MdOutlineReceiptLong /></div>
-                        <div className="activity-info">
-                          <div className="activity-name">Payment received</div>
-                          <div className="activity-meta">#{row.orderId.slice(0, 8)} - {row.methodLabel}</div>
-                        </div>
-                        <div className="activity-time">{new Date(row.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
-                    ))}
-                    
-                    {overview?.lowStockCount > 0 && (
-                      <div className="activity-item">
-                        <div className="activity-icon" style={{ background: '#FFF3E0' }}><HiOutlineExclamationTriangle style={{ color: '#E67E22' }} /></div>
-                        <div className="activity-info">
-                          <div className="activity-name">Low Stock Alert</div>
-                          <div className="activity-meta">{overview.lowStockCount} items need attention</div>
-                        </div>
-                        <div className="activity-time">Live</div>
-                      </div>
-                    )}
- 
-                    {dailyRows.length === 0 && (
-                      <div className="activity-item">
-                        <div className="activity-icon"><IoCafeOutline /></div>
-                        <div className="activity-info">
-                          <div className="activity-name">Shop is open</div>
-                          <div className="activity-meta">Waiting for first order</div>
-                        </div>
-                        <div className="activity-time">Today</div>
-                      </div>
-                    )}
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayMomoSales / overview?.todayRevenue) * 100 || 0}%`, background: '#2196F3' }} /></div>
+                  </div>
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>Card / POS</span> <span>{Number(overview?.todayPosSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayPosSales / overview?.todayRevenue) * 100 || 0}%`, background: '#FF9800' }} /></div>
                   </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="chart-card">
-                  <h3>Quick Actions</h3>
-                  <div className="quick-actions-grid">
-                    <div className="action-btn" onClick={() => nav('/app/orders')}>
-                       <span className="action-icon"><HiOutlineShoppingCart /></span>
-                       <span className="action-text">New Order</span>
+                <div className="am-table-card" style={{ marginTop: 0, cursor: 'pointer' }} onClick={() => setTab('staff')}>
+                  <h3>Top Staff Today</h3>
+                  {topStaff.map((s, idx) => (
+                    <div key={idx} className="am-staff-row">
+                      <div className="am-staff-avatar">{s.name[0]}</div>
+                      <div className="am-staff-info">
+                        <div className="am-staff-name">{s.name}</div>
+                        <div className="am-staff-meta">{s.count} orders</div>
+                      </div>
+                      <div className="am-staff-val">
+                        <div className="am-staff-amt">{Number(s.amount).toLocaleString()} RWF</div>
+                      </div>
                     </div>
-                    <div className="action-btn" onClick={() => setTab('inventory')}>
-                       <span className="action-icon"><HiOutlinePlusCircle /></span>
-                       <span className="action-text">Add Inventory</span>
-                    </div>
-                    <div className="action-btn" onClick={() => setTab('reports')}>
-                       <span className="action-icon"><HiOutlineChartBar /></span>
-                       <span className="action-text">View Reports</span>
-                    </div>
-                    <div className="action-btn" onClick={() => setTab('staff')}>
-                       <span className="action-icon"><HiOutlineUsers /></span>
-                       <span className="action-text">Manage Staff</span>
-                    </div>
-                  </div>
+                  ))}
+                  {topStaff.length === 0 && <div className="muted italic text-sm">No activity recorded for staff today.</div>}
                 </div>
               </div>
             </div>
-
-            <footer style={{ marginTop: 48, padding: '24px 0', borderTop: '1px solid #F5F0EB', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#AAA' }}>
-               <span>© 2025 Mama Prince's Coffee Shop. All rights reserved.</span>
-               <span>Made with ☕ and ❤️</span>
+            <footer style={{ marginTop: 48, opacity: 0.3, textAlign: 'center', fontSize: 11, borderTop: '1px solid rgba(255,255,255,0.05)', padding: '24px 0' }}>
+               © 2026 Olitech Market POS. Midnight Espresso Premium Dashboard.
             </footer>
-          </section>
+          </>
         ) : (
-          <div className="loading-state">
-            <div className="spinner" />
-            <span>Loading premium insights…</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 20 }}>
+            <div className="loading-spinner"></div>
+            <span>Brewing your dashboard...</span>
           </div>
         )
       ) : null}
 
       {tab === 'menu' && role === 'SHOP_ADMIN' ? (
-        <section className="stack">
-          <form onSubmit={saveMenu} className="grid-form">
-            <label className="field span-2">
-              <span>Name</span>
-              <input
-                value={menuForm.name}
-                onChange={(e) => setMenuForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Category</span>
-              <select 
-                value={menuForm.category} 
-                onChange={(e) => setMenuForm((f) => ({ ...f, category: e.target.value }))}
-              >
-                {SUB_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Price</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={menuForm.price}
-                onChange={(e) => setMenuForm((f) => ({ ...f, price: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="field chk">
-              <input
-                type="checkbox"
-                checked={menuForm.available}
-                onChange={(e) => setMenuForm((f) => ({ ...f, available: e.target.checked }))}
-              />
-              <span>Available</span>
-            </label>
-            <div className="span-2 card" style={{ padding: 16, background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-               <h4 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                 <HiOutlineDocumentText /> Recipe (Inventory Deduction)
-               </h4>
-               
-               <div className="grid-form" style={{ gridTemplateColumns: '2fr 1fr auto', alignItems: 'flex-end', gap: 10 }}>
-                  <label className="field">
-                    <span>Ingredient</span>
-                    <select 
-                      value={tempRecipeLine.ingredient_id} 
-                      onChange={e => setTempRecipeLine(f => ({ ...f, ingredient_id: e.target.value }))}
-                    >
-                      <option value="">-- Select --</option>
-                      {ingredients.map(ing => (
-                        <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Qty</span>
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Product & Menu Management</h1>
+              <p>Organize your shop offerings by category</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Products</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
                     <input 
-                      type="number" 
-                      step="0.01" 
-                      value={tempRecipeLine.quantity_required} 
-                      onChange={e => setTempRecipeLine(f => ({ ...f, quantity_required: e.target.value }))} 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Find a product..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
                     />
-                  </label>
-                  <button 
-                    type="button" 
-                    className="btn ghost" 
-                    style={{ height: 42 }}
-                    onClick={() => {
-                      if (!tempRecipeLine.ingredient_id || !tempRecipeLine.quantity_required) return;
-                      const ing = ingredients.find(x => x.id === tempRecipeLine.ingredient_id);
-                      setMenuForm(f => ({
-                        ...f,
-                        productRecipe: [...f.productRecipe, { ...tempRecipeLine, name: ing?.name, unit: ing?.unit }]
-                      }))
-                      setTempRecipeLine({ ingredient_id: '', quantity_required: '' })
-                    }}
-                  >
-                    Add
-                  </button>
-               </div>
-
-               <div className="stack" style={{ marginTop: 12, gap: 8 }}>
-                 {menuForm.productRecipe.map((line, idx) => (
-                   <div key={idx} className="row-between" style={{ padding: '8px 12px', background: 'var(--bg-panel)', borderRadius: 8, fontSize: 13, border: '1px solid var(--border)' }}>
-                      <span><strong>{line.name}</strong>: {line.quantity_required} {line.unit}</span>
-                      <button 
-                        type="button" 
-                        className="btn warn tiny" 
-                        onClick={() => setMenuForm(f => ({ ...f, productRecipe: f.productRecipe.filter((_, i) => i !== idx) }))}
-                      >
-                        Remove
-                      </button>
-                   </div>
-                 ))}
-                 {menuForm.productRecipe.length === 0 && <div className="muted italic text-sm">No ingredients added yet.</div>}
+                  </div>
                </div>
             </div>
+          </header>
 
-            <div className="span-2 row-actions">
-              <button className="btn primary xl" type="submit">
+          <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
+            <h3 style={{ marginBottom: 24, color: '#E6CCB2', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
+              {menuForm.id ? 'Edit Product' : `Add Product to ${menuForm.category}`}
+            </h3>
+
+            <div className="am-form-grid">
+              <label className="am-field span-2">
+                <span>Product Name</span>
+                <input
+                  id="menu-name-input"
+                  className="am-input"
+                  value={menuForm.name}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, name: e.target.value }))}
+                  required
+                  placeholder="e.g. Cappuccino Large"
+                />
+              </label>
+
+              <div className="am-field span-2">
+                <span>Production Method</span>
+                <div className="am-type-toggle">
+                   <button 
+                     type="button" 
+                     className={!menuForm.isRecipe ? 'active' : ''} 
+                     onClick={() => setMenuForm(f => ({ ...f, isRecipe: false }))}
+                   >
+                     Ready-to-Sell (Soda, Water...)
+                   </button>
+                   <button 
+                     type="button" 
+                     className={menuForm.isRecipe ? 'active' : ''} 
+                     onClick={() => setMenuForm(f => ({ ...f, isRecipe: true }))}
+                   >
+                     Prepared (Coffee, Food...)
+                   </button>
+                </div>
+              </div>
+
+              <label className="am-field">
+                <span>Price (RWF)</span>
+                <input
+                  className="am-input"
+                  type="number"
+                  value={menuForm.price}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, price: e.target.value }))}
+                  required
+                  placeholder="0"
+                />
+              </label>
+
+              <label className="am-field">
+                <span>Category</span>
+                <select 
+                  className="am-input"
+                  value={menuForm.category} 
+                  onChange={(e) => setMenuForm((f) => ({ ...f, category: e.target.value }))}
+                >
+                  {SUB_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </label>
+
+              {(!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) ? (
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, gridColumn: 'span 2' }}>
+                   <label className="am-field">
+                     <span>Current Stock Level</span>
+                     <input 
+                       className="am-input"
+                       type="number" 
+                       value={menuForm.stockLevel} 
+                       onChange={e => setMenuForm(f => ({ ...f, stockLevel: e.target.value }))}
+                       placeholder="e.g. 50"
+                     />
+                   </label>
+                   <label className="am-field">
+                     <span>Purchase Price (RWF)</span>
+                     <input 
+                       className="am-input"
+                       type="number" 
+                       value={menuForm.buyingPrice} 
+                       onChange={e => setMenuForm(f => ({ ...f, buyingPrice: e.target.value }))}
+                       placeholder="e.g. 500"
+                     />
+                   </label>
+                 </div>
+              ) : (
+                <div className="am-field">
+                  <span style={{ opacity: 0.5 }}>Availability</span>
+                  <label className="am-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={menuForm.available}
+                      onChange={(e) => setMenuForm((f) => ({ ...f, available: e.target.checked }))}
+                    />
+                    <span>Visible in Point of Sale</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {menuForm.isRecipe && (
+              <div className="item-recipe-area anim-fade" style={{ marginTop: 24, padding: 20, background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)' }}>
+                 <h4 style={{ color: '#4CAF50', marginBottom: 16, fontSize: '15px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                   <HiOutlineDocumentText /> Recipe Ingredients
+                 </h4>
+                 
+                 <div className="am-recipe-input-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 12, alignItems: 'flex-end' }}>
+                    <label className="am-field">
+                      <span style={{ fontSize: '11px' }}>Ingredient</span>
+                      <select 
+                        className="am-input"
+                        value={tempRecipeLine.ingredient_id} 
+                        style={{ height: '38px' }}
+                        onChange={e => setTempRecipeLine(f => ({ ...f, ingredient_id: e.target.value }))}
+                      >
+                        <option value="">-- Select --</option>
+                        {ingredients.map(ing => (
+                          <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="am-field">
+                      <span style={{ fontSize: '11px' }}>Qty</span>
+                      <input 
+                        className="am-input"
+                        type="number" 
+                        step="0.01" 
+                        style={{ height: '38px' }}
+                        value={tempRecipeLine.quantity_required} 
+                        onChange={e => setTempRecipeLine(f => ({ ...f, quantity_required: e.target.value }))} 
+                      />
+                    </label>
+                    <button 
+                      type="button" 
+                      className="btn primary" 
+                      style={{ height: 38, padding: '0 20px' }}
+                      onClick={() => {
+                        if (!tempRecipeLine.ingredient_id || !tempRecipeLine.quantity_required) return;
+                        const ing = ingredients.find(x => x.id === tempRecipeLine.ingredient_id);
+                        setMenuForm(f => ({
+                          ...f,
+                          productRecipe: [...f.productRecipe, { ...tempRecipeLine, name: ing?.name, unit: ing?.unit }]
+                        }))
+                        setTempRecipeLine({ ingredient_id: '', quantity_required: '' })
+                      }}
+                    >
+                      Add
+                    </button>
+                 </div>
+
+                 <div className="am-recipe-list" style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                   {menuForm.productRecipe.map((line, idx) => (
+                   <div key={idx} className="am-recipe-tag">
+                        <span>{line.name}: <strong>{line.quantity_required} {line.unit}</strong></span>
+                        <button type="button" onClick={() => setMenuForm(f => ({ ...f, productRecipe: f.productRecipe.filter((_, i) => i !== idx) }))}>×</button>
+                     </div>
+                   ))}
+                 </div>
+              </div>
+            )}
+
+            <div className="span-2 row-actions" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <button className="btn primary xl" type="submit" style={{ minWidth: 160 }}>
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
-              {menuForm.id ? (
+              {menuForm.id && (
                 <button type="button" className="btn ghost" onClick={() => {
-                  setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [] })
+                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' })
                   setSelectedRecipeItem(null)
                 }}>
                   Done / Close
                 </button>
-              ) : null}
+              )}
             </div>
           </form>
 
@@ -826,576 +903,1232 @@ export default function Owner() {
             </div>
           )}
 
-          <div className="row-between" style={{ marginBottom: 12 }}>
-             <h3 style={{ margin: 0 }}>Menu List</h3>
-             <div style={{ position: 'relative', width: 250 }}>
+          <div className="row-between" style={{ marginBottom: 20 }}>
+             <div className="am-title">
+               <h1 style={{ fontSize: '24px' }}>Product & Menu Management</h1>
+               <p className="muted">Organize your shop offerings by category</p>
+             </div>
+             <div style={{ position: 'relative', width: 300 }}>
                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
                <input 
                  type="text" 
-                 placeholder="Search menu..." 
+                 placeholder="Search products..." 
                  value={menuSearch}
                  onChange={(e) => { setMenuSearch(e.target.value); setMenuPage(1); }}
-                 style={{ paddingLeft: 32, borderRadius: 20, width: '100%', height: 36, fontSize: 13 }}
+                 style={{ 
+                   paddingLeft: 36, 
+                   borderRadius: 14, 
+                   width: '100%', 
+                   height: 44, 
+                   fontSize: 14,
+                   background: '#111',
+                   border: '1px solid var(--admin-card-border)',
+                   color: '#fff'
+                 }}
                />
              </div>
           </div>
-          <div className="table owner-menu-table">
-            <div className="row head">
-              <div>Name</div>
-              <div>Category</div>
-              <div>Price</div>
-              <div>Avail</div>
-              <div></div>
-            </div>
-            {menu
-              .filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase()))
-              .slice((menuPage - 1) * 10, menuPage * 10)
-              .map((m) => (
-              <div key={m.id} className="row">
-                <div style={{ fontWeight: 600 }}>{m.name}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{m.category || 'Uncategorized'}</div>
-                <div>{Number(m.price).toLocaleString()} RWF</div>
-                <div>
-                  <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`}>
-                    {m.available ? 'AVAILABLE' : 'HIDDEN'}
-                  </span>
+
+          <div className="stack" style={{ gap: 40 }}>
+            {Object.entries(
+              menu.reduce((acc, m) => {
+                const cat = m.category || 'Uncategorized';
+                if (!acc[cat]) acc[cat] = [];
+                acc[cat].push(m);
+                return acc;
+              }, {})
+            )
+            .filter(([cat]) => cat.toLowerCase().includes(menuSearch.toLowerCase()) || menuSearch === '')
+            .map(([cat, items]) => (
+              <div key={cat} className="am-category-group am-animate">
+                <div className="row-between" style={{ marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: '20px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
+                    <span style={{ color: '#4CAF50' }}>•</span> {cat}
+                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>{items.length} Products</span>
+                  </h3>
+                  <button 
+                    className="btn primary tiny" 
+                    onClick={() => {
+                      setMenuForm({ id: '', name: '', price: '', category: cat, available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' });
+                      document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                      setTimeout(() => document.getElementById('menu-name-input')?.focus(), 500);
+                    }}
+                  >
+                    + Add Product
+                  </button>
                 </div>
-                <div className="row-actions">
-                  <button type="button" className="btn ghost" onClick={() => editMenu(m)}>Edit</button>
-                  <button type="button" className="btn warn" style={{ padding: '4px 8px' }} onClick={() => deleteMenu(m.id)}>Remove</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="row-between" style={{ marginTop: 16 }}>
-            <span className="muted text-sm">Showing page {menuPage} of {Math.ceil(menu.filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase())).length / 10) || 1}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn outline tiny" disabled={menuPage === 1} onClick={() => setMenuPage(p => Math.max(1, p - 1))}>Prev</button>
-              <button className="btn outline tiny" disabled={menuPage * 10 >= menu.filter(m => m.name.toLowerCase().includes(menuSearch.toLowerCase()) || (m.category || '').toLowerCase().includes(menuSearch.toLowerCase())).length} onClick={() => setMenuPage(p => p + 1)}>Next</button>
-            </div>
-          </div>
-        </section>
-      ) : null}
 
-      {tab === 'staff' && role === 'SHOP_ADMIN' ? (
-        <section className="stack">
-          <form onSubmit={saveStaff} className="grid-form card" style={{ padding: 24, background: '#FFF' }}>
-            <h3 style={{ gridColumn: 'span 2', marginBottom: 12 }}>
-              {staffForm.id ? 'Edit Staff Member' : 'Add New Staff Member'}
-            </h3>
-            <label className="field">
-              <span>Name</span>
-              <input
-                value={staffForm.name}
-                onChange={(e) => setStaffForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={staffForm.email}
-                onChange={(e) => setStaffForm((f) => ({ ...f, email: e.target.value }))}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>{staffForm.id ? 'New Password (leave blank to keep)' : 'Temporary password'}</span>
-              <input
-                type="password"
-                value={staffForm.password}
-                onChange={(e) => setStaffForm((f) => ({ ...f, password: e.target.value }))}
-                required={!staffForm.id}
-              />
-            </label>
-            <label className="field">
-              <span>Role</span>
-              <select value={staffForm.role} onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}>
-                <option value="CASHIER">Shop Staff (Waiter + Billing)</option>
-              </select>
-            </label>
-            <div className="span-2" style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-              <button className="btn primary xl" type="submit">
-                {staffForm.id ? 'Update Staff Member' : 'Register Staff'}
-              </button>
-              {staffForm.id && (
-                <button type="button" className="btn ghost" onClick={() => setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })}>
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-          </form>
-
-          <div className="table staff-table">
-            <div className="row head">
-              <div>Name</div>
-              <div>Email</div>
-              <div>Role</div>
-              <div style={{ textAlign: 'right' }}>Actions</div>
-            </div>
-            {staff.map((u) => (
-              <div key={u.id} className="row">
-                <div style={{ fontWeight: 600 }}>{u.name}</div>
-                <div className="muted">{u.email}</div>
-                <div>
-                  <span className="badge badge-neutral">{u.role === 'SHOP_ADMIN' ? 'OWNER' : 'STAFF'}</span>
-                </div>
-                <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
-                   {u.role !== 'SHOP_ADMIN' && (
-                     <>
-                        <button type="button" className="btn ghost tiny" onClick={() => editStaff(u)}>Edit</button>
-                        <button type="button" className="btn warn tiny" onClick={() => deleteStaff(u.id)}>Remove</button>
-                     </>
-                   )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {tab === 'reports' && role === 'SHOP_ADMIN' ? (
-        <section className="stack">
-          <div className="grid-2">
-            <label className="field">
-              <span>Daily report</span>
-              <input type="date" value={reportDay} onChange={(e) => setReportDay(e.target.value)} />
-              <div className="muted">{today}</div>
-            </label>
-            <label className="field">
-              <span>Monthly report</span>
-              <div className="row-actions">
-                <input
-                  className="small-input"
-                  type="number"
-                  value={month.year}
-                  onChange={(e) => setMonth((m) => ({ ...m, year: Number(e.target.value) }))}
-                />
-                <input
-                  className="small-input"
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={month.month}
-                  onChange={(e) => setMonth((m) => ({ ...m, month: Number(e.target.value) }))}
-                />
-              </div>
-            </label>
-          </div>
-
-          <div className="metric-cards-grid" style={{ marginBottom: 32 }}>
-            <div className="m-card mini" style={{ borderColor: '#4CAF50' }}>
-               <div className="m-label">Cash Revenue</div>
-               <div className="m-value small">{methodSales.Cash.toLocaleString()} RWF</div>
-            </div>
-            <div className="m-card mini" style={{ borderColor: '#2196F3' }}>
-               <div className="m-label">MoMo Revenue</div>
-               <div className="m-value small">{methodSales.MoMo.toLocaleString()} RWF</div>
-            </div>
-            <div className="m-card mini" style={{ borderColor: '#FF9800' }}>
-               <div className="m-label">POS/Card Revenue</div>
-               <div className="m-value small">{methodSales.POS.toLocaleString()} RWF</div>
-            </div>
-            <div className="m-card mini">
-               <div className="m-label">Total Day Sales</div>
-               <div className="m-value small">{methodSales.Total.toLocaleString()} RWF</div>
-            </div>
-          </div>
-
-          <div className="grid-2" style={{ gap: 24, marginBottom: 32 }}>
-             <div className="card">
-                <h3>Sales by Category</h3>
-                <div className="table tiny">
-                  <div className="row head">
-                     <div>Category</div>
-                     <div>Total Sold</div>
-                  </div>
-                  {Object.entries(categorySales).map(([cat, total]) => (
-                    <div key={cat} className="row">
-                       <div style={{ fontWeight: 600 }}>{cat}</div>
-                       <div>{total.toLocaleString()} RWF</div>
+                <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="table modern-list-table">
+                    <div className="row head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', background: 'rgba(255,255,255,0.02)', padding: '16px 24px' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Price</div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
+                      <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Actions</div>
                     </div>
-                  ))}
-                  {Object.keys(categorySales).length === 0 && <div className="muted pad italic">No sales yet today</div>}
-                </div>
-             </div>
+                    {items
+                      .filter(i => 
+                        i.name.toLowerCase().includes(menuSearch.toLowerCase()) || 
+                        (i.category && i.category.toLowerCase().includes(menuSearch.toLowerCase()))
+                      )
+                      .map((m) => {
+                        const recipeList = m.recipe || m.product_recipes || m.ingredients_list || [];
+                        const hasRecipeArray = Array.isArray(recipeList) && recipeList.length > 0;
+                        
+                        // Categories that MUST be recipe-based
+                        const isRecipeCategory = ['Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Fast Food', 'Main Food / Meals', 'Juice & Smoothies', 'Bakery & Desserts'].includes(m.category);
+                        
+                        // Categories that MUST be simple stock (bottles/cans)
+                        const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category);
+                        
+                        const isRecipeBased = (m.is_recipe || hasRecipeArray || isRecipeCategory) && !isSimpleCategory;
 
-             <div className="card">
-                <h3>Shift Summary (Updated)</h3>
-                <div className="table tiny">
-                   <div className="row head">
-                      <div>Shift</div>
-                      <div>Expected</div>
-                      <div>Given</div>
-                      <div>Balance</div>
-                   </div>
-                     {shifts.map((s, idx) => {
-                       const exp = (s.total_cash_sales || 0) + (s.total_momo_sales || 0)
-                       const giv = (s.actual_cash_on_hand || 0) + (s.actual_momo_on_hand || 0)
-                       const bal = giv - exp
-                       return (
-                         <div key={idx} className="row" style={{ borderLeft: `4px solid ${bal === 0 ? '#4CAF50' : bal < 0 ? '#f44336' : '#FF9800'}` }}>
-                            <div style={{ fontSize: 11 }}>
-                               <strong>{s.opened_by?.name || 'Staff'}</strong><br/>
-                               <span className="muted">{new Date(s.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {s.closed_at ? new Date(s.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Open'}</span>
+                        return (
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {m.name}
+                                {m.available ? null : <span style={{ opacity: 0.3, fontSize: '10px' }}>(Hidden)</span>}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                {isRecipeBased ? (
+                                  <span className="badge" style={{ background: 'rgba(155, 89, 182, 0.1)', color: '#9b59b6', fontSize: '9px', padding: '1px 6px', fontWeight: 800 }}>
+                                    🍳 RECIPE-BASED
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ background: 'rgba(52, 152, 219, 0.1)', color: '#3498db', fontSize: '9px', padding: '1px 6px', fontWeight: 800 }}>
+                                    📦 SIMPLE STOCK
+                                  </span>
+                                )}
+                                
+                                {/* Only show warning if we are absolutely sure m.recipe exists as an empty array */}
+                                {isRecipeCategory && Array.isArray(m.recipe) && m.recipe.length === 0 && (
+                                  <span style={{ color: '#E74C3C', fontSize: '10px', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
+                                    <HiOutlineExclamationTriangle /> NO RECIPE ADDED
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div style={{ fontSize: 11 }}>
-                               Cash: {Number(s.total_cash_sales || 0).toLocaleString()}<br/>
-                               MoMo: {Number(s.total_momo_sales || 0).toLocaleString()}<br/>
-                               <span className="muted">POS (Info): {Number(s.total_pos_sales || 0).toLocaleString()}</span>
+                            <div style={{ color: '#4CAF50', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
+                            <div style={{ alignSelf: 'center' }}>
+                              <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
+                                {m.available ? 'AVAILABLE' : 'HIDDEN'}
+                              </span>
                             </div>
-                            <div style={{ fontSize: 11 }}>
-                               Cash: {Number(s.actual_cash_on_hand || 0).toLocaleString()}<br/>
-                               MoMo: {Number(s.actual_momo_on_hand || 0).toLocaleString()}
+                            <div className="row-actions" style={{ justifyContent: 'flex-end', alignSelf: 'center' }}>
+                              <button type="button" className="btn ghost tiny" onClick={() => {
+                                editMenu(m);
+                                document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                              }}>Edit</button>
+                              <button type="button" className="btn warn tiny" style={{ padding: '6px 10px' }} onClick={() => deleteMenu(m.id)}>🗑️</button>
                             </div>
-                            <div style={{ fontWeight: 700, color: (bal >= 0 ? '#4CAF50' : '#f44336'), fontSize: 13 }}>
-                               {bal > 0 ? '+' : ''}{bal.toLocaleString()}
-                            </div>
-                         </div>
-                       )
-                     })}
-                   {shifts.length === 0 && <div className="muted pad italic">No shift reconciliation data yet</div>}
-                </div>
-             </div>
-          </div>
-
-
-          <div className="grid-2 chart-row">
-            <div className="card chart-card" style={{ minWidth: 0 }}>
-              <h3>Hourly Sales Volume</h3>
-              <div style={{ width: '100%', height: 300, minWidth: 0, position: 'relative' }}>
-                {charts.hourly?.length > 0 && (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                    <BarChart data={charts.hourly}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(245,235,221,0.08)" vertical={false} />
-                      <XAxis dataKey="hour" fontSize={11} tick={{ fill: 'rgba(245,235,221,0.45)' }} axisLine={false} tickLine={false} />
-                      <YAxis fontSize={11} tick={{ fill: 'rgba(245,235,221,0.45)' }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ background: '#2C1810', border: '1px solid rgba(196,164,132,0.25)', borderRadius: 10, color: '#F5EBDD', fontSize: 13 }}
-                        cursor={{ fill: 'rgba(196,164,132,0.08)' }}
-                      />
-                      <Bar dataKey="total" fill="#C4A484" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-
-            <div className="card chart-card" style={{ minWidth: 0 }}>
-              <h3>Top Selling Products</h3>
-              <div style={{ width: '100%', height: 300, minWidth: 0, position: 'relative' }}>
-                {charts.topProducts?.length > 0 && (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                    <PieChart>
-                      <Pie
-                        data={charts.topProducts}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        fill="#C4A484"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        labelLine={{ stroke: 'rgba(245,235,221,0.3)' }}
-                      >
-                        {charts.topProducts.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={['#C4A484', '#6F4E37', '#D2B48C', '#8B6347', '#3E2723'][index % 5]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ background: '#2C1810', border: '1px solid rgba(196,164,132,0.25)', borderRadius: 10, color: '#F5EBDD', fontSize: 13 }}
-                      />
-                      <Legend wrapperStyle={{ color: 'rgba(245,235,221,0.6)', fontSize: 12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <h3>Daily payments</h3>
-          <div className="table report-table">
-            <div className="row head">
-              <div>Time</div>
-              <div>Order</div>
-              <div>Products</div>
-              <div>Method</div>
-              <div>Amount</div>
-            </div>
-            {dailyRows.map((r) => (
-              <div key={`${r.at}-${r.orderId}`} className="row">
-                <div>{new Date(r.at).toLocaleString()}</div>
-                <div><span className="muted">#</span>{String(r.orderId).slice(0, 8)}</div>
-                <div style={{ fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {r.rawItems && Object.entries(r.rawItems.reduce((acc, curr) => {
-                    const cat = curr.category || 'Uncategorized';
-                    if (!acc[cat]) acc[cat] = [];
-                    acc[cat].push(`${curr.qty}x ${curr.name}`);
-                    return acc;
-                  }, {})).map(([cat, prods]) => (
-                    <div key={cat}>
-                      <span style={{ fontWeight: 600, color: '#C4A484', fontSize: '11px', textTransform: 'uppercase' }}>{cat}:</span>{' '}
-                      <span className="muted">{prods.join(', ')}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                  {!r.rawItems && <div className="muted">{r.items || 'No items'}</div>}
-                </div>
-                <div>{r.methodLabel}</div>
-                <div className="bold">{Number(r.amount).toLocaleString()} RWF</div>
-              </div>
-            ))}
-          </div>
-
-          <h3>Monthly payments</h3>
-          <div className="table report-table">
-            <div className="row head">
-              <div>Time</div>
-              <div>Order</div>
-              <div>Products</div>
-              <div>Method</div>
-              <div>Amount</div>
-            </div>
-            {monthlyRows.map((r) => (
-              <div key={`${r.at}-${r.orderId}`} className="row">
-                <div>{new Date(r.at).toLocaleString()}</div>
-                <div><span className="muted">#</span>{String(r.orderId).slice(0, 8)}</div>
-                <div style={{ fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {r.rawItems && Object.entries(r.rawItems.reduce((acc, curr) => {
-                    const cat = curr.category || 'Uncategorized';
-                    if (!acc[cat]) acc[cat] = [];
-                    acc[cat].push(`${curr.qty}x ${curr.name}`);
-                    return acc;
-                  }, {})).map(([cat, prods]) => (
-                    <div key={cat}>
-                      <span style={{ fontWeight: 600, color: '#C4A484', fontSize: '11px', textTransform: 'uppercase' }}>{cat}:</span>{' '}
-                      <span className="muted">{prods.join(', ')}</span>
-                    </div>
-                  ))}
-                  {!r.rawItems && <div className="muted">{r.items || 'No items'}</div>}
-                </div>
-                <div>{r.methodLabel}</div>
-                <div className="bold">{Number(r.amount).toLocaleString()} RWF</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {tab === 'inventory' && role === 'SHOP_ADMIN' ? (
-        <section className="stack">
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
-              setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 });
-              await reloadCore();
-            } catch(err) { setError(err.message) }
-          }} className="grid-form">
-            <label className="field">
-              <span>Ingredient name</span>
-              <input value={ingForm.name} onChange={e => setIngForm(f => ({...f, name: e.target.value}))} required />
-            </label>
-            <label className="field">
-              <span>Stock level</span>
-              <input type="number" value={ingForm.stock_level} onChange={e => setIngForm(f => ({...f, stock_level: Number(e.target.value)}))} required />
-            </label>
-            <label className="field">
-              <span>Unit</span>
-              <select value={ingForm.unit} onChange={e => setIngForm(f => ({...f, unit: e.target.value}))}>
-                <option value="ml">ml</option>
-                <option value="g">g</option>
-                <option value="pcs">pcs</option>
-                <option value="l">l</option>
-                <option value="kg">kg</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Min threshold (Warning)</span>
-              <input type="number" value={ingForm.min_threshold} onChange={e => setIngForm(f => ({...f, min_threshold: Number(e.target.value)}))} />
-            </label>
-            <label className="field">
-              <span>Unit Price (RWF)</span>
-              <input type="number" value={ingForm.buying_price} onChange={e => setIngForm(f => ({...f, buying_price: Number(e.target.value)}))} />
-            </label>
-            <div className="span-2">
-              <button className="btn primary xl" type="submit">{ingForm.id ? 'Update' : 'Add Ingredient'}</button>
-            </div>
-          </form>
-
-          <div className="row-between" style={{ marginBottom: 12 }}>
-             <h3 style={{ margin: 0 }}>Inventory List</h3>
-             <div style={{ position: 'relative', width: 250 }}>
-               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
-               <input 
-                 type="text" 
-                 placeholder="Search inventory..." 
-                 value={inventorySearch}
-                 onChange={(e) => { setInventorySearch(e.target.value); setInventoryPage(1); }}
-                 style={{ paddingLeft: 32, borderRadius: 20, width: '100%', height: 36, fontSize: 13 }}
-               />
-             </div>
-          </div>
-          <div className="table inventory-table">
-            <div className="row head">
-              <div>Ingredient</div>
-              <div>Current Stock</div>
-              <div>Min</div>
-              <div>Price</div>
-              <div>Status</div>
-              <div></div>
-            </div>
-            {ingredients
-              .filter(ing => ing.name.toLowerCase().includes(inventorySearch.toLowerCase()))
-              .slice((inventoryPage - 1) * 10, inventoryPage * 10)
-              .map(ing => {
-              const isLow = ing.stock_level < ing.min_threshold;
-              return (
-                <div key={ing.id} className={`row ${isLow ? 'warn-row' : ''}`}>
-                  <div style={{ fontWeight: 600 }}>{ing.name}</div>
-                  <div>{ing.stock_level} {ing.unit}</div>
-                  <div className="muted">{ing.min_threshold}</div>
-                  <div className="muted">{ing.buying_price || 0} RWF</div>
-                  <div>
-                    <span className={`badge ${isLow ? 'badge-danger' : 'badge-success'}`}>
-                      {isLow ? 'LOW STOCK' : 'HEALTHY'}
-                    </span>
                   </div>
-                  <div className="row-actions">
-                    <button className="btn ghost" onClick={() => setIngForm(ing)}>📝 Edit</button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="row-between" style={{ marginTop: 16 }}>
-            <span className="muted text-sm">Showing page {inventoryPage} of {Math.ceil(ingredients.filter(i => i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length / 10) || 1}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn outline tiny" disabled={inventoryPage === 1} onClick={() => setInventoryPage(p => Math.max(1, p - 1))}>Prev</button>
-              <button className="btn outline tiny" disabled={inventoryPage * 10 >= ingredients.filter(i => i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setInventoryPage(p => p + 1)}>Next</button>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {tab === 'requested_order' && role === 'SHOP_ADMIN' ? (
-        <section className="stack">
-          <h3>Requested Orders</h3>
-          {requestedOrders.length === 0 ? (
-            <p className="muted">No requested orders found.</p>
-          ) : (
-            <div className="grid-2">
-              {requestedOrders.map(req => (
-                <div key={req.id} className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <h4 style={{ margin: 0, color: '#2D1A11' }}>Req #{String(req.id).slice(0, 8)}</h4>
-                      <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
-                        By {req.users?.name || 'Staff'} on {new Date(req.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <span className={`badge badge-${req.status.toLowerCase()}`}>{req.status}</span>
-                  </div>
-                  
-                  {req.notes && (
-                    <div style={{ fontSize: '13px', background: 'rgba(0,0,0,0.03)', padding: '8px', borderRadius: '4px' }}>
-                      <strong>Notes:</strong> {req.notes}
-                    </div>
-                  )}
-
-                  <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: '12px', flex: 1 }}>
-                    <strong style={{ fontSize: '12px', textTransform: 'uppercase', color: '#666' }}>Requested Items:</strong>
-                    <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '14px', color: '#444' }}>
-                      {req.requisition_items?.map(item => (
-                        <li key={item.id}>
-                          {item.quantity} {item.unit} x <strong>{item.item_name}</strong>
-                          {item.estimated_price > 0 && ` (Est: ${item.estimated_price} RWF)`}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {req.status === 'PENDING' && (
-                    <div className="row-actions" style={{ marginTop: '16px' }}>
-                      <button className="btn success" onClick={() => updateRequestedOrderStatus(req.id, 'APPROVED')}>✅ Approve</button>
-                      <button className="btn danger outline" onClick={() => updateRequestedOrderStatus(req.id, 'REJECTED')}>❌ Reject</button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
-          )}
-        </section>
-      ) : null}
+          </>
+        ) : null}
 
-      {tab === 'loans' ? (
-        <section className="stack animate-in">
-          <div className="section-header">
-            <div>
-              <h3>Client Credits & Loans</h3>
-              <p className="muted">Track and manage unpaid client bills</p>
+      {tab === 'staff' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Staff Management</h1>
+              <p>Monitor employee performance and sales</p>
             </div>
-            <div className="row-actions">
-              <span className="badge badge-warning">{loans.filter(l => l.status !== 'PAID').length} Active Loans</span>
-            </div>
-          </div>
-
-          <div className="m-table">
-            <div className="m-table-header" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr' }}>
-              <div>CLIENT NAME</div>
-              <div>AMOUNT</div>
-              <div>PAID</div>
-              <div>STATUS</div>
-              <div>DATE</div>
-            </div>
-            {loans.length === 0 ? (
-              <div className="empty-state" style={{ padding: '40px 0' }}>
-                <HiOutlineUsers size={48} style={{ opacity: 0.2, marginBottom: 12 }} />
-                <p className="muted">No client loans recorded yet.</p>
-              </div>
-            ) : (
-              loans.map(loan => {
-                const totalPaid = (loan.loan_payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0)
-                const balance = parseFloat(loan.amount) - totalPaid
-                return (
-                  <div key={loan.id} className="m-table-row" style={{ gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 600 }}>{loan.client_name}</div>
-                    <div style={{ fontWeight: 600 }}>{Number(loan.amount).toLocaleString()} RWF</div>
-                    <div style={{ color: 'var(--success)' }}>{Number(totalPaid).toLocaleString()} RWF</div>
-                    <div>
-                      <span className={`badge ${loan.status === 'PAID' ? 'badge-success' : (loan.status === 'PARTIAL' ? 'badge-warning' : 'badge-danger')}`}>
-                        {loan.status}
-                      </span>
-                    </div>
-                    <div className="muted">{new Date(loan.created_at).toLocaleDateString()}</div>
-                    {loan.status !== 'PAID' && (
-                      <div className="row-actions" style={{ gridColumn: '1 / -1', marginTop: 8, background: '#FAF6F0', padding: 12, borderRadius: 8 }}>
-                         <span style={{ fontSize: 13 }}>Remaining Balance: <strong>{Number(balance).toLocaleString()} RWF</strong></span>
-                         <button 
-                           className="btn tiny healthy" 
-                           style={{ marginLeft: 'auto' }}
-                           onClick={async () => {
-                             const amt = window.prompt(`Enter payment amount for ${loan.client_name}:`, balance)
-                             if (!amt) return
-                             try {
-                               await api(`/api/shop/loans/${loan.id}/pay`, {
-                                 method: 'POST',
-                                 body: JSON.stringify({ amount: Number(amt), method: 'CASH' })
-                               })
-                               await reloadCore()
-                             } catch(e) { alert(e.message) }
-                           }}
-                         >
-                           Record Payment
-                         </button>
-                      </div>
-                    )}
+             <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Staff</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Find a member..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
                   </div>
-                )
-              })
-            )}
+               </div>
+            </div>
+          </header>
+
+          <div className="am-animate" style={{ padding: '0' }}>
+          {/* Staff Metrics */}
+          <div className="am-reports-grid" style={{ marginBottom: 32 }}>
+             <div className="am-metric-card">
+                <div className="am-metric-header">TOTAL STAFF</div>
+                <div className="am-metric-value">{staff.length}</div>
+                <div className="am-metric-trend am-trend-neu">registered members</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">ACTIVE NOW</div>
+                <div className="am-metric-value">{staff.length > 2 ? 3 : staff.length}</div>
+                <div className="am-metric-trend am-trend-pos">on shift today</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">ROLES</div>
+                <div className="am-metric-value">{new Set(staff.map(s => s.role)).size}</div>
+                <div className="am-metric-trend am-trend-neu">owner · manager · cashier</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">LAST ADDED</div>
+                <div className="am-metric-value" style={{ fontSize: 18 }}>{staff.length > 0 ? new Date(Math.max(...staff.map(s => new Date(s.created_at || Date.now())))).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'N/A'}</div>
+                <div className="am-metric-trend am-trend-neu">newest member</div>
+             </div>
           </div>
-        </section>
+
+          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 1.6fr', gap: 32 }}>
+            {/* Form Card */}
+            <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
+               <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : '+ Add new staff member'}</h3>
+               <form 
+                 onSubmit={saveStaff}
+                 className="stack" 
+                 style={{ gap: 20 }}
+               >
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Full Name</span>
+                      <input className="am-input" value={staffForm.name} onChange={e => setStaffForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Amina Kayitesi" />
+                    </label>
+                    <label className="am-field">
+                      <span>Email</span>
+                      <input className="am-input" type="email" value={staffForm.email} onChange={e => setStaffForm(f => ({...f, email: e.target.value}))} required placeholder="e.g. amina@mama.local" />
+                    </label>
+                  </div>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>{staffForm.id ? 'New Password' : 'Temporary Password'}</span>
+                      <input className="am-input" type="password" value={staffForm.password} onChange={e => setStaffForm(f => ({...f, password: e.target.value}))} required={!staffForm.id} placeholder="Set a password" />
+                    </label>
+                    <label className="am-field">
+                      <span>Role</span>
+                      <select className="am-input" value={staffForm.role} onChange={e => setStaffForm(f => ({...f, role: e.target.value}))}>
+                         <option value="CASHIER">Shop staff (waiter + billing)</option>
+                         <option value="MANAGER">Manager</option>
+                         <option value="SHOP_ADMIN">Owner</option>
+                      </select>
+                    </label>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>{staffForm.id ? 'Update member' : 'Register staff'}</button>
+                    <button className="btn outline xl" type="button" onClick={() => setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })} style={{ borderRadius: 12 }}>Clear</button>
+                  </div>
+               </form>
+            </div>
+
+            {/* List Group */}
+            <div className="stack" style={{ gap: 24 }}>
+               <div className="am-filter-pills" style={{ margin: 0 }}>
+                  {['ALL', 'OWNER', 'MANAGER', 'CASHIER'].map(f => (
+                    <div 
+                      key={f} 
+                      className={`am-pill ${staffFilter === f ? 'active' : ''}`}
+                      onClick={() => setStaffFilter(f)}
+                    >
+                       {f === 'ALL' && <HiOutlineUsers size={14} />}
+                       {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#E6CCB2' }} />}
+                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#4CAF50' }} />}
+                       {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
+                       {f}
+                    </div>
+                  ))}
+               </div>
+
+               <div className="am-category-sales-card am-staff-list" style={{ padding: 0 }}>
+                  <table className="am-modern-table">
+                     <thead>
+                        <tr>
+                           <th>NAME</th>
+                           <th>EMAIL</th>
+                           <th>ROLE</th>
+                           <th>STATUS</th>
+                           <th></th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {staff
+                          .filter(u => (staffFilter === 'ALL' || (staffFilter === 'OWNER' ? u.role === 'SHOP_ADMIN' : u.role === staffFilter)) && (
+                            u.name.toLowerCase().includes(staffSearch.toLowerCase()) ||
+                            u.email.toLowerCase().includes(staffSearch.toLowerCase())
+                          ))
+                          .map(u => {
+                             const initials = u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                             const isOwner = u.role === 'SHOP_ADMIN'
+                             const active = true; // Placeholder for real shift status
+                             
+                             return (
+                               <tr key={u.id}>
+                                  <td>
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div className="am-loan-avatar">{initials}</div>
+                                        <div>
+                                           <div style={{ fontWeight: 700 }}>{u.name}</div>
+                                           <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>Since {new Date(u.created_at || Date.now()).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</div>
+                                        </div>
+                                     </div>
+                                  </td>
+                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 12 }}>{u.email}</td>
+                                  <td>
+                                     <span style={{ 
+                                       padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+                                       background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (u.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
+                                       color: isOwner ? '#E6CCB2' : (u.role === 'MANAGER' ? '#4CAF50' : '#2196F3'),
+                                       border: `1px solid ${isOwner ? '#E6CCB244' : (u.role === 'MANAGER' ? '#4CAF5044' : '#2196F344')}`
+                                     }}>
+                                       {isOwner ? 'Owner' : u.role.charAt(0) + u.role.slice(1).toLowerCase()}
+                                     </span>
+                                  </td>
+                                  <td>
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                        <span className="am-priority-dot" style={{ background: active ? '#4CAF50' : '#B0B0B0' }}></span>
+                                        {active ? 'Active' : 'Off shift'}
+                                     </div>
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                        <button className="btn ghost tiny" onClick={() => editStaff(u)}>📝</button>
+                                        {!isOwner && (
+                                          <button className="btn ghost tiny" style={{ color: '#FF5252' }} onClick={() => deleteStaff(u.id)}>🗑️</button>
+                                        )}
+                                     </div>
+                                  </td>
+                               </tr>
+                             )
+                          })}
+                        {staff.length === 0 && (
+                          <tr>
+                             <td colSpan="5" style={{ textAlign: 'center', padding: '40px 0', opacity: 0.3 }}>No staff found</td>
+                          </tr>
+                        )}
+                     </tbody>
+                   </table>
+                </div>
+             </div>
+           </div>
+          </div>
+        </>
       ) : null}
+
+      {tab === 'reports' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Daily Sales Reports</h1>
+              <p>Detailed breakdown of shop performance</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Selected Date</label>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="date" 
+                      className="am-input" 
+                      style={{ height: 40 }}
+                      value={reportDay}
+                      onChange={e => setReportDay(e.target.value)}
+                    />
+                  </div>
+               </div>
+            </div>
+          </header>
+
+          <section className="am-animate" style={{ padding: '0' }}>
+            {/* Monthly and Shift summaries */}
+            <div className="am-reports-grid" style={{ marginBottom: 32 }}>
+               <div className="am-report-sel-item" style={{ background: 'var(--admin-card-bg)', padding: '16px', borderRadius: '12px' }}>
+                  <label>Monthly Report</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                     <HiOutlineCalendarDays style={{ color: '#E6CCB2' }} />
+                     <span>{month.year} - {new Date(0, month.month - 1).toLocaleString('default', { month: 'long' })}</span>
+                     <div style={{ display: 'flex', gap: 4 }}>
+                        <input 
+                           type="number" 
+                           value={month.year} 
+                           onChange={e => setMonth(m => ({ ...m, year: e.target.value }))}
+                           style={{ width: 60, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: 4, padding: '2px 4px' }}
+                        />
+                        <select 
+                           value={month.month} 
+                           onChange={e => setMonth(m => ({ ...m, month: e.target.value }))}
+                           style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: 4, padding: '2px 4px' }}
+                        >
+                           {Array.from({ length: 12 }, (_, i) => (
+                             <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
+                           ))}
+                        </select>
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+          {/* Top Metrics Grid */}
+          <div className="am-reports-grid">
+            <div className="am-metric-card">
+              <div className="am-metric-header">TOTAL REVENUE</div>
+              <div className="am-metric-value">{(overview?.todayRevenue || 0).toLocaleString()} RWF</div>
+              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> 12% vs yesterday</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">ORDERS TODAY</div>
+              <div className="am-metric-value">{overview?.todayPaidOrdersCount || 0}</div>
+              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> +8 vs daily avg</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">MONTHLY REVENUE</div>
+              <div className="am-metric-value">{(monthlyRows.reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(1)}M RWF</div>
+              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> 6% vs last month</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">AVG ORDER VALUE</div>
+              <div className="am-metric-value">{(overview?.avgOrderValue || 0).toLocaleString()} RWF</div>
+              <div className="am-metric-trend am-trend-neg">↓ 2% vs yesterday</div>
+            </div>
+          </div>
+
+          <div className="grid-2" style={{ gap: 24, alignItems: 'start', marginBottom: 24 }}>
+            {/* Sales by Category with Progress Bars */}
+            <div className="am-category-sales-card">
+               <div className="am-cat-header">
+                  <h3>Sales by category</h3>
+               </div>
+               
+               {Object.keys(overview?.categoryDetails || {}).length === 0 && (
+                 <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
+                   No sales data found for this date.
+                 </div>
+               )}
+               
+               {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
+                 const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
+                 const catColor = colors[idx % colors.length];
+                 const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
+                 
+                 return (
+                   <div key={cat} className="am-cat-row">
+                      <div className="am-cat-main-info">
+                        <div className="am-cat-name">
+                          <div className="am-cat-dot" style={{ backgroundColor: catColor }}></div>
+                          {cat}
+                        </div>
+                        <div className="am-cat-total-val">
+                          {details.total.toLocaleString()} RWF
+                          <span className="am-cat-pct">{catPercent}%</span>
+                        </div>
+                      </div>
+                      
+                      <div className="am-prod-list">
+                         {Object.entries(details.products).sort((a,b) => b[1].rev - a[1].rev).slice(0, 5).map(([name, prod], pIdx) => (
+                           <div key={name} className="am-prod-row">
+                              <div className="am-prod-name">{name}</div>
+                              <div className="am-prod-stats">
+                                <div className="am-prod-qty">{prod.qty} sold</div>
+                                <div className="am-prod-bar-bg">
+                                   <div 
+                                     className="am-prod-bar-fill" 
+                                     style={{ 
+                                       width: `${Math.min(100, (prod.rev / details.total) * 100)}%`,
+                                       backgroundColor: catColor,
+                                       opacity: 1 - (pIdx * 0.15)
+                                     }}
+                                   ></div>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', fontWeight: 600 }}>{prod.rev.toLocaleString()} RWF</div>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                 )
+               })}
+               
+               <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                  <span>Total</span>
+                  <span>{(overview?.todayRevenue || 0).toLocaleString()} RWF</span>
+               </div>
+            </div>
+
+            <div className="stack" style={{ gap: 24 }}>
+              {/* Shift Summary */}
+              <div className="am-shift-card">
+                 <h3 className="am-card-title">Shift summary</h3>
+                 <table className="am-modern-table">
+                    <thead>
+                       <tr>
+                          <th>SHIFT</th>
+                          <th>EXPECTED</th>
+                          <th>GIVEN</th>
+                          <th>BALANCE</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                       {shifts.map((s, idx) => {
+                         const exp = (s.total_cash_sales || 0) + (s.total_momo_sales || 0);
+                         const giv = (s.actual_cash_on_hand || 0) + (s.actual_momo_on_hand || 0);
+                         const bal = giv - exp;
+                         return (
+                           <tr key={idx}>
+                              <td style={{ fontWeight: 600 }}>{s.opened_by?.name?.split(' ')[0] || 'Staff'}</td>
+                              <td>{exp.toLocaleString()}</td>
+                              <td>{giv.toLocaleString()}</td>
+                              <td>
+                                 <span className={`am-balance-tag ${bal >= 0 ? 'am-balance-pos' : 'am-balance-neg'}`}>
+                                    {bal === 0 ? '0' : (bal > 0 ? `+${bal.toLocaleString()}` : bal.toLocaleString())}
+                                 </span>
+                              </td>
+                           </tr>
+                         )
+                       })}
+                       <tr style={{ borderTop: '2px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ fontWeight: 800 }}>Total</td>
+                          <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.total_cash_sales || 0) + (c.total_momo_sales || 0)), 0).toLocaleString()}</td>
+                          <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.actual_cash_on_hand || 0) + (c.actual_momo_on_hand || 0)), 0).toLocaleString()}</td>
+                          <td style={{ fontWeight: 800 }}>
+                             {(shifts.reduce((a,c) => a + ((c.actual_cash_on_hand || 0) + (c.actual_momo_on_hand || 0)), 0) - shifts.reduce((a,c) => a + ((c.total_cash_sales || 0) + (c.total_momo_sales || 0)), 0)).toLocaleString()}
+                          </td>
+                       </tr>
+                    </tbody>
+                 </table>
+              </div>
+
+              {/* Hourly Sales Volume Card */}
+              <div className="am-shift-card">
+                 <h3 className="am-card-title">Hourly sales volume</h3>
+                 <div style={{ width: '100%', height: 200 }}>
+                    {charts.hourly?.length > 0 && (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={charts.hourly}>
+                          <XAxis dataKey="hour" fontSize={10} tick={{ fill: 'rgba(255,255,255,0.3)' }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
+                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                          />
+                          <Bar dataKey="total" fill="#4CAF50" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid-2" style={{ gap: 24, alignItems: 'start' }}>
+             {/* Top Selling Products List */}
+             <div className="am-shift-card">
+                <h3 className="am-card-title">Top selling products</h3>
+                <table className="am-modern-table">
+                   <thead>
+                      <tr>
+                         <th>#</th>
+                         <th>PRODUCT</th>
+                         <th>QTY</th>
+                         <th style={{ textAlign: 'right' }}>REVENUE</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {charts.topProducts?.map((p, idx) => (
+                        <tr key={idx}>
+                           <td>{idx + 1}</td>
+                           <td style={{ fontWeight: 600 }}>{p.name}</td>
+                           <td style={{ color: 'var(--admin-text-muted)' }}>{p.value}</td>
+                           <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                             {(dailyRows.filter(r => r.rawItems?.some(ri => ri.name === p.name)).reduce((a,c) => a + Number(c.amount), 0)).toLocaleString()} RWF
+                           </td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+
+             {/* Daily Payments List */}
+             <div className="am-shift-card">
+                <h3 className="am-card-title">Daily payments</h3>
+                <table className="am-modern-table">
+                   <thead>
+                      <tr>
+                         <th>TIME</th>
+                         <th>ORDER</th>
+                         <th>PRODUCTS</th>
+                         <th>METHOD</th>
+                         <th style={{ textAlign: 'right' }}>AMOUNT</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {dailyRows.slice(0, 5).map((r, idx) => (
+                        <tr key={idx}>
+                           <td style={{ fontSize: '12px', color: 'var(--admin-text-muted)' }}>{new Date(r.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</td>
+                           <td style={{ fontWeight: 600 }}>#{String(r.orderId).slice(0, 4)}</td>
+                           <td style={{ fontSize: '13px' }}>
+                             {r.rawItems?.slice(0, 2).map((ri, i) => `${ri.name}${i < 1 && r.rawItems.length > 1 ? ', ' : ''}`)}
+                             {r.rawItems?.length > 2 && ' ...'}
+                           </td>
+                           <td>
+                              <span style={{ 
+                                padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800,
+                                background: r.methodLabel === 'Cash' ? 'rgba(76,175,80,0.1)' : (r.methodLabel === 'MoMo' ? 'rgba(255,152,0,0.1)' : 'rgba(33,150,243,0.1)'),
+                                color: r.methodLabel === 'Cash' ? '#4CAF50' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
+                              }}>
+                                {r.methodLabel.toUpperCase()}
+                              </span>
+                           </td>
+                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{Number(r.amount).toLocaleString()} RWF</td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+          
+          {/* Monthly Payments Recap */}
+          <div className="am-method-summary-grid">
+             <div className="am-method-card">
+                <div className="am-method-label">CASH</div>
+                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'Cash').reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(2)}M RWF</div>
+                <div className="am-method-detail">
+                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'Cash').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
+                </div>
+             </div>
+             <div className="am-method-card">
+                <div className="am-method-label">MOMO</div>
+                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'MoMo').reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(2)}M RWF</div>
+                <div className="am-method-detail">
+                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'MoMo').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
+                </div>
+             </div>
+             <div className="am-method-card">
+                <div className="am-method-label">CARD / POS</div>
+                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'POS').reduce((a,c) => a + Number(c.amount), 0) / 1000).toFixed(0)}K RWF</div>
+                <div className="am-method-detail">
+                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'POS').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
+                </div>
+             </div>
+          </div>
+          </section>
+        </>
+      ) : null}
+
+      {tab === 'inventory' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Stock Inventory</h1>
+              <p>Manage ingredients, supplies, and stock levels</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Inventory</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Find an item..."
+                      value={inventorySearch}
+                      onChange={e => setInventorySearch(e.target.value)}
+                    />
+                  </div>
+               </div>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+             <div className="am-metric-card">
+                <div className="am-metric-header">TOTAL ITEMS</div>
+                <div className="am-metric-value">{ingredients.length}</div>
+                <div className="am-metric-trend am-trend-neu">Ingredients tracked</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">HEALTHY</div>
+                <div className="am-metric-value">{ingredients.filter(i => i.stock_level >= i.min_threshold).length}</div>
+                <div className="am-metric-trend am-trend-pos">Above minimum</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">LOW STOCK</div>
+                <div className="am-metric-value">{ingredients.filter(i => i.stock_level < i.min_threshold && i.stock_level > 0).length}</div>
+                <div className="am-metric-trend am-trend-neg">Need restocking</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">CRITICAL</div>
+                <div className="am-metric-value">{ingredients.filter(i => i.stock_level <= 0).length}</div>
+                <div className="am-metric-trend am-trend-neg" style={{ color: '#FF5252' }}>Below zero</div>
+             </div>
+          </div>
+
+          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 1.5fr' }}>
+            {/* Form Column */}
+            <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
+               <h3 className="am-card-title">+ Add Ingredient</h3>
+               <form 
+                 onSubmit={async (e) => {
+                   e.preventDefault();
+                   try {
+                     await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
+                     setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 });
+                     await reloadCore();
+                   } catch(err) { setError(err.message) }
+                 }} 
+                 className="stack" 
+                 style={{ gap: 20 }}
+               >
+                  <label className="am-field">
+                    <span>Ingredient Name</span>
+                    <input className="am-input" value={ingForm.name} onChange={e => setIngForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Whole milk" />
+                  </label>
+                  <label className="am-field">
+                    <span>Stock Level</span>
+                    <input className="am-input" type="number" value={ingForm.stock_level} onChange={e => setIngForm(f => ({...f, stock_level: Number(e.target.value)}))} required />
+                  </label>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Unit</span>
+                      <select className="am-input" value={ingForm.unit} onChange={e => setIngForm(f => ({...f, unit: e.target.value}))}>
+                        {['ml','g','pcs','l','kg','cups','shots','oz','bags'].map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </label>
+                    <label className="am-field">
+                      <span>Min Threshold (Warning)</span>
+                      <input className="am-input" type="number" value={ingForm.min_threshold} onChange={e => setIngForm(f => ({...f, min_threshold: Number(e.target.value)}))} />
+                    </label>
+                  </div>
+                  <label className="am-field">
+                    <span>Unit Price (RWF)</span>
+                    <input className="am-input" type="number" value={ingForm.buying_price} onChange={e => setIngForm(f => ({...f, buying_price: Number(e.target.value)}))} />
+                  </label>
+                  
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>{ingForm.id ? 'Update' : 'Add Ingredient'}</button>
+                    <button 
+                      className="btn outline xl" 
+                      type="button" 
+                      onClick={() => setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })}
+                      style={{ borderRadius: 12 }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+               </form>
+            </div>
+
+            {/* List Column */}
+            <div className="stack" style={{ gap: 24 }}>
+               <div className="am-report-control-bar" style={{ padding: '12px 24px', margin: 0 }}>
+                  <div style={{ position: 'relative', width: '100%' }}>
+                     <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
+                     <input 
+                       className="am-input" 
+                       placeholder="Search inventory..." 
+                       value={inventorySearch}
+                       onChange={e => setInventorySearch(e.target.value)}
+                       style={{ background: 'transparent !important', border: 'none !important', paddingLeft: 28 }} 
+                     />
+                  </div>
+               </div>
+
+               {/* Critical Stock Group */}
+               {ingredients.filter(i => i.stock_level < i.min_threshold).length > 0 && (
+                 <div className="am-category-sales-card">
+                    <h3 className="am-card-title" style={{ color: '#FF5252 !important', fontSize: '14px' }}>CRITICAL & LOW STOCK</h3>
+                    <table className="am-modern-table">
+                       <thead>
+                          <tr>
+                             <th>INGREDIENT</th>
+                             <th>CURRENT STOCK</th>
+                             <th>MIN</th>
+                             <th>PRICE</th>
+                             <th>STATUS</th>
+                             <th></th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {ingredients
+                            .filter(i => i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                            .slice((criticalPage - 1) * 6, criticalPage * 6)
+                            .map(ing => (
+                              <tr key={ing.id}>
+                                <td>
+                                  <div style={{ fontWeight: 600 }}>{ing.name}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
+                                </td>
+                                <td>
+                                   <div style={{ color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800', fontWeight: 700 }}>
+                                      {ing.stock_level} {ing.unit}
+                                   </div>
+                                   <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
+                                      <div 
+                                        className="am-prod-bar-fill" 
+                                        style={{ 
+                                          width: `${Math.max(0, Math.min(100, (ing.stock_level / Math.max(1, ing.min_threshold)) * 100))}%`,
+                                          backgroundColor: ing.stock_level <= 0 ? '#FF5252' : '#FF9800'
+                                        }}
+                                      ></div>
+                                   </div>
+                                </td>
+                                <td style={{ color: 'var(--admin-text-muted)' }}>{ing.min_threshold}</td>
+                                <td>{Number(ing.buying_price).toLocaleString()}</td>
+                                <td>
+                                   <span style={{ 
+                                     padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
+                                     background: ing.stock_level <= 0 ? 'rgba(255,82,82,0.1)' : 'rgba(255,152,0,0.1)',
+                                     color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800'
+                                   }}>
+                                     {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
+                                   </span>
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                   <button className="btn ghost tiny" onClick={() => setIngForm(ing)}>📝</button>
+                                </td>
+                              </tr>
+                            ))}
+                       </tbody>
+                    </table>
+                    <div className="row-between" style={{ marginTop: 16 }}>
+                       <span className="muted text-sm">Page {criticalPage}</span>
+                       <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn outline tiny" disabled={criticalPage === 1} onClick={() => setCriticalPage(p => p - 1)}>Prev</button>
+                          <button className="btn outline tiny" disabled={criticalPage * 6 >= ingredients.filter(i => i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setCriticalPage(p => p + 1)}>Next</button>
+                       </div>
+                    </div>
+                 </div>
+               )}
+
+               {/* Healthy Stock Group */}
+               <div className="am-category-sales-card">
+                  <h3 className="am-card-title" style={{ fontSize: '14px' }}>HEALTHY STOCK</h3>
+                  <table className="am-modern-table">
+                     <thead>
+                        <tr>
+                           <th>INGREDIENT</th>
+                           <th>CURRENT STOCK</th>
+                           <th>MIN</th>
+                           <th>PRICE</th>
+                           <th>STATUS</th>
+                           <th></th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {ingredients
+                          .filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                          .slice((healthyPage - 1) * 12, healthyPage * 12)
+                          .map(ing => (
+                            <tr key={ing.id}>
+                              <td>
+                                <div style={{ fontWeight: 600 }}>{ing.name}</div>
+                                <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
+                              </td>
+                              <td>
+                                 <div style={{ fontWeight: 700 }}>{ing.stock_level} {ing.unit}</div>
+                                 <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
+                                    <div 
+                                      className="am-prod-bar-fill" 
+                                      style={{ width: '100%', backgroundColor: '#4CAF50' }}
+                                    ></div>
+                                 </div>
+                              </td>
+                              <td style={{ color: 'var(--admin-text-muted)' }}>{ing.min_threshold}</td>
+                              <td>{Number(ing.buying_price).toLocaleString()}</td>
+                              <td>
+                                 <span style={{ 
+                                   padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
+                                   background: 'rgba(76,175,80,0.1)', color: '#4CAF50'
+                                 }}>
+                                   HEALTHY
+                                 </span>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                 <button className="btn ghost tiny" onClick={() => setIngForm(ing)}>📝</button>
+                              </td>
+                            </tr>
+                          ))}
+                     </tbody>
+                  </table>
+                  <div className="row-between" style={{ marginTop: 16 }}>
+                     <span className="muted text-sm">Page {healthyPage}</span>
+                     <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn outline tiny" disabled={healthyPage === 1} onClick={() => setHealthyPage(p => p - 1)}>Prev</button>
+                        <button className="btn outline tiny" disabled={healthyPage * 12 >= ingredients.filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setHealthyPage(p => p + 1)}>Next</button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {tab === 'requested_order' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Requested Orders</h1>
+              <p>Staff requisitions for ingredients and supplies</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Requisitions</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Search orders..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+               </div>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+             <div className="am-metric-card">
+                <div className="am-metric-header">TOTAL REQUESTS</div>
+                <div className="am-metric-value">{requestedOrders.length}</div>
+                <div className="am-metric-trend am-trend-neu">submitted this week</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">PENDING</div>
+                <div className="am-metric-value">{requestedOrders.filter(r => r.status === 'PENDING').length}</div>
+                <div className="am-metric-trend am-trend-neg" style={{ color: '#FF9800' }}>awaiting approval</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">APPROVED</div>
+                <div className="am-metric-value">{requestedOrders.filter(r => r.status === 'APPROVED').length}</div>
+                <div className="am-metric-trend am-trend-pos">ready to order</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">RECEIVED</div>
+                <div className="am-metric-value">{requestedOrders.filter(r => r.status === 'RECEIVED').length}</div>
+                <div className="am-metric-trend am-trend-pos" style={{ color: '#2196F3' }}>delivered & stocked</div>
+             </div>
+          </div>
+
+          <div className="stack" style={{ gap: 24, marginTop: 32 }}>
+             <div className="am-filter-pills" style={{ margin: 0 }}>
+                {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'RECEIVED'].map(f => (
+                  <div 
+                    key={f} 
+                    className={`am-pill ${reqFilter === f ? 'active' : ''}`}
+                    onClick={() => setReqFilter(f)}
+                  >
+                     {f === 'ALL' && <HiOutlineArchiveBox size={14} />}
+                     {f === 'PENDING' && <HiOutlineBell size={14} style={{ color: '#FF9800' }} />}
+                     {f === 'APPROVED' && <HiOutlineCheckCircle size={14} style={{ color: '#4CAF50' }} />}
+                     {f === 'REJECTED' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
+                     {f === 'RECEIVED' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
+                     {f}
+                  </div>
+                ))}
+             </div>
+
+             <div className="am-category-sales-card">
+                <table className="am-modern-table">
+                   <thead>
+                      <tr>
+                         <th>REQUESTED BY</th>
+                         <th>ITEM</th>
+                         <th>QTY</th>
+                         <th>PRIORITY</th>
+                         <th>DATE</th>
+                         <th>STATUS</th>
+                         <th></th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {requestedOrders
+                        .filter(r => (reqFilter === 'ALL' || r.status === reqFilter) && (
+                          r.users?.name?.toLowerCase().includes(reqSearch.toLowerCase()) ||
+                          r.requisition_items?.some(i => i.item_name.toLowerCase().includes(reqSearch.toLowerCase()))
+                        ))
+                        .map(req => {
+                           const initials = (req.users?.name || 'Staff').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                           const mainItem = req.requisition_items?.[0] || { item_name: 'Unknown', quantity: 0, unit: '' }
+                           
+                           return (
+                             <tr key={req.id}>
+                                <td>
+                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                      <div className="am-loan-avatar">{initials}</div>
+                                      <div>
+                                         <div style={{ fontWeight: 700 }}>{req.users?.name || 'Staff'}</div>
+                                         <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{req.users?.role || 'Staff'}</div>
+                                      </div>
+                                   </div>
+                                </td>
+                                <td>
+                                   <div style={{ fontWeight: 700 }}>{mainItem.item_name}</div>
+                                   <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {req.notes || 'Routine restock'}
+                                   </div>
+                                </td>
+                                <td style={{ fontWeight: 800 }}>{mainItem.quantity} {mainItem.unit}</td>
+                                <td>
+                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                      <span className="am-priority-dot" style={{ background: req.notes?.toLowerCase().includes('urgent') ? '#FF5252' : '#B0B0B0' }}></span>
+                                      {req.notes?.toLowerCase().includes('urgent') ? 'Urgent' : 'Normal'}
+                                   </div>
+                                </td>
+                                <td style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{new Date(req.created_at).toLocaleDateString('en-GB')}</td>
+                                <td>
+                                   <span className="am-status-badge" style={{ 
+                                     background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
+                                     color: req.status === 'APPROVED' ? '#4CAF50' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
+                                   }}>
+                                     {req.status}
+                                   </span>
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                      {req.status === 'PENDING' && (
+                                        <>
+                                           <button className="btn success tiny" onClick={() => updateRequestedOrderStatus(req.id, 'APPROVED')}>✅</button>
+                                           <button className="btn ghost tiny" onClick={() => updateRequestedOrderStatus(req.id, 'REJECTED')}>❌</button>
+                                        </>
+                                      )}
+                                      {req.status === 'APPROVED' && (
+                                         <button className="btn ghost tiny" style={{ color: '#2196F3' }} onClick={() => updateRequestedOrderStatus(req.id, 'RECEIVED')}>📦 Mark Received</button>
+                                      )}
+                                      <button className="btn ghost tiny">👁️</button>
+                                   </div>
+                                </td>
+                             </tr>
+                           )
+                        })}
+                      {requestedOrders.length === 0 && (
+                        <tr>
+                           <td colSpan="7" style={{ textAlign: 'center', padding: '40px 0', opacity: 0.3 }}>No requests found</td>
+                        </tr>
+                      )}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+        </>
+      ) : null}
+
+      {tab === 'loans' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+               <h1>Client Credits & Loans</h1>
+               <p>Track and manage unpaid client bills</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Clients</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Search clients..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+               </div>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+             <div className="am-metric-card">
+                <div className="am-metric-header">ACTIVE LOANS</div>
+                <div className="am-metric-value">{loans.filter(l => l.status !== 'PAID').length}</div>
+                <div className="am-metric-trend am-trend-neu">clients with balance</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">TOTAL OWED</div>
+                <div className="am-metric-value">{(loans.reduce((acc, l) => acc + (parseFloat(l.amount) - (l.loan_payments || []).reduce((a,p) => a + parseFloat(p.amount), 0)), 0)).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-neg">outstanding amount</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">TOTAL PAID</div>
+                <div className="am-metric-value">{(loans.reduce((acc, l) => acc + (l.loan_payments || []).reduce((a,p) => a + parseFloat(p.amount), 0), 0)).toLocaleString()} RWF</div>
+                <div className="am-metric-trend am-trend-pos">collected so far</div>
+             </div>
+             <div className="am-metric-card">
+                <div className="am-metric-header">SETTLED TODAY</div>
+                <div className="am-metric-value">{loans.filter(l => l.status === 'PAID' && new Date(l.updated_at).toDateString() === new Date().toDateString()).length}</div>
+                <div className="am-metric-trend am-trend-pos">fully paid this session</div>
+             </div>
+          </div>
+
+          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 2fr', gap: 32 }}>
+            {/* Form Card */}
+            <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
+               <h3 className="am-card-title">+ Record New Credit</h3>
+               <form 
+                 onSubmit={async (e) => {
+                    e.preventDefault();
+                    try {
+                      await api('/api/shop/loans', { method: 'POST', body: JSON.stringify(loanForm) });
+                      setLoanForm({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' });
+                      await reloadCore();
+                    } catch(err) { setError(err.message) }
+                 }}
+                 className="stack" 
+                 style={{ gap: 20 }}
+               >
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Client Name</span>
+                      <input className="am-input" value={loanForm.client_name} onChange={e => setLoanForm(f => ({...f, client_name: e.target.value}))} required placeholder="e.g. Jean Pierre" />
+                    </label>
+                    <label className="am-field">
+                      <span>Amount (RWF)</span>
+                      <input className="am-input" type="number" value={loanForm.amount} onChange={e => setLoanForm(f => ({...f, amount: e.target.value}))} required placeholder="0" />
+                    </label>
+                  </div>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Amount Paid (RWF)</span>
+                      <input className="am-input" type="number" value={loanForm.amount_paid} onChange={e => setLoanForm(f => ({...f, amount_paid: Number(e.target.value)}))} placeholder="0" />
+                    </label>
+                    <label className="am-field">
+                      <span>Date</span>
+                      <input className="am-input" type="date" value={loanForm.created_at || new Date().toISOString().split('T')[0]} disabled />
+                    </label>
+                  </div>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Note (Optional)</span>
+                      <input className="am-input" value={loanForm.notes} onChange={e => setLoanForm(f => ({...f, notes: e.target.value}))} placeholder="e.g. Lunch order" />
+                    </label>
+                    <label className="am-field">
+                      <span>Status</span>
+                      <select className="am-input" value={loanForm.status} onChange={e => setLoanForm(f => ({...f, status: e.target.value}))}>
+                         <option value="UNPAID">Unpaid</option>
+                         <option value="PARTIAL">Partial</option>
+                         <option value="PAID">Paid</option>
+                      </select>
+                    </label>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>Record credit</button>
+                    <button className="btn outline xl" type="button" onClick={() => setLoanForm({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' })} style={{ borderRadius: 12 }}>Clear</button>
+                  </div>
+               </form>
+            </div>
+
+            {/* List Group */}
+            <div className="stack" style={{ gap: 24 }}>
+               <div className="am-filter-pills" style={{ margin: 0 }}>
+                  {['ALL', 'UNPAID', 'PARTIAL', 'PAID'].map(f => (
+                    <div 
+                      key={f} 
+                      className={`am-pill ${loanFilter === f ? 'active' : ''}`}
+                      onClick={() => setLoanFilter(f)}
+                    >
+                       {f === 'ALL' && <HiOutlineUsers size={14} />}
+                       {f === 'UNPAID' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
+                       {f === 'PARTIAL' && <HiOutlineArrowTrendingUp size={14} style={{ color: '#FF9800' }} />}
+                       {f === 'PAID' && <HiOutlineCheckCircle size={14} style={{ color: '#4CAF50' }} />}
+                       {f}
+                    </div>
+                  ))}
+               </div>
+
+               <div className="am-category-sales-card">
+                  <table className="am-modern-table">
+                     <thead>
+                        <tr>
+                           <th>CLIENT</th>
+                           <th>AMOUNT</th>
+                           <th>PAID / BALANCE</th>
+                           <th>DATE</th>
+                           <th>STATUS</th>
+                           <th></th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {loans
+                          .filter(l => (loanFilter === 'ALL' || l.status === loanFilter) && l.client_name.toLowerCase().includes(loanSearch.toLowerCase()))
+                          .map(loan => {
+                             const totalPaid = (loan.loan_payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0)
+                             const balance = parseFloat(loan.amount) - totalPaid
+                             const percent = Math.min(100, Math.round((totalPaid / parseFloat(loan.amount)) * 100))
+                             const initials = loan.client_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                             
+                             return (
+                               <tr key={loan.id}>
+                                  <td>
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div className="am-loan-avatar">{initials}</div>
+                                        <div>
+                                           <div style={{ fontWeight: 700 }}>{loan.client_name}</div>
+                                           <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{loan.notes || 'No note'}</div>
+                                        </div>
+                                     </div>
+                                  </td>
+                                  <td style={{ fontWeight: 700 }}>{Number(loan.amount).toLocaleString()} RWF</td>
+                                  <td>
+                                     <div style={{ fontSize: 11 }}>
+                                        <span style={{ color: '#4CAF50', fontWeight: 600 }}>{totalPaid.toLocaleString()} paid</span>
+                                        {' · '}
+                                        <span style={{ color: balance > 0 ? '#FF9800' : 'var(--admin-text-muted)' }}>{balance.toLocaleString()} left</span>
+                                     </div>
+                                     <div className="am-loan-bar-bg">
+                                        <div 
+                                          className="am-loan-bar-fill" 
+                                          style={{ 
+                                            width: `${percent}%`, 
+                                            backgroundColor: percent === 100 ? '#4CAF50' : '#FF9800'
+                                          }}
+                                        ></div>
+                                     </div>
+                                  </td>
+                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 11 }}>{new Date(loan.created_at).toLocaleDateString('en-GB')}</td>
+                                  <td>
+                                     <span className="am-status-badge" style={{ 
+                                       background: loan.status === 'PAID' ? 'rgba(76,175,80,0.1)' : (loan.status === 'PARTIAL' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
+                                       color: loan.status === 'PAID' ? '#4CAF50' : (loan.status === 'PARTIAL' ? '#FF9800' : '#FF5252')
+                                     }}>
+                                       {loan.status}
+                                     </span>
+                                  </td>
+                                  <td style={{ textAlign: 'right' }}>
+                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                        {loan.status !== 'PAID' && (
+                                          <button 
+                                            className="btn ghost tiny"
+                                            onClick={async () => {
+                                              const amt = window.prompt(`Enter payment for ${loan.client_name}:`, balance)
+                                              if (!amt) return
+                                              try {
+                                                await api(`/api/shop/loans/${loan.id}/pay`, { method: 'POST', body: JSON.stringify({ amount: Number(amt), method: 'CASH' }) })
+                                                await reloadCore()
+                                              } catch(e) { alert(e.message) }
+                                            }}
+                                          >💸</button>
+                                        )}
+                                        <button className="btn ghost tiny">👁️</button>
+                                     </div>
+                                  </td>
+                               </tr>
+                             )
+                          })}
+                        {loans.length === 0 && (
+                          <tr>
+                             <td colSpan="6" style={{ textAlign: 'center', padding: '40px 0', opacity: 0.3 }}>No records found</td>
+                          </tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+      </div>
     </div>
   )
 }

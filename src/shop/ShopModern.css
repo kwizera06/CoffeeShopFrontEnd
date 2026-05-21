@@ -1,0 +1,278 @@
+/* ShopModern.css - Full App Dark Theme (Midnight Espresso) */
+:root {
+  --app-bg: #000000;
+  --nav-bg: #080808;
+  --sidebar-bg: #050505;
+  --accent-green: #4CAF50;
+  --text-main: #FFFFFF;
+  --text-muted: #A0A0A0;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+}
+
+.shop-app-modern {
+  background-color: var(--app-bg);
+  color: var(--text-main);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Modern Top Nav */
+.modern-header {
+  height: 64px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
+.modern-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.modern-logo {
+  width: 40px;
+  height: 40px;
+  background: var(--accent-green);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.modern-shop-info h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modern-shop-info p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.modern-nav-tabs {
+  display: flex;
+  gap: 8px;
+  background: #000;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.modern-tab {
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.modern-tab.active {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.modern-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-modern {
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pos-btn-modern {
+  background: #252525;
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.user-avatar-modern {
+  width: 36px;
+  height: 36px;
+  background: #333;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Modern Layout Body */
+.modern-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Global Full Sidebar */
+.am-app-sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1001;
+}
+
+.am-sidebar-header {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.am-sidebar-logo {
+  margin: 0;
+  color: #E6CCB2;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.am-sidebar-close-btn {
+  display: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.am-sidebar-nav {
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.am-nav-link {
+  padding: 12px 16px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+  display: block;
+}
+
+.am-nav-link:hover, .am-nav-link.active {
+  background: rgba(230, 204, 178, 0.08);
+  color: #E6CCB2;
+}
+
+.am-sidebar-footer {
+  padding: 24px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.am-logout-btn {
+  width: 100%;
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.2);
+  color: #FF5252;
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.am-logout-btn:hover {
+  background: #FF5252;
+  color: #fff;
+}
+
+/* Mobile Toggle Bar */
+.am-mobile-toggle-bar {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.am-hamburger-btn {
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.am-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+.am-sidebar-backdrop.show {
+  display: block;
+}
+
+.modern-viewport {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--app-bg);
+}
+
+/* Mobile Adjustments */
+@media (max-width: 900px) {
+  .am-app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+  }
+  
+  .am-app-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .am-sidebar-close-btn {
+    display: block;
+  }
+  
+  .am-mobile-toggle-bar {
+    display: flex;
+  }
+  
+  .modern-nav-tabs { display: none; }
+  .modern-header-left { min-width: auto; }
+}
