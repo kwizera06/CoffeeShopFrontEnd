@@ -6,10 +6,6 @@ export function esc(s) {
 }
 
 function withThermalPage(printFn) {
-  // Clear any old tickets from the DOM to prevent overlapping/concatenating
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
-  document.querySelectorAll('#print-page-override').forEach(el => el.remove());
-
   const style = document.createElement('style');
   style.id = 'print-page-override';
   style.textContent = `
@@ -40,10 +36,15 @@ function withThermalPage(printFn) {
   // Set timeout to allow the DOM to absorb the injected styles before spawning print dialog
   setTimeout(() => {
     printFn();
-    // Cleanup happens immediately after print dialog is closed
+  }, 100);
+
+  const cleanup = () => {
     style.remove();
     document.querySelectorAll('#print-root').forEach(el => el.remove());
-  }, 100);
+  };
+
+  // Cleanup happens immediately after print dialog is closed
+  window.addEventListener('afterprint', cleanup, { once: true });
 }
 
 // Replaced static 50-character strings with responsive CSS borders!
@@ -52,6 +53,9 @@ const lineDash = `<div style="border-bottom: 1px dashed #000; margin: 6px 0; wid
 const lineAst = `<div style="border-bottom: 2px dotted #000; margin: 8px 0; width: 100%;"></div>`;
 
 export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
+  // Clear any old tickets before starting
+  document.querySelectorAll('#print-root').forEach(el => el.remove());
+
   const root = document.createElement('div');
   root.id = 'print-root';
 
@@ -129,6 +133,9 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
 }
 
 export function printReceipt({ shopName, order, paymentMethod }) {
+  // Clear any old tickets before starting
+  document.querySelectorAll('#print-root').forEach(el => el.remove());
+
   const root = document.createElement('div');
   root.id = 'print-root';
 
