@@ -1,414 +1,219 @@
-// function esc(s) {
-//   return String(s)
-//     .replaceAll('&', '&amp;')
-//     .replaceAll('<', '&lt;')
-//     .replaceAll('>', '&gt;')
-// }
-
-// /** Injects a temporary @page size rule — 80mm wide, auto tall (thermal roll paper) */
-// function withThermalPage(printFn) {
-//   const style = document.createElement('style')
-//   style.id = 'print-page-override'
-//   // margin:0 so the full 80mm is usable; height auto so nothing is cut off
-//   style.textContent = `@page { size: 80mm auto; margin: 0; }`
-//   document.head.appendChild(style)
-//   printFn()
-//   const cleanup = () => style.remove()
-//   window.addEventListener('afterprint', cleanup, { once: true })
-//   setTimeout(cleanup, 30000)
-// }
-
-// const lineEq = "==================================================";
-// const lineDash = "--------------------------------------------------";
-// const lineAst = "**************************************************";
-
-// // ─── KITCHEN TICKET  — 80mm wide, auto height ────────────────────────────────
-// export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
-//   const root = document.createElement('div')
-//   root.id = 'print-root'
-  
-//   const d = createdAt ? new Date(createdAt) : new Date()
-//   const dateStr = d.toLocaleDateString()
-//   const timeStr = d.toLocaleTimeString()
-
-//   const rows = lines.map((l) => {
-//     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
-//     const ingText = ings.length > 0
-//       ? `<div style="font-size: 11pt; padding-left: 20px; font-style: italic; text-align: left;">
-//           ${ings.map(i => `* ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
-//          </div>`
-//       : ''
-
-//     return `
-//       <div style="display:flex; justify-content:flex-start; gap: 16px; margin: 8px 0 0 0; font-size: 14pt;">
-//          <span style="min-width: 24px;">${esc(String(l.quantity))}</span>
-//          <span>${esc(l.itemName)}</span>
-//       </div>
-//       ${ingText}
-//     `
-//   }).join('')
-
-//   root.innerHTML = `
-//     <div style="width:100%; font-family: 'Courier New', Courier, monospace; text-align:center; font-size: 11pt; line-height: 1.3;">
-//       <div style="font-size: 14pt; padding: 10px 0;">*** KITCHEN BAR ***</div>
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-      
-//       <div style="display:flex; justify-content:space-between; text-align:left;">
-//         <span>Server: ${esc(waiterName || 'Staff')}</span>
-//         <span>Station 1</span>
-//       </div>
-      
-//       <div style="font-size: 20pt; padding: 12px 0; font-weight: normal;">Dine In</div>
-      
-//       <div style="display:flex; justify-content:space-between; text-align:left;">
-//         <span>${esc(dateStr)}</span>
-//         <span>${esc(timeStr)}</span>
-//       </div>
-      
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-
-//       <div style="text-align:left; font-size: 16pt;">Table: ${esc(String(tableNumber))}</div>
-//       <div style="text-align:left; font-size: 12pt;">Guests: 1</div>
-      
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-//       <div style="text-align:left; margin: 10px 0;">
-//         ${rows}
-//       </div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%; margin-top: 20px;">${lineAst}</div>
-      
-//       <div style="padding: 10px 0;">
-//          <div style="font-size: 16pt;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
-//          <div style="font-size: 12pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
-//       </div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineAst}</div>
-//     </div>
-//   `
-
-//   document.body.appendChild(root)
-//   withThermalPage(() => {
-//     requestAnimationFrame(() => {
-//       window.print()
-//       root.remove()
-//     })
-//   })
-// }
-
-// // ─── PAYMENT RECEIPT — 80mm wide, auto height ────────────────────────────────
-// export function printReceipt({ shopName, order, paymentMethod }) {
-//   const root = document.createElement('div')
-//   root.id = 'print-root'
-  
-//   const d = order?.createdAt ? new Date(order.createdAt) : new Date()
-//   const dateStr = d.toLocaleDateString()
-//   const timeStr = d.toLocaleTimeString()
-
-//   const rows = (order?.lines ?? []).map((l) => {
-//     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
-//     const ingText = ings.length > 0
-//       ? `<div style="font-size: 11pt; padding-left: 32px; font-style: italic; text-align: left;">
-//           ${ings.map(i => `* ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
-//          </div>`
-//       : ''
-
-//     return `
-//     <div style="display:flex; justify-content:space-between; margin: 6px 0 0 0; font-size: 12pt;">
-//        <div style="display:flex; gap: 12px; max-width: 65%;">
-//           <span style="min-width: 20px;">${esc(String(l.quantity))}</span>
-//           <span style="word-wrap:break-word;">${esc(l.itemName)}</span>
-//        </div>
-//        <div>${Number(l.price).toLocaleString()}</div>
-//     </div>
-//     ${ingText}
-//   `}).join('')
-
-//   const total = Number(order?.total ?? 0).toLocaleString()
-//   const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH')
-//   const waiter = order?.waiterName || 'Staff'
-
-//   root.innerHTML = `
-//     <div style="width:100%; font-family: 'Courier New', Courier, monospace; text-align:center; font-size: 11pt; line-height: 1.3;">
-//       <div style="font-size: 14pt; padding: 10px 0;">*** ${esc(shopName ?? "Mama Prince's Coffee")} ***</div>
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-      
-//       <div style="display:flex; justify-content:space-between; text-align:left;">
-//         <span>Server: ${esc(waiter)}</span>
-//         <span>${esc(methodLabel)}</span>
-//       </div>
-      
-//       <div style="font-size: 20pt; padding: 12px 0; font-weight: normal;">Dine In</div>
-      
-//       <div style="display:flex; justify-content:space-between; text-align:left;">
-//         <span>${esc(dateStr)}</span>
-//         <span>${esc(timeStr)}</span>
-//       </div>
-      
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-
-//       <div style="text-align:left; font-size: 16pt;">Table: ${esc(String(order?.tableNumber || '1'))}</div>
-//       <div style="text-align:left; font-size: 12pt;">Guests: 1</div>
-      
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-//       <div style="text-align:left; margin: 10px 0;">
-//         ${rows}
-//       </div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-//       <div style="display:flex; justify-content:space-between; font-size: 14pt; font-weight:bold; margin-top: 10px;">
-//          <span>TOTAL RWF</span>
-//          <span>${total}</span>
-//       </div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%; margin-top: 20px;">${lineAst}</div>
-      
-//       <div style="padding: 10px 0;">
-//          <div style="font-size: 16pt;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
-//          <div style="font-size: 12pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
-//       </div>
-
-//       <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineAst}</div>
-//     </div>
-//   `
-
-//   document.body.appendChild(root)
-//   withThermalPage(() => {
-//     requestAnimationFrame(() => {
-//       window.print()
-//       root.remove()
-//     })
-//   })
-// }
-function esc(s) {
-  return String(s)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+export function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
-/** Injects a temporary @page size rule — 80mm wide, auto tall (thermal roll paper) */
 function withThermalPage(printFn) {
-  const style = document.createElement('style')
-  style.id = 'print-page-override'
+  // Clear any old tickets from the DOM to prevent overlapping/concatenating
+  document.querySelectorAll('#print-root').forEach(el => el.remove());
+  document.querySelectorAll('#print-page-override').forEach(el => el.remove());
+
+  const style = document.createElement('style');
+  style.id = 'print-page-override';
   style.textContent = `
-    @page { size: 80mm auto; margin: 0; }
+    @page { 
+      margin: 0; 
+      size: auto; 
+    }
     @media print {
       body > *:not(#print-root) { display: none !important; }
+      body, html { 
+        margin: 0 !important; 
+        padding: 0 !important; 
+        background: #fff !important; 
+      }
       #print-root {
         display: block !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 80mm !important;
-        max-width: 80mm !important;
+        position: static !important;
+        width: 100% !important;
         margin: 0 !important;
-        padding: 0 0 30mm 0 !important; /* Huge bottom padding to feed paper past cutter */
+        padding: 5mm 5mm 20mm 5mm !important;
+        box-sizing: border-box !important;
+        color: #000 !important;
       }
     }
-  `
-  document.head.appendChild(style)
-  printFn()
-  const cleanup = () => style.remove()
-  window.addEventListener('afterprint', cleanup, { once: true })
-  setTimeout(cleanup, 30000)
+  `;
+  document.head.appendChild(style);
+  
+  // Set timeout to allow the DOM to absorb the injected styles before spawning print dialog
+  setTimeout(() => {
+    printFn();
+    // Cleanup happens immediately after print dialog is closed
+    style.remove();
+    document.querySelectorAll('#print-root').forEach(el => el.remove());
+  }, 100);
 }
 
-const lineEq = "==================================================";
-const lineDash = "--------------------------------------------------";
-const lineAst = "**************************************************";
+// Replaced static 50-character strings with responsive CSS borders!
+const lineEq = `<div style="border-bottom: 2px dashed #000; margin: 8px 0; width: 100%;"></div>`;
+const lineDash = `<div style="border-bottom: 1px dashed #000; margin: 6px 0; width: 100%;"></div>`;
+const lineAst = `<div style="border-bottom: 2px dotted #000; margin: 8px 0; width: 100%;"></div>`;
 
-// ─── KITCHEN TICKET  — 80mm wide, auto height ────────────────────────────────
 export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
-  const root = document.createElement('div')
-  root.id = 'print-root'
+  const root = document.createElement('div');
+  root.id = 'print-root';
 
-  const d = createdAt ? new Date(createdAt) : new Date()
-  const dateStr = d.toLocaleDateString()
-  const timeStr = d.toLocaleTimeString()
+  const d = createdAt ? new Date(createdAt) : new Date();
+  const dateStr = d.toLocaleDateString();
+  const timeStr = d.toLocaleTimeString();
 
   const rows = lines.map((l) => {
-    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
+    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
-      ? `<div style="font-size: 12pt; padding-left: 30px; font-style: italic; text-align: left; font-weight: bold; margin-bottom: 8px;">
-          ${ings.map(i => `• ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
+      ? `<div style="font-size: 11pt; padding-left: 20px; font-style: italic; text-align: left; font-weight: bold; margin-bottom: 8px;">
+          ${ings.map(i => `• ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
          </div>`
-      : ''
+      : '';
 
     return `
-      <div style="display:flex; justify-content:flex-start; gap: 16px; margin: 8px 0 0 0; font-size: 14pt;">
-         <span style="min-width: 24px;">${esc(String(l.quantity))}</span>
-         <span style="word-break: break-word;">${esc(l.itemName)}</span>
+      <div style="display:flex; justify-content:flex-start; margin: 8px 0 2px 0; font-size: 14pt;">
+         <div style="min-width: 28px; font-weight: bold;">${esc(l.quantity)}</div>
+         <div style="word-break: break-word;">${esc(l.itemName)}</div>
       </div>
       ${ingText}
-    `
-  }).join('')
+    `;
+  }).join('');
 
-  // KEY FIX: width is set to 72mm (80mm minus ~4mm margin each side) on the
-  // content div itself. This means text wraps at the correct thermal width
-  // regardless of what page size the printer driver forces.
+  // max-width set to a safer 60mm which easily fits 58mm & 80mm printers without wrapping wildly
   root.innerHTML = `
     <div style="
-      width: 72mm;
-      max-width: 72mm;
+      width: 100%;
+      max-width: 60mm;
+      margin: 0;
       font-family: 'Courier New', Courier, monospace;
-      text-align: center;
-      font-size: 11pt;
+      font-size: 12pt;
       line-height: 1.3;
-      print-color-adjust: exact;
-      -webkit-print-color-adjust: exact;
-      overflow-wrap: break-word;
-      word-break: break-word;
-      margin: 0 auto;
+      color: #000;
+      text-align: left;
     ">
-      <div style="font-size: 14pt; padding: 10px 0;">*** KITCHEN BAR ***</div>
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-
-      <div style="display:flex; justify-content:space-between; text-align:left;">
-        <span>Server: ${esc(waiterName || 'Staff')}</span>
-        <span>Station 1</span>
+      <div style="text-align: center; font-size: 16pt; font-weight: bold; padding: 5px 0;">
+        *** KITCHEN BAR ***
       </div>
+      ${lineEq}
 
-      <div style="font-size: 20pt; padding: 12px 0; font-weight: normal;">Dine In</div>
-
-      <div style="display:flex; justify-content:space-between; text-align:left;">
+      <div>Server: ${esc(waiterName || 'Staff')}</div>
+      <div>Station 1</div>
+      <div style="font-size: 18pt; padding: 8px 0; text-align:center; font-weight:bold;">Dine In</div>
+      
+      <div style="display:flex; justify-content:space-between;">
         <span>${esc(dateStr)}</span>
         <span>${esc(timeStr)}</span>
       </div>
+      
+      ${lineEq}
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
+      <div style="font-size: 16pt; font-weight: bold;">Table: ${esc(tableNumber)}</div>
+      <div style="font-size: 12pt;">Guests: 1</div>
+      
+      ${lineDash}
 
-      <div style="text-align:left; font-size: 16pt;">Table: ${esc(String(tableNumber))}</div>
-      <div style="text-align:left; font-size: 12pt;">Guests: 1</div>
+      ${rows}
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-      <div style="text-align:left; margin: 10px 0;">
-        ${rows}
-      </div>
-
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%; margin-top: 20px;">${lineAst}</div>
-
+      ${lineDash}
+      
       <div style="padding: 10px 0;">
-         <div style="font-size: 16pt;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
-         <div style="font-size: 12pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
+         <div style="font-size: 14pt; font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
+         <div style="font-size: 11pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
       </div>
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineAst}</div>
+      ${lineAst}
     </div>
-  `
+  `;
 
-  document.body.appendChild(root)
+  document.body.appendChild(root);
   withThermalPage(() => {
-    requestAnimationFrame(() => {
-      window.print()
-      root.remove()
-    })
-  })
+    window.print();
+  });
 }
 
-// ─── PAYMENT RECEIPT — 80mm wide, auto height ────────────────────────────────
 export function printReceipt({ shopName, order, paymentMethod }) {
-  const root = document.createElement('div')
-  root.id = 'print-root'
+  const root = document.createElement('div');
+  root.id = 'print-root';
 
-  const d = order?.createdAt ? new Date(order.createdAt) : new Date()
-  const dateStr = d.toLocaleDateString()
-  const timeStr = d.toLocaleTimeString()
+  const d = order?.createdAt ? new Date(order.createdAt) : new Date();
+  const dateStr = d.toLocaleDateString();
+  const timeStr = d.toLocaleTimeString();
 
   const rows = (order?.lines ?? []).map((l) => {
-    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : []
+    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
-      ? `<div style="font-size: 11pt; padding-left: 32px; font-style: italic; text-align: left;">
-          ${ings.map(i => `* ${esc(i.name)}: ${esc(String(i.qty))} ${esc(i.unit || '')}`).join('<br/>')}
+      ? `<div style="font-size: 10pt; padding-left: 20px; font-style: italic; text-align: left;">
+          ${ings.map(i => `• ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
          </div>`
-      : ''
+      : '';
 
     return `
-    <div style="display:flex; justify-content:space-between; margin: 6px 0 0 0; font-size: 12pt;">
-       <div style="display:flex; gap: 12px; max-width: 65%;">
-          <span style="min-width: 20px;">${esc(String(l.quantity))}</span>
-          <span style="word-wrap:break-word; word-break: break-word;">${esc(l.itemName)}</span>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin: 6px 0 2px 0; font-size: 12pt;">
+       <div style="display:flex; width: 70%;">
+          <div style="min-width: 24px; font-weight: bold;">${esc(l.quantity)}</div>
+          <div style="word-break: break-word; padding-right: 4px;">${esc(l.itemName)}</div>
        </div>
-       <div>${Number(l.price).toLocaleString()}</div>
+       <div style="width: 30%; text-align: right;">${Number(l.price).toLocaleString()}</div>
     </div>
     ${ingText}
-  `}).join('')
+  `}).join('');
 
-  const total = Number(order?.total ?? 0).toLocaleString()
-  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH')
-  const waiter = order?.waiterName || 'Staff'
+  const total = Number(order?.total ?? 0).toLocaleString();
+  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH');
+  const waiter = order?.waiterName || 'Staff';
 
-  // KEY FIX: same 72mm constraint here
   root.innerHTML = `
     <div style="
-      width: 72mm;
-      max-width: 72mm;
+      width: 100%;
+      max-width: 60mm;
+      margin: 0;
       font-family: 'Courier New', Courier, monospace;
-      text-align: center;
-      font-size: 11pt;
+      font-size: 12pt;
       line-height: 1.3;
-      print-color-adjust: exact;
-      -webkit-print-color-adjust: exact;
-      overflow-wrap: break-word;
-      word-break: break-word;
-      margin: 0 auto;
+      color: #000;
+      text-align: left;
     ">
-      <div style="font-size: 14pt; padding: 10px 0;">*** ${esc(shopName ?? "Mama Prince's Coffee")} ***</div>
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
-
-      <div style="display:flex; justify-content:space-between; text-align:left;">
-        <span>Server: ${esc(waiter)}</span>
-        <span>${esc(methodLabel)}</span>
+      <div style="text-align: center; font-size: 16pt; font-weight: bold; padding: 5px 0;">
+        ${esc(shopName ?? "Mama Prince's Coffee")}
       </div>
+      ${lineEq}
 
-      <div style="font-size: 20pt; padding: 12px 0; font-weight: normal;">Dine In</div>
-
-      <div style="display:flex; justify-content:space-between; text-align:left;">
+      <div>Server: ${esc(waiter)}</div>
+      <div>Method: ${esc(methodLabel)}</div>
+      <div style="font-size: 18pt; padding: 8px 0; text-align: center; font-weight:bold;">Dine In</div>
+      
+      <div style="display:flex; justify-content:space-between;">
         <span>${esc(dateStr)}</span>
         <span>${esc(timeStr)}</span>
       </div>
+      
+      ${lineEq}
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineEq}</div>
+      <div style="font-size: 16pt; font-weight: bold;">Table: ${esc(order?.tableNumber || '1')}</div>
+      <div style="font-size: 12pt;">Guests: 1</div>
+      
+      ${lineDash}
 
-      <div style="text-align:left; font-size: 16pt;">Table: ${esc(String(order?.tableNumber || '1'))}</div>
-      <div style="text-align:left; font-size: 12pt;">Guests: 1</div>
+      ${rows}
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
+      ${lineDash}
 
-      <div style="text-align:left; margin: 10px 0;">
-        ${rows}
-      </div>
-
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineDash}</div>
-
-      <div style="display:flex; justify-content:space-between; font-size: 14pt; font-weight:bold; margin-top: 10px;">
-         <span>TOTAL RWF</span>
+      <div style="display:flex; justify-content:space-between; font-size: 16pt; font-weight:bold; margin-top: 10px;">
+         <span>TOTAL</span>
          <span>${total}</span>
       </div>
 
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%; margin-top: 20px;">${lineAst}</div>
-
+      ${lineAst}
+      
       <div style="padding: 10px 0;">
-         <div style="font-size: 16pt;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
-         <div style="font-size: 12pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
+         <div style="font-size: 14pt; font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
+         <div style="font-size: 11pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
       </div>
-
-      <div style="overflow:hidden; white-space:nowrap; letter-spacing: -1px; width:100%;">${lineAst}</div>
+      <div style="text-align: center; font-size: 10pt; padding-top: 10px;">
+        Thank you for your visit!
+      </div>
     </div>
-  `
+  `;
 
-  document.body.appendChild(root)
+  document.body.appendChild(root);
   withThermalPage(() => {
-    requestAnimationFrame(() => {
-      window.print()
-      root.remove()
-    })
-  })
+    window.print();
+  });
 }
