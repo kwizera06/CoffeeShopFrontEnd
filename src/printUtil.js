@@ -6,8 +6,7 @@ export function esc(s) {
 }
 
 function withThermalPage(printFn) {
-  // Clear entirely to prevent ghosting
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
+  // Only remove old styles, DO NOT REMOVE #print-root here because it was just appended by the caller!
   document.querySelectorAll('#print-page-override').forEach(el => el.remove());
 
   const style = document.createElement('style');
