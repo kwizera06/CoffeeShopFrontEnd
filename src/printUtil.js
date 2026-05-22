@@ -40,8 +40,8 @@ function withThermalPage(printFn) {
         position: absolute;
         left: 0;
         top: 0;
-        width: 72mm !important;
-        max-width: 72mm !important;
+        width: 280px !important;
+        max-width: 280px !important;
         margin: 0 auto !important;
         padding: 0 !important;
         color: #000 !important;
@@ -142,8 +142,8 @@ export function printKitchenTicket({
 
   root.innerHTML = `
     <div style="
-      width:72mm;
-      max-width:72mm;
+      width:280px;
+      max-width:280px;
       font-family: monospace;
       font-size:12px;
       line-height:1.5;
@@ -320,8 +320,8 @@ export function printReceipt({
 
   root.innerHTML = `
     <div style="
-      width:72mm;
-      max-width:72mm;
+      width:280px;
+      max-width:280px;
       font-family: monospace;
       font-size:12px;
       line-height:1.5;
