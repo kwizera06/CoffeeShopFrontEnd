@@ -1,214 +1,435 @@
 export function esc(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function withThermalPage(printFn) {
-  // Only remove old styles, DO NOT REMOVE #print-root here because it was just appended by the caller!
-  document.querySelectorAll('#print-page-override').forEach(el => el.remove());
+  // Remove old print styles
+  document
+    .querySelectorAll("#print-page-override")
+    .forEach((el) => el.remove());
 
-  const style = document.createElement('style');
-  style.id = 'print-page-override';
+  const style = document.createElement("style");
+  style.id = "print-page-override";
+
   style.textContent = `
-    @page { 
-      margin: 0; 
-      size: auto; 
+    @page {
+      margin: 0;
     }
+
     @media print {
-      body > *:not(#print-root) { display: none !important; }
-      body, html { 
-        margin: 0 !important; 
-        padding: 0 !important; 
-        background: #fff !important; 
-      }
-      #print-root {
-        display: block !important;
-        position: static !important;
-        width: 100% !important;
+
+      html, body {
         margin: 0 !important;
         padding: 0 !important;
+        background: #fff !important;
+      }
+
+      body * {
+        visibility: hidden;
+      }
+
+      #print-root,
+      #print-root * {
+        visibility: visible;
+      }
+
+      #print-root {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 72mm !important;
+        max-width: 72mm !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
         color: #000 !important;
+        background: #fff !important;
       }
     }
   `;
+
   document.head.appendChild(style);
-  
-  // Set timeout to allow the DOM to absorb the injected styles before spawning print dialog
+
   setTimeout(() => {
     printFn();
-  }, 100);
+  }, 150);
 
   const cleanup = () => {
     style.remove();
-    document.querySelectorAll('#print-root').forEach(el => el.remove());
+
+    document
+      .querySelectorAll("#print-root")
+      .forEach((el) => el.remove());
   };
 
-  window.addEventListener('afterprint', cleanup, { once: true });
+  window.addEventListener("afterprint", cleanup, {
+    once: true,
+  });
 }
 
-// Fixed 32-character lines which safely fits ALL thermal printers (58mm and 80mm) without ugly word-wrap. 
-// We use raw text here because many generic POS drivers STRIP all CSS borders/graphics!
-const lineEq = "================================";
-const lineDash = "--------------------------------";
-const lineAst = "********************************";
+// Safe thermal separator lengths
+const lineEq = "==============================";
+const lineDash = "------------------------------";
+const lineAst = "******************************";
 
-export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
-  // Clear any old tickets before starting
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
+export function printKitchenTicket({
+  orderId,
+  tableNumber,
+  shopName,
+  createdAt,
+  lines,
+  waiterName,
+}) {
+  // Remove previous tickets
+  document
+    .querySelectorAll("#print-root")
+    .forEach((el) => el.remove());
 
-  const root = document.createElement('div');
-  root.id = 'print-root';
+  const root = document.createElement("div");
+  root.id = "print-root";
 
-  const d = createdAt ? new Date(createdAt) : new Date();
+  const d = createdAt
+    ? new Date(createdAt)
+    : new Date();
+
   const dateStr = d.toLocaleDateString();
   const timeStr = d.toLocaleTimeString();
 
-  const rows = lines.map((l) => {
-    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
-    const ingText = ings.length > 0
-      ? `<div>
-          ${ings.map(i => `&nbsp;&nbsp;* ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
-         </div>`
-      : '';
+  const rows = (lines || [])
+    .map((l) => {
+      const ings = Array.isArray(l.ingredients)
+        ? l.ingredients.filter((i) => i.name)
+        : [];
 
-    return `
-      <div style="font-weight: bold; margin-top: 4px;">
-         ${esc(l.quantity)}x ${esc(l.itemName)}
-      </div>
-      ${ingText}
-    `;
-  }).join('');
+      const ingText =
+        ings.length > 0
+          ? `
+            <div style="margin-left:10px; margin-top:2px;">
+              ${ings
+                .map(
+                  (i) => `
+                    <div>
+                      • ${esc(i.name)}:
+                      ${esc(i.qty)}
+                      ${esc(i.unit || "")}
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          `
+          : "";
 
-  // We use pure HTML structure with `<br/>` and `&nbsp;` because some basic printer 
-  // drivers act as "Generic Text Only" and completely ignore CSS margins, padding, and Flexbox!
+      return `
+        <div style="margin-top:8px;">
+
+          <div style="
+            font-weight:bold;
+            font-size:13px;
+            word-break: break-word;
+          ">
+            ${esc(l.quantity)}x ${esc(l.itemName)}
+          </div>
+
+          ${ingText}
+
+        </div>
+      `;
+    })
+    .join("");
+
   root.innerHTML = `
     <div style="
+      width:72mm;
+      max-width:72mm;
       font-family: monospace;
-      font-size: 14pt;
-      line-height: 1.4;
-      color: #000;
-      text-align: left;
-      padding: 10px;
+      font-size:12px;
+      line-height:1.5;
+      color:#000;
+      padding:6px;
+      box-sizing:border-box;
+      white-space:normal;
+      overflow-wrap:break-word;
     ">
-      <div style="text-align: center; font-weight: bold;">
-        *** KITCHEN BAR ***
+
+      <div style="
+        text-align:center;
+        font-weight:bold;
+        font-size:15px;
+      ">
+        KITCHEN BAR
       </div>
+
       <div>${lineEq}</div>
 
-      <div>Server: ${esc(waiterName || 'Staff')}</div>
-      <div>Station 1</div>
-      <div style="text-align: center; font-weight: bold; margin: 8px 0;">DINE IN</div>
-      
-      <div>${esc(dateStr)} &nbsp; ${esc(timeStr)}</div>
-      
+      <div>
+        <strong>Server:</strong>
+      </div>
+
+      <div style="margin-bottom:6px;">
+        ${esc(waiterName || "Staff")}
+      </div>
+
+      <div>
+        <strong>Station:</strong> 1
+      </div>
+
+      <div style="
+        text-align:center;
+        font-weight:bold;
+        font-size:14px;
+        margin:8px 0;
+      ">
+        DINE IN
+      </div>
+
+      <div>
+        <strong>Date:</strong>
+        ${esc(dateStr)}
+      </div>
+
+      <div>
+        <strong>Time:</strong>
+        ${esc(timeStr)}
+      </div>
+
       <div>${lineEq}</div>
 
-      <div style="font-weight: bold;">Table: ${esc(tableNumber)}</div>
-      <div>Guests: 1</div>
-      
+      <div>
+        <strong>Table:</strong>
+        ${esc(tableNumber || "1")}
+      </div>
+
+      <div>
+        <strong>Guests:</strong> 1
+      </div>
+
       <div>${lineDash}</div>
 
       ${rows}
 
       <div>${lineDash}</div>
+
       <br/>
-      <div style="font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
-      <div>Order #: ${esc(String(orderId).split('-')[0])}</div>
+
+      <div>
+        <strong>Ticket #:</strong>
+        ${esc(String(orderId || "").slice(0, 4))}
+      </div>
+
+      <div>
+        <strong>Order #:</strong>
+        ${esc(String(orderId || "").split("-")[0])}
+      </div>
 
       <div>${lineAst}</div>
-      
-      <!-- Crucial blank space: forces printer feed so the paper clears the cutter -->
-      <br/><br/><br/><br/><br/>
-      .
+
+      <div style="height:40px;"></div>
+
     </div>
   `;
 
   document.body.appendChild(root);
+
   withThermalPage(() => {
     window.print();
   });
 }
 
-export function printReceipt({ shopName, order, paymentMethod }) {
-  // Clear any old tickets before starting
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
+export function printReceipt({
+  shopName,
+  order,
+  paymentMethod,
+}) {
+  // Remove previous tickets
+  document
+    .querySelectorAll("#print-root")
+    .forEach((el) => el.remove());
 
-  const root = document.createElement('div');
-  root.id = 'print-root';
+  const root = document.createElement("div");
+  root.id = "print-root";
 
-  const d = order?.createdAt ? new Date(order.createdAt) : new Date();
+  const d = order?.createdAt
+    ? new Date(order.createdAt)
+    : new Date();
+
   const dateStr = d.toLocaleDateString();
   const timeStr = d.toLocaleTimeString();
 
-  const rows = (order?.lines ?? []).map((l) => {
-    const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
-    const ingText = ings.length > 0
-      ? `<div>
-          ${ings.map(i => `&nbsp;&nbsp;* ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
-         </div>`
-      : '';
+  const rows = (order?.lines || [])
+    .map((l) => {
+      const ings = Array.isArray(l.ingredients)
+        ? l.ingredients.filter((i) => i.name)
+        : [];
 
-    return `
-    <div style="margin-top: 4px;">
-       <div style="font-weight: bold;">${esc(l.quantity)}x ${esc(l.itemName)}</div>
-       <div>&nbsp;Price: ${Number(l.price).toLocaleString()} RWF</div>
-    </div>
-    ${ingText}
-  `}).join('');
+      const ingText =
+        ings.length > 0
+          ? `
+            <div style="margin-left:10px; margin-top:2px;">
+              ${ings
+                .map(
+                  (i) => `
+                    <div>
+                      • ${esc(i.name)}:
+                      ${esc(i.qty)}
+                      ${esc(i.unit || "")}
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          `
+          : "";
 
-  const total = Number(order?.total ?? 0).toLocaleString();
-  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH');
-  const waiter = order?.waiterName || 'Staff';
+      return `
+        <div style="margin-top:8px;">
+
+          <div style="
+            font-weight:bold;
+            font-size:13px;
+            word-break: break-word;
+          ">
+            ${esc(l.quantity)}x ${esc(l.itemName)}
+          </div>
+
+          <div>
+            Price:
+            ${Number(l.price || 0).toLocaleString()} RWF
+          </div>
+
+          ${ingText}
+
+        </div>
+      `;
+    })
+    .join("");
+
+  const total = Number(order?.total || 0).toLocaleString();
+
+  const methodLabel =
+    paymentMethod === "MOBILE_MONEY"
+      ? "MOMO"
+      : paymentMethod === "POS"
+      ? "POS/CARD"
+      : "CASH";
+
+  const waiter =
+    order?.waiterName || "Staff";
 
   root.innerHTML = `
     <div style="
+      width:72mm;
+      max-width:72mm;
       font-family: monospace;
-      font-size: 14pt;
-      line-height: 1.4;
-      color: #000;
-      text-align: left;
-      padding: 10px;
+      font-size:12px;
+      line-height:1.5;
+      color:#000;
+      padding:6px;
+      box-sizing:border-box;
+      white-space:normal;
+      overflow-wrap:break-word;
     ">
-      <div style="text-align: center; font-weight: bold;">
-        ${esc(shopName ?? "Mama Prince's Coffee")}
+
+      <div style="
+        text-align:center;
+        font-weight:bold;
+        font-size:15px;
+      ">
+        ${esc(shopName || "Coffee Shop")}
       </div>
+
       <div>${lineEq}</div>
 
-      <div>Server: ${esc(waiter)}</div>
-      <div>Method: ${esc(methodLabel)}</div>
-      <div style="text-align: center; font-weight: bold; margin: 8px 0;">DINE IN</div>
-      
-      <div>${esc(dateStr)} &nbsp; ${esc(timeStr)}</div>
-      
+      <div>
+        <strong>Server:</strong>
+      </div>
+
+      <div style="margin-bottom:6px;">
+        ${esc(waiter)}
+      </div>
+
+      <div>
+        <strong>Payment:</strong>
+        ${esc(methodLabel)}
+      </div>
+
+      <div style="
+        text-align:center;
+        font-weight:bold;
+        font-size:14px;
+        margin:8px 0;
+      ">
+        DINE IN
+      </div>
+
+      <div>
+        <strong>Date:</strong>
+        ${esc(dateStr)}
+      </div>
+
+      <div>
+        <strong>Time:</strong>
+        ${esc(timeStr)}
+      </div>
+
       <div>${lineEq}</div>
 
-      <div style="font-weight: bold;">Table: ${esc(order?.tableNumber || '1')}</div>
-      <div>Guests: 1</div>
-      
+      <div>
+        <strong>Table:</strong>
+        ${esc(order?.tableNumber || "1")}
+      </div>
+
+      <div>
+        <strong>Guests:</strong> 1
+      </div>
+
       <div>${lineDash}</div>
 
       ${rows}
 
       <div>${lineDash}</div>
-      <br/>
-      <div style="font-weight: bold;">TOTAL: ${total} RWF</div>
-      <br/>
-      <div>${lineAst}</div>
-      
-      <div style="font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
-      <div>Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
-      
-      <div style="text-align: center; margin-top: 10px;">Thank you!</div>
 
-      <!-- Crucial blank space: forces printer feed so the paper clears the cutter -->
-      <br/><br/><br/><br/><br/>
-      .
+      <br/>
+
+      <div style="
+        font-weight:bold;
+        font-size:14px;
+      ">
+        TOTAL:
+        ${total} RWF
+      </div>
+
+      <br/>
+
+      <div>
+        <strong>Ticket #:</strong>
+        ${esc(String(order?.id || "NEW").slice(0, 4))}
+      </div>
+
+      <div>
+        <strong>Order #:</strong>
+        ${esc(String(order?.id || "NEW").split("-")[0])}
+      </div>
+
+      <div>${lineAst}</div>
+
+      <div style="
+        text-align:center;
+        margin-top:10px;
+        font-weight:bold;
+      ">
+        Thank You!
+      </div>
+
+      <div style="height:40px;"></div>
+
     </div>
   `;
 
   document.body.appendChild(root);
+
   withThermalPage(() => {
     window.print();
   });
