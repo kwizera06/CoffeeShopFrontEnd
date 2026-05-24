@@ -88,7 +88,7 @@ function Shell() {
             <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, background: '#FF5722', borderRadius: '50%' }}></span>
           </div>
           <NavLink to="/app/cashier" className="pos-btn-modern">
-            <HiOutlineClipboardDocumentList /> Point of Sale
+            POS
           </NavLink>
           <div className="user-avatar-modern" title="Click to logout" onClick={logout} style={{ cursor: 'pointer' }}>{initials}</div>
         </div>
@@ -113,6 +113,7 @@ function Shell() {
               <NavLink to="/app/admin?tab=requested_order" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=requested_order') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Requisitions</NavLink>
               <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=staff') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Staff</NavLink>
               <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=reports') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Reports</NavLink>
+              <NavLink to="/app/admin?tab=eod" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=eod') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>EOD Report</NavLink>
            </nav>
 
            <div style={{ flex: 1 }} />
@@ -134,6 +135,32 @@ function Shell() {
           <Outlet context={{ setSidebarOpen }} />
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      {showOwner && (
+        <nav className="am-bottom-nav">
+          <NavLink to="/app/admin?tab=overview" className={`am-bottom-nav-item ${loc.search.includes('tab=overview') || (!loc.search.includes('tab=')) ? 'active' : ''}`}>
+            <HiOutlineSquares2X2 />
+            <span>Overview</span>
+          </NavLink>
+          <NavLink to="/app/admin?tab=reports" className={`am-bottom-nav-item ${loc.search.includes('tab=reports') ? 'active' : ''}`}>
+            <HiOutlineChartBar />
+            <span>Reports</span>
+          </NavLink>
+          <NavLink to="/app/admin?tab=staff" className={`am-bottom-nav-item ${loc.search.includes('tab=staff') ? 'active' : ''}`}>
+            <HiOutlineUsers />
+            <span>Staff</span>
+          </NavLink>
+          <NavLink to="/app/admin?tab=inventory" className={`am-bottom-nav-item ${loc.search.includes('tab=inventory') ? 'active' : ''}`}>
+            <HiOutlineArchiveBox />
+            <span>Inventory</span>
+          </NavLink>
+          <button className="am-bottom-nav-item" onClick={() => setSidebarOpen(true)}>
+            <HiOutlineBars3 />
+            <span>More</span>
+          </button>
+        </nav>
+      )}
     </div>
   )
 }

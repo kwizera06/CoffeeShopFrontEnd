@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, getSession } from '../../api'
+import { supabase } from '../../supabaseClient'
+import './OwnerModern.css'
 
 export default function Supplies() {
   const { role } = getSession()
@@ -80,96 +82,102 @@ export default function Supplies() {
     }
   }
 
-  if (!allowed) return <div className="panel">Unauthorized</div>
+  if (!allowed) return <div className="owner-modern-page"><p style={{ color: '#FF5252' }}>Unauthorized</p></div>
 
   return (
-    <div className="panel animate-in">
-      <div className="section-header">
-        <div>
-          <h2>Shop Supplies</h2>
-          <p className="muted">Request items needed for the coffee shop</p>
+    <div className="owner-modern-page am-animate" style={{ minHeight: 'auto' }}>
+      <header className="am-header">
+        <div className="am-title">
+          <h1>Shop Supplies</h1>
+          <p>Request items needed for the coffee shop</p>
         </div>
-      </div>
+      </header>
 
-      {error ? <div className="error">{error}</div> : null}
+      {error ? <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div> : null}
       {success ? (
-        <div style={{ background: 'var(--go)', color: 'var(--espresso)', padding: 16, borderRadius: 8, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}>
-          <span style={{ fontSize: 20 }}>✅</span> Request sent to Admin successfully!
+        <div style={{ background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '12px 16px', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13 }}>
+          ✅ Request sent to Admin successfully!
         </div>
       ) : null}
 
-      <div className="card stack" style={{ padding: 24 }}>
-        <h3 style={{ marginBottom: 16 }}>New Supply Request</h3>
-        <p className="muted" style={{ marginBottom: 24 }}>Add items to your list and click submit to notify the admin.</p>
+      <div className="am-chart-card">
+        <h3 style={{ marginBottom: 8, fontSize: 16 }}>New Supply Request</h3>
+        <p style={{ color: '#A0A0A0', fontSize: 12, marginBottom: 20 }}>Add items to your list and submit to notify admin.</p>
         
-        <div className="grid-3" style={{ gap: 12, marginBottom: 16 }}>
-          <label className="field">
+        <div className="supplies-form-row">
+          <label className="am-field" style={{ flex: 2 }}>
             <span>Item Name</span>
             <input 
+              className="am-input"
               type="text" 
               placeholder="e.g. Milk, Sugar" 
               value={newSupply.name} 
               onChange={e => setNewSupply({...newSupply, name: e.target.value})} 
             />
           </label>
-          <div className="row" style={{ gap: 8 }}>
-            <label className="field" style={{ flex: 1 }}>
-              <span>Qty</span>
-              <input 
-                type="number" 
-                placeholder="0" 
-                value={newSupply.quantity} 
-                onChange={e => setNewSupply({...newSupply, quantity: e.target.value})} 
-              />
-            </label>
-            <label className="field" style={{ flex: 1 }}>
-              <span>Unit</span>
-              <input 
-                type="text" 
-                placeholder="pcs, kg" 
-                value={newSupply.unit} 
-                onChange={e => setNewSupply({...newSupply, unit: e.target.value})} 
-              />
-            </label>
-          </div>
-          <div className="stack" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn primary block" onClick={addSupplyItem} style={{ height: 42 }}>Add to List</button>
+          <label className="am-field" style={{ flex: 1 }}>
+            <span>Qty</span>
+            <input 
+              className="am-input"
+              type="number" 
+              placeholder="0" 
+              value={newSupply.quantity} 
+              onChange={e => setNewSupply({...newSupply, quantity: e.target.value})} 
+            />
+          </label>
+          <label className="am-field" style={{ flex: 1 }}>
+            <span>Unit</span>
+            <input 
+              className="am-input"
+              type="text" 
+              placeholder="pcs, kg" 
+              value={newSupply.unit} 
+              onChange={e => setNewSupply({...newSupply, unit: e.target.value})} 
+            />
+          </label>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button onClick={addSupplyItem} style={{ background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '10px 20px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer', height: 42, whiteSpace: 'nowrap' }}>+ Add</button>
           </div>
         </div>
 
         {supplyItems.length > 0 && (
-          <div className="table" style={{ marginTop: 12, marginBottom: 20 }}>
-            <div className="row head">
-              <div>Item</div>
-              <div style={{ textAlign: 'right' }}>Quantity</div>
-              <div style={{ textAlign: 'right' }}>Action</div>
+          <div style={{ marginTop: 20, background: 'rgba(255,255,255,0.02)', borderRadius: 12, padding: 14, border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, fontSize: 10, fontWeight: 800, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: 1, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 8 }}>
+              <span>Item</span>
+              <span style={{ textAlign: 'right' }}>Qty</span>
+              <span style={{ textAlign: 'right' }}>Action</span>
             </div>
             {supplyItems.map((item, idx) => (
-              <div key={idx} className="row">
-                <div style={{ fontWeight: 600 }}>{item.name}</div>
-                <div style={{ textAlign: 'right' }}>{item.quantity} {item.unit}</div>
-                <div style={{ textAlign: 'right' }}>
-                  <button className="btn small warn ghost" onClick={() => setSupplyItems(supplyItems.filter((_, i) => i !== idx))}>Remove</button>
-                </div>
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
+                <span style={{ textAlign: 'right', color: '#A0A0A0', fontSize: 13 }}>{item.quantity} {item.unit}</span>
+                <button onClick={() => setSupplyItems(supplyItems.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: '#FF5252', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'right' }}>Remove</button>
               </div>
             ))}
           </div>
         )}
 
-        <label className="field">
+        <label className="am-field" style={{ marginTop: 20 }}>
           <span>Notes for Admin (Optional)</span>
           <textarea 
+            className="am-input"
+            style={{ height: 'auto', padding: '12px 16px' }}
+            rows={3}
             placeholder="Explain why these items are needed or specify brands..." 
             value={supplyNotes} 
             onChange={e => setSupplyNotes(e.target.value)}
           />
         </label>
 
-        <div className="row-actions" style={{ marginTop: 24 }}>
-           <button className="btn success xl" disabled={busy || supplyItems.length === 0} onClick={submitRequisition}>
-             {busy ? 'Sending...' : '🚀 Submit Request to Admin'}
+        <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+           <button 
+             disabled={busy || supplyItems.length === 0} 
+             onClick={submitRequisition}
+             style={{ flex: 1, background: supplyItems.length === 0 ? '#222' : '#4CAF50', color: supplyItems.length === 0 ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: supplyItems.length === 0 ? 'not-allowed' : 'pointer', boxShadow: supplyItems.length > 0 ? '0 4px 15px rgba(76,175,80,0.3)' : 'none' }}
+           >
+             {busy ? 'Sending...' : 'Submit Request to Admin'}
            </button>
-           <button className="btn ghost" onClick={() => { setSupplyItems([]); }}>Clear List</button>
+           <button onClick={() => { setSupplyItems([]); }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#A0A0A0', padding: '14px 20px', borderRadius: 12, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Clear</button>
         </div>
       </div>
     </div>

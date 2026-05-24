@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, getSession } from '../../api'
 import { supabase } from '../../supabaseClient'
+import './OwnerModern.css'
 import { 
   HiOutlineClipboardDocumentList, 
   HiOutlineExclamationTriangle,
@@ -94,132 +95,131 @@ export default function ChefDashboard() {
   const lowStock = inventory.filter(i => i.stock_level < i.min_threshold)
 
   return (
-    <div className="panel animate-in">
-      <div className="section-header">
-        <div>
-          <h2>Chef Dashboard</h2>
-          <p className="muted">Manage kitchen supplies and monitor inventory</p>
+    <div className="owner-modern-page am-animate" style={{ minHeight: 'auto' }}>
+      <header className="am-header">
+        <div className="am-title">
+          <h1>Chef Dashboard</h1>
+          <p>Kitchen supplies & inventory monitor</p>
         </div>
-        <button className="btn ghost" onClick={loadInventory}>
-           <HiOutlineArrowPath /> Refresh Stock
+        <button className="btn ghost" onClick={loadInventory} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 16px', borderRadius: 12, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+           <HiOutlineArrowPath /> Refresh
         </button>
-      </div>
+      </header>
 
-      <div className="grid-2" style={{ gap: 24 }}>
+      {error && <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+
+      <div className="chef-grid">
         {/* Left Column: Inventory Alerts */}
-        <div className="stack">
-          <div className="card" style={{ padding: 20 }}>
-            <div className="row-between" style={{ marginBottom: 16 }}>
-               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                 <HiOutlineExclamationTriangle style={{ color: 'var(--mahogany)' }} /> Low Stock Alerts
-               </h3>
-               <span className="badge badge-danger">{lowStock.length} Items</span>
-            </div>
-            
-            {lowStock.length === 0 ? (
-              <div className="empty-state" style={{ padding: '20px 0' }}>
-                <HiOutlineCheckCircle size={32} style={{ color: 'var(--success)', opacity: 0.5 }} />
-                <p className="muted">Inventory levels are healthy.</p>
-              </div>
-            ) : (
-              <div className="stack" style={{ gap: 10 }}>
-                {lowStock.map(item => (
-                  <div key={item.id} className="row-between p-12" style={{ borderBottom: '1px solid var(--border)' }}>
-                     <div>
-                       <div style={{ fontWeight: 600 }}>{item.name}</div>
-                       <div className="muted" style={{ fontSize: 12 }}>Min Threshold: {item.min_threshold} {item.unit}</div>
-                     </div>
-                     <div className="text-right">
-                       <div style={{ fontWeight: 700, color: 'var(--mahogany)' }}>{item.stock_level} {item.unit}</div>
-                       <button 
-                         className="btn tiny ghost" 
-                         style={{ color: 'var(--caramel)', fontSize: 11 }}
-                         onClick={() => {
-                           if (!supplyItems.find(s => s.name === item.name)) {
-                             setSupplyItems([...supplyItems, { name: item.name, quantity: item.min_threshold, unit: item.unit }])
-                           }
-                         }}
-                       >
-                         + Add to Req
-                       </button>
-                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="am-chart-card">
+          <div className="am-chart-header">
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <HiOutlineExclamationTriangle style={{ color: '#FF5722' }} /> Low Stock Alerts
+            </h3>
+            <span style={{ background: 'rgba(255,87,34,0.1)', color: '#FF5722', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{lowStock.length} Items</span>
           </div>
+          
+          {lowStock.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center' }}>
+              <HiOutlineCheckCircle size={32} style={{ color: '#4CAF50', opacity: 0.5, marginBottom: 8 }} />
+              <p style={{ color: '#A0A0A0', fontSize: 13 }}>Inventory levels are healthy.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {lowStock.map(item => (
+                <div key={item.id} className="am-order-row">
+                   <div>
+                     <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                     <div style={{ color: '#A0A0A0', fontSize: 11 }}>Min: {item.min_threshold} {item.unit}</div>
+                   </div>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                     <span style={{ fontWeight: 700, color: '#FF5722', fontSize: 14 }}>{item.stock_level} {item.unit}</span>
+                     <button 
+                       style={{ background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                       onClick={() => {
+                         if (!supplyItems.find(s => s.name === item.name)) {
+                           setSupplyItems([...supplyItems, { name: item.name, quantity: item.min_threshold, unit: item.unit }])
+                         }
+                       }}
+                     >
+                       + Req
+                     </button>
+                   </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right Column: New Requisition */}
-        <div className="stack">
-          <div className="card" style={{ padding: 24, position: 'relative' }}>
-             {success && (
-               <div className="alert-float" style={{ position: 'absolute', top: 12, right: 12, background: 'var(--success)', color: 'white', padding: '8px 16px', borderRadius: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, zIndex: 10 }}>
-                 <HiOutlineCheckCircle /> Submitted!
-               </div>
-             )}
-            <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-               <HiOutlineClipboardDocumentList /> Create Requisition
-            </h3>
-            
-            <div className="grid-2" style={{ gap: 12, marginBottom: 16 }}>
-               <label className="field" style={{ gridColumn: 'span 2' }}>
-                 <span>Item Name</span>
-                 <input 
-                   type="text" 
-                   list="inventory-suggestions"
-                   placeholder="e.g. Coffee Beans" 
-                   value={newSupply.name} 
-                   onChange={e => setNewSupply({...newSupply, name: e.target.value})} 
-                 />
-                 <datalist id="inventory-suggestions">
-                    {inventory.map(i => <option key={i.id} value={i.name} />)}
-                 </datalist>
-               </label>
-               <label className="field">
-                 <span>Quantity</span>
-                 <input type="number" value={newSupply.quantity} onChange={e => setNewSupply({...newSupply, quantity: e.target.value})} />
-               </label>
-               <label className="field">
-                 <span>Unit</span>
-                 <input type="text" value={newSupply.unit} onChange={e => setNewSupply({...newSupply, unit: e.target.value})} />
-               </label>
-            </div>
-            
-            <button className="btn primary block" onClick={addSupplyItem}>Add to List</button>
-
-            {supplyItems.length > 0 && (
-              <div className="stack" style={{ marginTop: 20, background: '#FAF6F0', borderRadius: 8, padding: 12 }}>
-                <div className="row-between head" style={{ fontSize: 12, fontWeight: 700, paddingBottom: 8, borderBottom: '1px solid #E5E0DA', marginBottom: 8 }}>
-                   <span>ITEM</span>
-                   <span>QTY</span>
-                </div>
-                {supplyItems.map((s, i) => (
-                  <div key={i} className="row-between" style={{ padding: '4px 0', fontSize: 14 }}>
-                     <span>{s.name}</span>
-                     <div className="row" style={{ gap: 8 }}>
-                       <span>{s.quantity} {s.unit}</span>
-                       <button className="btn tiny danger ghost" onClick={() => setSupplyItems(supplyItems.filter((_, idx) => idx !== i))}>×</button>
-                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <label className="field" style={{ marginTop: 20 }}>
-               <span>Notes</span>
-               <textarea rows={2} value={supplyNotes} onChange={e => setSupplyNotes(e.target.value)} placeholder="Any special instructions..." />
-            </label>
-
-            <button 
-              className="btn success xl block" 
-              style={{ marginTop: 20 }}
-              disabled={busy || supplyItems.length === 0}
-              onClick={submitRequisition}
-            >
-              {busy ? 'Sending...' : '🚀 Submit Requisition to Admin'}
-            </button>
+        <div className="am-chart-card" style={{ position: 'relative' }}>
+           {success && (
+             <div style={{ position: 'absolute', top: 16, right: 16, background: '#4CAF50', color: 'white', padding: '6px 14px', borderRadius: 20, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, zIndex: 10, fontWeight: 700 }}>
+               <HiOutlineCheckCircle /> Submitted!
+             </div>
+           )}
+          <h3 style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
+             <HiOutlineClipboardDocumentList /> Create Requisition
+          </h3>
+          
+          <div className="am-form-grid" style={{ marginTop: 0, gap: 12 }}>
+             <label className="am-field" style={{ gridColumn: 'span 2' }}>
+               <span>Item Name</span>
+               <input 
+                 type="text" 
+                 className="am-input"
+                 list="inventory-suggestions"
+                 placeholder="e.g. Coffee Beans" 
+                 value={newSupply.name} 
+                 onChange={e => setNewSupply({...newSupply, name: e.target.value})} 
+               />
+               <datalist id="inventory-suggestions">
+                  {inventory.map(i => <option key={i.id} value={i.name} />)}
+               </datalist>
+             </label>
+             <label className="am-field">
+               <span>Quantity</span>
+               <input className="am-input" type="number" value={newSupply.quantity} onChange={e => setNewSupply({...newSupply, quantity: e.target.value})} />
+             </label>
+             <label className="am-field">
+               <span>Unit</span>
+               <input className="am-input" type="text" value={newSupply.unit} onChange={e => setNewSupply({...newSupply, unit: e.target.value})} />
+             </label>
           </div>
+          
+          <button onClick={addSupplyItem} style={{ width: '100%', marginTop: 16, background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            + Add to List
+          </button>
+
+          {supplyItems.length > 0 && (
+            <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)', borderRadius: 12, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 800, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: 1, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 8 }}>
+                 <span>ITEM</span>
+                 <span>QTY</span>
+              </div>
+              {supplyItems.map((s, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 13 }}>
+                   <span>{s.name}</span>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                     <span style={{ color: '#A0A0A0' }}>{s.quantity} {s.unit}</span>
+                     <button onClick={() => setSupplyItems(supplyItems.filter((_, idx) => idx !== i))} style={{ background: 'transparent', border: 'none', color: '#FF5252', fontSize: 16, cursor: 'pointer' }}>×</button>
+                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label className="am-field" style={{ marginTop: 16 }}>
+             <span>Notes</span>
+             <textarea className="am-input" style={{ height: 'auto', padding: '12px 16px' }} rows={2} value={supplyNotes} onChange={e => setSupplyNotes(e.target.value)} placeholder="Any special instructions..." />
+          </label>
+
+          <button 
+            style={{ width: '100%', marginTop: 16, background: supplyItems.length === 0 ? '#222' : '#4CAF50', color: supplyItems.length === 0 ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: supplyItems.length === 0 ? 'not-allowed' : 'pointer', boxShadow: supplyItems.length > 0 ? '0 4px 15px rgba(76,175,80,0.3)' : 'none' }}
+            disabled={busy || supplyItems.length === 0}
+            onClick={submitRequisition}
+          >
+            {busy ? 'Sending...' : 'Submit Requisition to Admin'}
+          </button>
         </div>
       </div>
     </div>

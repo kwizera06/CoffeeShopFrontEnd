@@ -67,6 +67,7 @@ export default function CashierDashboard() {
   // Top header states
   const [showShiftModal, setShowShiftModal] = useState('') // 'OPEN' or 'CLOSE'
   const [shiftForm, setShiftForm] = useState({ initialCash: '0', initialMomo: '0', actualCash: '0', actualMomo: '0', notes: '' })
+  const [cartExpanded, setCartExpanded] = useState(false)
 
   // New Order states
   const [menu, setMenu] = useState([])
@@ -395,11 +396,11 @@ export default function CashierDashboard() {
                 })}
               </div>
             </div>
-            <div className="cashier-right-pane">
-               <div className="cashier-ticket-header" style={editId ? { background: '#3A3022', borderBottomColor: '#E6CCB2' } : {}}>
+            <div className={`cashier-right-pane ${cartExpanded ? 'expanded' : ''}`}>
+               <div className="cashier-ticket-header" style={editId ? { background: '#3A3022', borderBottomColor: '#E6CCB2' } : {}} onClick={() => setCartExpanded(!cartExpanded)}>
                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: 12}}>
                     <div className="cashier-ticket-title" style={editId ? { color: '#E6CCB2' } : {}}>
-                      {editId ? '📝 Editing Order' : 'Current Ticket'}
+                      {editId ? '📝 Editing Order' : `🛒 Cart (${cartLines.length})`}
                     </div>
                     {editId && (
                       <button 

@@ -98,8 +98,8 @@
 }
 
 .pos-btn-modern {
-  background: #252525;
-  border: 1px solid var(--border-subtle);
+  background: var(--accent-green);
+  border: none;
   color: #fff;
   padding: 8px 16px;
   border-radius: 10px;
@@ -250,6 +250,52 @@
   background: var(--app-bg);
 }
 
+/* Bottom Navigation Bar (Mobile) */
+.am-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: #0a0a0a;
+  border-top: 1px solid var(--border-subtle);
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 8px;
+  z-index: 1002;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.am-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.am-bottom-nav-item svg {
+  font-size: 20px;
+}
+
+.am-bottom-nav-item.active {
+  color: #fff;
+}
+
+.am-bottom-nav-item.active svg {
+  color: var(--accent-green);
+}
+
 /* Mobile Adjustments */
 @media (max-width: 900px) {
   .am-app-sidebar {
@@ -270,7 +316,45 @@
   }
   
   .am-mobile-toggle-bar {
+    display: none;
+  }
+
+  .am-bottom-nav {
     display: flex;
+  }
+
+  .modern-viewport {
+    padding-bottom: 72px;
+  }
+
+  .modern-header {
+    height: 56px;
+    padding: 0 12px;
+  }
+
+  .modern-header-right {
+    gap: 10px;
+  }
+
+  .pos-btn-modern {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .user-avatar-modern {
+    display: none;
+  }
+
+  .modern-shop-info h3 {
+    font-size: 13px;
+  }
+
+  .modern-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 16px;
   }
   
   .modern-nav-tabs { display: none; }

@@ -70,6 +70,7 @@ export default function Owner() {
     stockLevel: '',
     buyingPrice: ''
   })
+  const [showMenuForm, setShowMenuForm] = useState(false)
   const [tempRecipeLine, setTempRecipeLine] = useState({ ingredient_id: '', quantity_required: '' })
   
   const SUB_CATEGORIES = [
@@ -103,8 +104,25 @@ export default function Owner() {
   const [recipeLines, setRecipeLines] = useState([])
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: '', quantity_required: 0 })
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const [reportDay, setReportDay] = useState(() => new Date().toISOString().slice(0, 10))
+  // Today's BUSINESS day in Kigali, Rwanda (UTC+2) with 6 AM cutoff.
+  // Sales between 00:00–05:59 Kigali still count toward the previous day,
+  // so the dashboard "Today" matches the operator's mental model.
+  const kigaliToday = () => {
+    const KIGALI_OFFSET_HOURS = 2
+    const BUSINESS_DAY_CUTOFF_HOUR = 6
+    const ms = Date.now() + (KIGALI_OFFSET_HOURS - BUSINESS_DAY_CUTOFF_HOUR) * 60 * 60 * 1000
+    return new Date(ms).toISOString().slice(0, 10)
+  }
+  const today = useMemo(() => kigaliToday(), [])
+  const [reportDay, setReportDay] = useState(() => kigaliToday())
+
+  // Defer chart mount until after first layout pass so Recharts'
+  // ResponsiveContainer can measure its parent correctly on first paint.
+  const [chartsReady, setChartsReady] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setChartsReady(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
   const [month, setMonth] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() + 1 }
@@ -133,6 +151,9 @@ export default function Owner() {
   
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
+
+  // Drill-down modal state: { type: 'revenue'|'cash'|'momo'|'pos'|'profit'|'completed'|'prep'|'waiting'|'lowstock', data?: any }
+  const [drilldown, setDrilldown] = useState(null)
   
   const allowed = role === 'SHOP_ADMIN' || role === 'CASHIER'
 
@@ -204,7 +225,7 @@ export default function Owner() {
     if (!allowed) {
       return
     }
-    if (tab !== 'reports' && tab !== 'overview') {
+    if (tab !== 'reports' && tab !== 'overview' && tab !== 'eod') {
       return
     }
       Promise.all([
@@ -247,6 +268,102 @@ export default function Owner() {
         })
         .catch((e) => setError(e.message))
     }, [allowed, tab, reportDay, month.year, month.month])
+
+  // ──────────────────── Drill-Down Openers ────────────────────
+  const openDrilldown = async (type) => {
+    try {
+      if (type === 'revenue') {
+        // All products sold today aggregated by item
+        const items = aggregateItems(dailyRows)
+        setDrilldown({ type, title: 'All Sales Today', items, total: overview?.todayRevenue || 0 })
+      } else if (type === 'cash') {
+        const filtered = dailyRows.filter(r => r.methodLabel === 'Cash')
+        setDrilldown({ type, title: 'Cash Sales', items: aggregateItems(filtered), total: overview?.todayCashSales || 0 })
+      } else if (type === 'momo') {
+        const filtered = dailyRows.filter(r => r.methodLabel === 'MoMo')
+        setDrilldown({ type, title: 'MoMo Sales', items: aggregateItems(filtered), total: overview?.todayMomoSales || 0 })
+      } else if (type === 'pos') {
+        const filtered = dailyRows.filter(r => r.methodLabel === 'POS')
+        setDrilldown({ type, title: 'POS/Card Sales', items: aggregateItems(filtered), total: overview?.todayPosSales || 0 })
+      } else if (type === 'profit') {
+        const items = aggregateItemsWithProfit(dailyRows)
+        setDrilldown({ type, title: 'Profit Breakdown', items, total: overview?.todayProfit || 0 })
+      } else if (type === 'completed') {
+        // Products sold grouped by category
+        const items = aggregateItems(dailyRows)
+        const byCategory = groupByCategory(items)
+        setDrilldown({ type, title: 'Completed Orders', byCategory, count: overview?.todayPaidOrdersCount || 0 })
+      } else if (type === 'prep') {
+        const orders = await api('/api/shop/orders/kitchen-queue')
+        const byCategory = groupOrdersByCategory(orders)
+        setDrilldown({ type, title: 'In Preparation', byCategory, count: orders.length })
+      } else if (type === 'waiting') {
+        const orders = await api('/api/shop/orders/drafts')
+        const byCategory = groupOrdersByCategory(orders)
+        setDrilldown({ type, title: 'Waiting Orders', byCategory, count: orders.length })
+      } else if (type === 'lowstock') {
+        const low = ingredients.filter(ing => ing.stock_level <= ing.min_threshold)
+        setDrilldown({ type, title: 'Low Stock Items', items: low })
+      }
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  // Aggregate rawItems from payment rows into product summary
+  function aggregateItems(rows) {
+    const map = {}
+    rows.forEach(row => {
+      (row.rawItems || []).forEach(item => {
+        const key = item.name || item.item_name || 'Unknown'
+        if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, category: item.category || 'Uncategorized' }
+        map[key].qty += item.qty || 1
+        map[key].revenue += (Number(item.price) || 0) * (item.qty || 1)
+      })
+    })
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue)
+  }
+
+  // Same as aggregateItems but also calculates profit
+  function aggregateItemsWithProfit(rows) {
+    const map = {}
+    rows.forEach(row => {
+      (row.rawItems || []).forEach(item => {
+        const key = item.name || item.item_name || 'Unknown'
+        if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, cost: 0, category: item.category || 'Uncategorized' }
+        const qty = item.qty || 1
+        map[key].qty += qty
+        map[key].revenue += (Number(item.price) || 0) * qty
+        map[key].cost += (Number(item.buying_price) || 0) * qty
+      })
+    })
+    return Object.values(map).map(i => ({ ...i, profit: i.revenue - i.cost })).sort((a, b) => b.profit - a.profit)
+  }
+
+  // Group items by category
+  function groupByCategory(items) {
+    const grouped = {}
+    items.forEach(item => {
+      const cat = item.category || 'Uncategorized'
+      if (!grouped[cat]) grouped[cat] = []
+      grouped[cat].push(item)
+    })
+    return grouped
+  }
+
+  // Group orders (from kitchen-queue/drafts) by category
+  function groupOrdersByCategory(orders) {
+    const grouped = {}
+    ;(orders || []).forEach(order => {
+      (order.lines || order.order_items || order.items || []).forEach(item => {
+        const cat = item.category || 'Order #' + (order.tableNumber || order.id?.slice(-4))
+        if (!grouped[cat]) grouped[cat] = []
+        grouped[cat].push({ name: item.itemName || item.item_name || item.name || 'Unknown', qty: item.quantity || 1, orderId: order.id })
+      })
+    })
+    return grouped
+  }
+  // ──────────────────────────────────────────────────────────────
 
   const fetchRequestedOrders = useCallback(async () => {
     try {
@@ -301,6 +418,7 @@ export default function Owner() {
         available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' 
       })
       setSelectedRecipeItem(null)
+      setShowMenuForm(false)
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -414,17 +532,36 @@ export default function Owner() {
             <header className="am-header">
               <div className="am-title">
                 <h1>Admin Dashboard</h1>
-                <p>Welcome back! Here's what's happening today.</p>
+                <p>{reportDay === today ? "Today's overview" : 'Overview'} · {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
               </div>
-              <div className="am-date-picker" onClick={() => document.getElementById('modern-date').showPicker()}>
-                <HiOutlineCalendarDays />
-                <span>{new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                <HiOutlineChevronDown style={{ fontSize: 10 }} />
+              <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={() => document.getElementById('modern-date').showPicker?.()}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                  title="Pick a date"
+                >
+                  <HiOutlineCalendarDays />
+                  <span>
+                    {reportDay === today
+                      ? 'Today'
+                      : new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                {reportDay !== today && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setReportDay(today); }}
+                    style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Today
+                  </button>
+                )}
                 <input 
                   id="modern-date" 
                   type="date" 
                   value={reportDay} 
                   onChange={e => setReportDay(e.target.value)} 
+                  max={today}
                   style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                 />
               </div>
@@ -432,7 +569,7 @@ export default function Owner() {
 
             {/* Metrics Row 1: Top 4 */}
             <div className="am-metrics-grid-top">
-              <div className="am-metric-card" onClick={() => setTab('reports')}>
+              <div className="am-metric-card" onClick={() => openDrilldown('revenue')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon"><HiOutlineCurrencyDollar /></div>
                   TOTAL REVENUE
@@ -441,61 +578,96 @@ export default function Owner() {
                 <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> +12% vs yesterday</div>
               </div>
 
-              <div className="am-metric-card" onClick={() => setTab('reports')}>
+              <div className="am-metric-card" onClick={() => openDrilldown('cash')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon"><HiOutlineBanknotes /></div>
-                  CASH SALES
+                  CASH
                 </div>
-                <div className="am-metric-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-neu">• Physical cash today</div>
+                <div className="am-metric-value">{Number(overview?.todayCashSales ?? 0).toLocaleString()}</div>
+                <div className="am-metric-trend am-trend-neu">RWF today</div>
               </div>
 
-              <div className="am-metric-card" onClick={() => setTab('reports')}>
+              <div className="am-metric-card" onClick={() => openDrilldown('momo')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon"><HiOutlineDevicePhoneMobile /></div>
-                  MOMO SALES
+                  MOMO
                 </div>
-                <div className="am-metric-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-neu">• Mobile money today</div>
+                <div className="am-metric-value">{Number(overview?.todayMomoSales ?? 0).toLocaleString()}</div>
+                <div className="am-metric-trend am-trend-neu">RWF today</div>
               </div>
 
-              <div className="am-metric-card" onClick={() => setTab('reports')}>
+              <div className="am-metric-card" onClick={() => openDrilldown('pos')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon"><HiOutlineCreditCard /></div>
-                  POS / CARD
+                  POS/CARD
                 </div>
-                <div className="am-metric-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-neu">• Bank & POS sales</div>
+                <div className="am-metric-value">{Number(overview?.todayPosSales ?? 0).toLocaleString()}</div>
+                <div className="am-metric-trend am-trend-neu">RWF today</div>
               </div>
             </div>
 
-            {/* Metrics Row 2: Bottom 3 */}
+            {/* Metrics Row 2 */}
             <div className="am-metrics-grid-mid">
               <div className="am-metric-card" onClick={() => setTab('loans')}>
                 <div className="am-metric-header">
-                  <div className="am-metric-icon"><HiOutlineUsers /></div>
+                  <div className="am-metric-icon" style={{ background: 'rgba(230, 126, 34, 0.1)', color: '#E67E22' }}><HiOutlineUsers /></div>
                   CREDIT / LOANS
                 </div>
                 <div className="am-metric-value">{Number(overview?.todayLoanSales ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-neu" style={{ color: '#E67E22' }}><HiOutlineExclamationTriangle /> Unpaid credit</div>
+                <div className="am-metric-trend" style={{ color: '#E67E22' }}><HiOutlineExclamationTriangle /> Unpaid client credit</div>
               </div>
 
-              <div className="am-metric-card" onClick={() => setTab('reports')}>
+              <div className="am-metric-card" onClick={() => openDrilldown('profit')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon"><HiOutlineArrowTrendingUp /></div>
-                  TODAY'S PROFIT
+                  PROFIT
                 </div>
-                <div className="am-metric-value">{Number(overview?.todayProfit ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> Revenue minus costs</div>
+                <div className="am-metric-value">{Number(overview?.todayProfit ?? 0).toLocaleString()}</div>
+                <div className="am-metric-trend am-trend-pos">↑ Net today</div>
               </div>
 
               <div className="am-metric-card" onClick={() => setTab('inventory')}>
                 <div className="am-metric-header">
-                  <div className="am-metric-icon" style={{ background: 'rgba(255, 193, 7, 0.1)', color: '#FFC107' }}><HiOutlineArchiveBox /></div>
+                  <div className="am-metric-icon" style={{ background: 'rgba(33, 150, 243, 0.1)', color: '#2196F3' }}><HiOutlineArchiveBox /></div>
                   STOCK VALUE
                 </div>
-                <div className="am-metric-value">{Number(overview?.inventoryValue ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend am-trend-neu">• Total inventory worth</div>
+                <div className="am-metric-value">{Number(overview?.inventoryValue ?? 0).toLocaleString()}</div>
+                <div className="am-metric-trend" style={{ color: '#2196F3' }}>RWF in inventory</div>
+              </div>
+            </div>
+
+            {/* Status Badges Grid */}
+            <div className="am-status-grid">
+              <div className="am-mini-status" onClick={() => openDrilldown('completed')}>
+                 <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#4CAF50' }}><HiOutlineCheckCircle /></div>
+                 <div className="am-status-info">
+                   <h4>{overview?.todayPaidOrdersCount ?? 0}</h4>
+                   <p>Completed</p>
+                 </div>
+              </div>
+
+              <div className="am-mini-status" onClick={() => openDrilldown('prep')}>
+                 <div className="am-status-icon" style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3' }}><HiOutlineFire /></div>
+                 <div className="am-status-info">
+                   <h4>{overview?.pendingKitchenCount ?? 0}</h4>
+                   <p>In Prep</p>
+                 </div>
+              </div>
+
+              <div className="am-mini-status" onClick={() => openDrilldown('waiting')}>
+                 <div className="am-status-icon" style={{ background: 'rgba(255,152,0,0.1)', color: '#FF9800' }}><HiOutlineShoppingCart /></div>
+                 <div className="am-status-info">
+                   <h4>{overview?.waitingOrdersCount ?? 0}</h4>
+                   <p>Waiting</p>
+                 </div>
+              </div>
+
+              <div className="am-mini-status" onClick={() => openDrilldown('lowstock')}>
+                 <div className="am-status-icon" style={{ background: 'rgba(255,87,34,0.1)', color: '#FF5722' }}><HiOutlineExclamationTriangle /></div>
+                 <div className="am-status-info">
+                   <h4>{overview?.lowStockCount ?? 0}</h4>
+                   <p>Low Stock</p>
+                 </div>
               </div>
             </div>
 
@@ -509,74 +681,73 @@ export default function Owner() {
                     <div className="am-chart-tabs">
                       <div className="am-chart-tab active">Today</div>
                       <div className="am-chart-tab">Week</div>
-                      <div className="am-chart-tab">Month</div>
                     </div>
                   </div>
-                  <div style={{ width: '100%', height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={charts.hourly?.slice(6, 22) || []}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 10 }} />
-                        <YAxis hide />
-                        <Tooltip 
-                          cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                          contentStyle={{ background: '#161716', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                        />
-                        <Bar dataKey="total" fill="var(--admin-accent-green)" radius={[4, 4, 0, 0]} barSize={30} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div style={{ width: '100%', height: 250, minWidth: 0 }}>
+                    {chartsReady && charts.hourly?.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={charts.hourly.slice(6, 22)}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 10 }} />
+                          <YAxis hide />
+                          <Tooltip 
+                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                            contentStyle={{ background: '#161716', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                          />
+                          <Bar dataKey="total" fill="var(--admin-accent-green)" radius={[4, 4, 0, 0]} barSize={30} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: 13 }}>
+                        No sales data for this date yet
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="am-table-card">
                   <div className="am-chart-header">
                     <h3>Recent Orders</h3>
-                    <button className="btn ghost tiny" onClick={() => nav('/app/orders')}>View all</button>
+                    <button className="btn ghost tiny" onClick={() => nav('/app/orders')}>All</button>
                   </div>
                   <div className="am-order-list">
                     {dailyRows.slice(0, 5).map((row, idx) => (
                       <div key={idx} className="am-order-row">
                         <div className="am-order-main">
                           <div className="am-order-tbl">Tbl {idx + 1}</div>
-                          <div className="am-order-items">{row.items.length > 40 ? row.items.slice(0, 40) + '...' : row.items}</div>
+                          <div className="am-order-items">{row.items.length > 30 ? row.items.slice(0, 30) + '...' : row.items}</div>
                         </div>
                         <div className="am-order-right">
-                          <div className="am-order-total">{Number(row.amount).toLocaleString()} RWF</div>
-                          <div className="am-status-badge done">Done</div>
+                          <div className="am-order-total">{Number(row.amount).toLocaleString()}</div>
+                          <div className={`am-status-badge ${row.status === 'PAID' ? 'done' : row.status === 'PENDING' ? 'pending' : 'payment'}`}>
+                            {row.status === 'PAID' ? 'Done' : row.status === 'PENDING' ? 'Pend' : 'Pay'}
+                          </div>
                         </div>
                       </div>
                     ))}
                     {dailyRows.length === 0 && <div className="muted pad text-center">No orders yet today.</div>}
                   </div>
                 </div>
+
+                <div className="am-table-card" style={{ cursor: 'pointer' }} onClick={() => setTab('reports')}>
+                  <h3>Payment Methods</h3>
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>💵 Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#4CAF50' }} /></div>
+                  </div>
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>📱 MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayMomoSales / overview?.todayRevenue) * 100 || 0}%`, background: '#2196F3' }} /></div>
+                  </div>
+                  <div className="am-progress-item">
+                     <div className="am-progress-label"><span>💳 Card</span> <span>{Number(overview?.todayPosSales || 0).toLocaleString()} RWF</span></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayPosSales / overview?.todayRevenue) * 100 || 0}%`, background: '#FF9800' }} /></div>
+                  </div>
+                </div>
               </div>
 
-              {/* Right Column: Mini Cards & Lists */}
+              {/* Right Column: Info Cards (hidden on mobile via CSS, shown on desktop) */}
               <div className="am-info-stack">
-                <div className="am-mini-status" onClick={() => nav('/app/orders?status=READY')}>
-                   <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#4CAF50' }}><HiOutlineCheckCircle /></div>
-                   <div className="am-status-info">
-                     <h4>{overview?.todayPaidOrdersCount ?? 0}</h4>
-                     <p>Completed Orders</p>
-                   </div>
-                </div>
-
-                <div className="am-mini-status" onClick={() => nav('/app/chef')}>
-                   <div className="am-status-icon" style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3' }}><HiOutlineFire /></div>
-                   <div className="am-status-info">
-                     <h4>{overview?.pendingKitchenCount ?? 0}</h4>
-                     <p>In Prep (Kitchen)</p>
-                   </div>
-                </div>
-
-                <div className="am-mini-status" onClick={() => setTab('inventory')}>
-                   <div className="am-status-icon" style={{ background: 'rgba(255,87,34,0.1)', color: '#FF5722' }}><HiOutlineExclamationTriangle /></div>
-                   <div className="am-status-info">
-                     <h4>{overview?.lowStockCount ?? 0}</h4>
-                     <p>Low Stock Items</p>
-                   </div>
-                </div>
-
                 <div className="am-table-card" style={{ marginTop: 0, cursor: 'pointer' }} onClick={() => setTab('reports')}>
                   <h3>Payment Methods</h3>
                   <div className="am-progress-item">
@@ -648,7 +819,7 @@ export default function Owner() {
             </div>
           </header>
 
-          <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
+          {showMenuForm && <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
             <h3 style={{ marginBottom: 24, color: '#E6CCB2', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
               {menuForm.id ? 'Edit Product' : `Add Product to ${menuForm.category}`}
             </h3>
@@ -808,20 +979,27 @@ export default function Owner() {
               </div>
             )}
 
-            <div className="span-2 row-actions" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="span-2 row-actions" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button className="btn primary xl" type="submit" style={{ minWidth: 160 }}>
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
-              {menuForm.id && (
-                <button type="button" className="btn ghost" onClick={() => {
+              <button type="button" className="btn ghost" onClick={() => {
                 setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' })
-                  setSelectedRecipeItem(null)
+                setSelectedRecipeItem(null)
+                setShowMenuForm(false)
+              }}>
+                Cancel
+              </button>
+              {menuForm.id && (
+                <button type="button" className="btn warn" style={{ marginLeft: 'auto' }} onClick={() => {
+                  deleteMenu(menuForm.id)
+                  setShowMenuForm(false)
                 }}>
-                  Done / Close
+                  Delete Product
                 </button>
               )}
             </div>
-          </form>
+          </form>}
 
           {menuForm.id && (
             <div className="card" style={{ marginTop: 20, border: '2px solid var(--caramel-light)' }}>
@@ -904,11 +1082,7 @@ export default function Owner() {
           )}
 
           <div className="row-between" style={{ marginBottom: 20 }}>
-             <div className="am-title">
-               <h1 style={{ fontSize: '24px' }}>Product & Menu Management</h1>
-               <p className="muted">Organize your shop offerings by category</p>
-             </div>
-             <div style={{ position: 'relative', width: 300 }}>
+             <div style={{ position: 'relative', width: '100%', maxWidth: 300 }}>
                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}>🔍</span>
                <input 
                  type="text" 
@@ -950,8 +1124,11 @@ export default function Owner() {
                     className="btn primary tiny" 
                     onClick={() => {
                       setMenuForm({ id: '', name: '', price: '', category: cat, available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' });
-                      document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
-                      setTimeout(() => document.getElementById('menu-name-input')?.focus(), 500);
+                      setShowMenuForm(true);
+                      setTimeout(() => {
+                        document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                        document.getElementById('menu-name-input')?.focus();
+                      }, 100);
                     }}
                   >
                     + Add Product
@@ -970,7 +1147,7 @@ export default function Owner() {
                           {isSimpleListing && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</div>}
                           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</div>
                           <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
-                          <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Actions</div>
+                          <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}></div>
                         </div>
                       )
                     })()}
@@ -994,7 +1171,7 @@ export default function Owner() {
                         const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
 
                         return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent' }}>
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent', cursor: 'pointer' }} onClick={() => { editMenu(m); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {m.name}
@@ -1035,12 +1212,8 @@ export default function Owner() {
                                 {m.available ? 'AVAILABLE' : 'HIDDEN'}
                               </span>
                             </div>
-                            <div className="row-actions" style={{ justifyContent: 'flex-end', alignSelf: 'center' }}>
-                              <button type="button" className="btn ghost tiny" onClick={() => {
-                                editMenu(m);
-                                document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
-                              }}>Edit</button>
-                              <button type="button" className="btn warn tiny" style={{ padding: '6px 10px' }} onClick={() => deleteMenu(m.id)}>🗑️</button>
+                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
+                              Click to edit
                             </div>
                           </div>
                         );
@@ -1103,7 +1276,7 @@ export default function Owner() {
              </div>
           </div>
 
-          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 1.6fr', gap: 32 }}>
+          <div className="am-main-grid am-grid-form-list">
             {/* Form Card */}
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
                <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : '+ Add new staff member'}</h3>
@@ -1421,8 +1594,8 @@ export default function Owner() {
               {/* Hourly Sales Volume Card */}
               <div className="am-shift-card">
                  <h3 className="am-card-title">Hourly sales volume</h3>
-                 <div style={{ width: '100%', height: 200 }}>
-                    {charts.hourly?.length > 0 && (
+                 <div style={{ width: '100%', height: 200, minWidth: 0 }}>
+                    {chartsReady && charts.hourly?.length > 0 && (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={charts.hourly}>
                           <XAxis dataKey="hour" fontSize={10} tick={{ fill: 'rgba(255,255,255,0.3)' }} axisLine={false} tickLine={false} />
@@ -1582,7 +1755,7 @@ export default function Owner() {
              </div>
           </div>
 
-          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 1.5fr' }}>
+          <div className="am-main-grid am-grid-form-list">
             {/* Form Column */}
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
                <h3 className="am-card-title">+ Add Ingredient</h3>
@@ -1933,6 +2106,401 @@ export default function Owner() {
         </>
       ) : null}
 
+      {tab === 'eod' && role === 'SHOP_ADMIN' ? (
+        (() => {
+          // Compute EOD aggregates from existing state
+          const eodRevenue = overview?.todayRevenue || 0
+          const eodCash = overview?.todayCashSales || 0
+          const eodMomo = overview?.todayMomoSales || 0
+          const eodPos = overview?.todayPosSales || 0
+          const eodProfit = overview?.todayProfit || 0
+          const eodOrders = overview?.todayPaidOrdersCount || 0
+          const eodCost = eodRevenue - eodProfit
+
+          // Product breakdown from dailyRows
+          const productMap = {}
+          const catBreakdown = {}
+          const hourlyMap = {}
+          let totalItemsSold = 0
+
+          dailyRows.forEach(row => {
+            if (row.rawItems) {
+              row.rawItems.forEach(item => {
+                const key = item.name || 'Unknown'
+                const cat = item.category || 'Uncategorized'
+                const qty = item.qty || 1
+                const rev = Number(item.price) * qty
+                const cost = Number(item.buying_price || 0) * qty
+                totalItemsSold += qty
+
+                if (!productMap[key]) productMap[key] = { name: key, category: cat, qty: 0, revenue: 0, cost: 0 }
+                productMap[key].qty += qty
+                productMap[key].revenue += rev
+                productMap[key].cost += cost
+
+                if (!catBreakdown[cat]) catBreakdown[cat] = { revenue: 0, qty: 0, cost: 0 }
+                catBreakdown[cat].revenue += rev
+                catBreakdown[cat].qty += qty
+                catBreakdown[cat].cost += cost
+              })
+            }
+            // Hourly distribution
+            if (row.paidAt) {
+              const hr = new Date(row.paidAt).getHours()
+              hourlyMap[hr] = (hourlyMap[hr] || 0) + Number(row.amount)
+            }
+          })
+
+          const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue)
+          const sortedCategories = Object.entries(catBreakdown).sort((a, b) => b[1].revenue - a[1].revenue)
+          const peakHour = Object.entries(hourlyMap).sort((a, b) => b[1] - a[1])[0]
+          const avgOrderValue = eodOrders > 0 ? Math.round(eodRevenue / eodOrders) : 0
+          const profitMargin = eodRevenue > 0 ? ((eodProfit / eodRevenue) * 100).toFixed(1) : 0
+
+          // Low stock
+          const lowStockItems = ingredients.filter(i => i.stock_level < i.min_threshold)
+
+          // Active loans today
+          const activeLoansCount = loans.filter(l => l.status !== 'PAID').length
+          const totalOwed = loans.reduce((acc, l) => acc + (parseFloat(l.amount) - (l.loan_payments || []).reduce((a,p) => a + parseFloat(p.amount), 0)), 0)
+
+          return (
+            <>
+              <header className="am-header">
+                <div className="am-title">
+                  <h1>End of Day Report</h1>
+                  <p>Complete business summary for {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                </div>
+                <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="date"
+                    className="am-input"
+                    style={{ height: 40 }}
+                    value={reportDay}
+                    onChange={e => setReportDay(e.target.value)}
+                  />
+                </div>
+              </header>
+
+              <div className="am-eod-report">
+                {/* ── Revenue Summary ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Revenue Summary</h3>
+                  <div className="am-eod-grid-4">
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Total Revenue</span>
+                      <span className="am-eod-stat-value" style={{ color: '#4CAF50' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Total Cost</span>
+                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(eodCost).toLocaleString()} RWF</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Net Profit</span>
+                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#4CAF50' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Profit Margin</span>
+                      <span className="am-eod-stat-value">{profitMargin}%</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ── Payment Breakdown ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Payment Breakdown</h3>
+                  <div className="am-eod-grid-3">
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Cash</span>
+                      <span className="am-eod-stat-value">{Number(eodCash).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodCash / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">MoMo</span>
+                      <span className="am-eod-stat-value">{Number(eodMomo).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodMomo / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">POS / Card</span>
+                      <span className="am-eod-stat-value">{Number(eodPos).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodPos / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ── Order Stats ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Order Statistics</h3>
+                  <div className="am-eod-grid-4">
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Total Orders</span>
+                      <span className="am-eod-stat-value">{eodOrders}</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Items Sold</span>
+                      <span className="am-eod-stat-value">{totalItemsSold}</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Avg Order Value</span>
+                      <span className="am-eod-stat-value">{avgOrderValue.toLocaleString()} RWF</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Peak Hour</span>
+                      <span className="am-eod-stat-value">{peakHour ? `${peakHour[0]}:00` : 'N/A'}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ── Category Breakdown ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Sales by Category</h3>
+                  <div className="am-eod-table">
+                    <div className="am-eod-table-head">
+                      <span>Category</span>
+                      <span>Qty</span>
+                      <span>Revenue</span>
+                      <span>Cost</span>
+                      <span>Profit</span>
+                    </div>
+                    {sortedCategories.length === 0 && <div className="am-eod-empty">No sales data for this date</div>}
+                    {sortedCategories.map(([cat, data]) => (
+                      <div key={cat} className="am-eod-table-row">
+                        <span className="am-eod-cell-name">{cat}</span>
+                        <span>{data.qty}</span>
+                        <span style={{ color: '#4CAF50' }}>{Number(data.revenue).toLocaleString()}</span>
+                        <span style={{ color: '#E57373' }}>{Number(data.cost).toLocaleString()}</span>
+                        <span style={{ color: data.revenue - data.cost >= 0 ? '#4CAF50' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── Top Products ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Top Products</h3>
+                  <div className="am-eod-table">
+                    <div className="am-eod-table-head">
+                      <span>Product</span>
+                      <span>Qty</span>
+                      <span>Revenue</span>
+                      <span>Profit</span>
+                    </div>
+                    {topProducts.length === 0 && <div className="am-eod-empty">No products sold this date</div>}
+                    {topProducts.slice(0, 15).map((p, idx) => (
+                      <div key={idx} className="am-eod-table-row">
+                        <span className="am-eod-cell-name">
+                          <span className="am-eod-rank">#{idx + 1}</span>
+                          {p.name}
+                          <span className="am-eod-cell-cat">{p.category}</span>
+                        </span>
+                        <span>{p.qty}</span>
+                        <span style={{ color: '#4CAF50' }}>{Number(p.revenue).toLocaleString()}</span>
+                        <span style={{ color: p.revenue - p.cost >= 0 ? '#4CAF50' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── Staff Performance ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Staff Performance</h3>
+                  <div className="am-eod-table">
+                    <div className="am-eod-table-head">
+                      <span>Staff Member</span>
+                      <span>Orders</span>
+                      <span>Revenue</span>
+                    </div>
+                    {topStaff.length === 0 && <div className="am-eod-empty">No staff sales recorded</div>}
+                    {topStaff.map((s, idx) => (
+                      <div key={idx} className="am-eod-table-row">
+                        <span className="am-eod-cell-name">{s.name}</span>
+                        <span>{s.count}</span>
+                        <span style={{ color: '#4CAF50' }}>{Number(s.amount).toLocaleString()} RWF</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── Inventory Alerts ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Inventory Alerts</h3>
+                  {lowStockItems.length === 0 ? (
+                    <div className="am-eod-empty" style={{ padding: 20 }}>All stock levels are healthy</div>
+                  ) : (
+                    <div className="am-eod-table">
+                      <div className="am-eod-table-head">
+                        <span>Ingredient</span>
+                        <span>Stock</span>
+                        <span>Min Required</span>
+                        <span>Status</span>
+                      </div>
+                      {lowStockItems.map((ing, idx) => (
+                        <div key={idx} className="am-eod-table-row">
+                          <span className="am-eod-cell-name">{ing.name}</span>
+                          <span style={{ color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>{ing.stock_level} {ing.unit}</span>
+                          <span>{ing.min_threshold} {ing.unit}</span>
+                          <span>
+                            <span className={`badge ${ing.stock_level <= 0 ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
+                              {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* ── Outstanding Credits ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Outstanding Credits</h3>
+                  <div className="am-eod-grid-3">
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Active Loans</span>
+                      <span className="am-eod-stat-value">{activeLoansCount}</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Total Owed</span>
+                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(totalOwed).toLocaleString()} RWF</span>
+                    </div>
+                    <div className="am-eod-stat">
+                      <span className="am-eod-stat-label">Loan Clients</span>
+                      <span className="am-eod-stat-value">{loans.filter(l => l.status !== 'PAID').length}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ── Cash Reconciliation ── */}
+                {shifts.length > 0 && (
+                  <section className="am-eod-section">
+                    <h3 className="am-eod-section-title">Cash Reconciliation</h3>
+                    {shifts.filter(sh => sh.status === 'CLOSED').length === 0 ? (
+                      <div className="am-eod-empty">No closed shifts for this date yet</div>
+                    ) : (
+                      shifts.filter(sh => sh.status === 'CLOSED').map((sh, idx) => {
+                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)
+                        const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0)
+                        const expectedPos = parseFloat(sh.total_pos_sales) || 0
+                        const expectedTotal = expectedCash + expectedMomo + expectedPos
+
+                        const actualCash = parseFloat(sh.actual_cash_on_hand) || 0
+                        const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
+                        const actualPos = parseFloat(sh.actual_pos_on_hand) || 0
+                        const actualTotal = actualCash + actualMomo + actualPos
+
+                        const diffCash = actualCash - expectedCash
+                        const diffMomo = actualMomo - expectedMomo
+                        const diffPos = actualPos - expectedPos
+                        const diffTotal = actualTotal - expectedTotal
+
+                        return (
+                          <div key={idx} className="am-eod-reconciliation-block">
+                            <div className="am-eod-recon-header">
+                              <span className="am-eod-recon-staff">{sh.opened_by_user?.name || 'Cashier'}</span>
+                              <span className="am-eod-recon-time">
+                                {sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''} 
+                                {' → '}
+                                {sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                            </div>
+
+                            <div className="am-eod-recon-opening">
+                              <span className="am-eod-recon-label">Opening Balance:</span>
+                              <span>Cash: <strong>{Number(parseFloat(sh.initial_cash) || 0).toLocaleString()} RWF</strong></span>
+                              {(parseFloat(sh.initial_momo) || 0) > 0 && <span>MoMo: <strong>{Number(parseFloat(sh.initial_momo) || 0).toLocaleString()} RWF</strong></span>}
+                            </div>
+
+                            <div className="am-eod-recon-grid">
+                              <div className="am-eod-recon-col am-eod-recon-col-head">
+                                <span></span>
+                                <span>Expected</span>
+                                <span>Actual</span>
+                                <span>Difference</span>
+                              </div>
+                              <div className="am-eod-recon-col">
+                                <span className="am-eod-recon-label">Cash</span>
+                                <span>{Number(expectedCash).toLocaleString()}</span>
+                                <span>{Number(actualCash).toLocaleString()}</span>
+                                <span style={{ color: diffCash === 0 ? '#4CAF50' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                  {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="am-eod-recon-col">
+                                <span className="am-eod-recon-label">MoMo</span>
+                                <span>{Number(expectedMomo).toLocaleString()}</span>
+                                <span>{Number(actualMomo).toLocaleString()}</span>
+                                <span style={{ color: diffMomo === 0 ? '#4CAF50' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                  {diffMomo > 0 ? '+' : ''}{Number(diffMomo).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="am-eod-recon-col">
+                                <span className="am-eod-recon-label">POS/Card</span>
+                                <span>{Number(expectedPos).toLocaleString()}</span>
+                                <span>{Number(actualPos).toLocaleString()}</span>
+                                <span style={{ color: diffPos === 0 ? '#4CAF50' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                  {diffPos > 0 ? '+' : ''}{Number(diffPos).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="am-eod-recon-col am-eod-recon-col-total">
+                                <span className="am-eod-recon-label">TOTAL</span>
+                                <span style={{ fontWeight: 700 }}>{Number(expectedTotal).toLocaleString()} RWF</span>
+                                <span style={{ fontWeight: 700 }}>{Number(actualTotal).toLocaleString()} RWF</span>
+                                <span style={{ color: diffTotal === 0 ? '#4CAF50' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
+                                  {diffTotal > 0 ? '+' : ''}{Number(diffTotal).toLocaleString()} RWF
+                                </span>
+                              </div>
+                            </div>
+
+                            {sh.notes && (
+                              <div className="am-eod-recon-notes">
+                                <span className="am-eod-recon-notes-label">Cashier Notes:</span>
+                                <p>{sh.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
+                  </section>
+                )}
+
+                {/* ── Shifts ── */}
+                {shifts.length > 0 && (
+                  <section className="am-eod-section">
+                    <h3 className="am-eod-section-title">Shift Timeline</h3>
+                    <div className="am-eod-table">
+                      <div className="am-eod-table-head">
+                        <span>Staff</span>
+                        <span>Start</span>
+                        <span>End</span>
+                        <span>Status</span>
+                      </div>
+                      {shifts.map((sh, idx) => (
+                        <div key={idx} className="am-eod-table-row">
+                          <span className="am-eod-cell-name">{sh.opened_by_user?.name || 'Staff'}</span>
+                          <span>{sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                          <span>{sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'Active'}</span>
+                          <span>
+                            <span className={`badge ${sh.status === 'CLOSED' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: 10 }}>
+                              {sh.status === 'CLOSED' ? 'CLOSED' : 'ACTIVE'}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Footer ── */}
+                <div className="am-eod-footer">
+                  <p>Report generated at {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · {new Date(reportDay).toLocaleDateString('en-GB')}</p>
+                  <p>Olitech POS · End of Day Summary</p>
+                </div>
+              </div>
+            </>
+          )
+        })()
+      ) : null}
+
       {tab === 'loans' && role === 'SHOP_ADMIN' ? (
         <>
           <header className="am-header">
@@ -1981,7 +2549,7 @@ export default function Owner() {
              </div>
           </div>
 
-          <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 2fr', gap: 32 }}>
+          <div className="am-main-grid am-grid-form-list">
             {/* Form Card */}
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
                <h3 className="am-card-title">+ Record New Credit</h3>
@@ -2149,6 +2717,96 @@ export default function Owner() {
         </>
       ) : null}
       </div>
+
+      {/* ──── Drill-Down Modal (outside scrollable container for mobile) ──── */}
+      {drilldown && (
+        <div className="am-drilldown-overlay" onClick={() => setDrilldown(null)}>
+          <div className="am-drilldown-modal" onClick={e => e.stopPropagation()}>
+            <div className="am-drilldown-header">
+              <h2>{drilldown.title}</h2>
+              <button className="am-drilldown-close" onClick={() => setDrilldown(null)}><HiOutlineXMark /></button>
+            </div>
+
+            {drilldown.total !== undefined && (
+              <div className="am-drilldown-total">{Number(drilldown.total).toLocaleString()} RWF</div>
+            )}
+            {drilldown.count !== undefined && (
+              <div className="am-drilldown-total">{drilldown.count} item{drilldown.count !== 1 ? 's' : ''}</div>
+            )}
+
+            {drilldown.items && !drilldown.byCategory && drilldown.type !== 'lowstock' && (
+              <div className="am-drilldown-list">
+                {drilldown.items.length === 0 && <p className="muted" style={{ textAlign: 'center', padding: 32 }}>No data for this period</p>}
+                {drilldown.items.map((item, idx) => (
+                  <div key={idx} className="am-drilldown-row">
+                    <div className="am-drilldown-row-info">
+                      <span className="am-drilldown-name">{item.name}</span>
+                      <span className="am-drilldown-cat">{item.category}</span>
+                    </div>
+                    <div className="am-drilldown-row-nums">
+                      <span className="am-drilldown-qty">{item.qty}x</span>
+                      {item.profit !== undefined ? (
+                        <span className="am-drilldown-amount" style={{ color: item.profit >= 0 ? '#4CAF50' : '#E57373' }}>
+                          {Number(item.profit).toLocaleString()} RWF
+                        </span>
+                      ) : (
+                        <span className="am-drilldown-amount">{Number(item.revenue).toLocaleString()} RWF</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {drilldown.type === 'profit' && drilldown.items && (
+              <div style={{ fontSize: 11, color: '#999', padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                Revenue: {drilldown.items.reduce((a, i) => a + i.revenue, 0).toLocaleString()} RWF &nbsp;|&nbsp; 
+                Cost: {drilldown.items.reduce((a, i) => a + i.cost, 0).toLocaleString()} RWF
+              </div>
+            )}
+
+            {drilldown.byCategory && (
+              <div className="am-drilldown-list">
+                {Object.keys(drilldown.byCategory).length === 0 && <p className="muted" style={{ textAlign: 'center', padding: 32 }}>No items</p>}
+                {Object.entries(drilldown.byCategory).map(([cat, items]) => (
+                  <div key={cat} className="am-drilldown-cat-group">
+                    <div className="am-drilldown-cat-header">{cat}</div>
+                    {items.map((item, idx) => (
+                      <div key={idx} className="am-drilldown-row">
+                        <div className="am-drilldown-row-info">
+                          <span className="am-drilldown-name">{item.name}</span>
+                        </div>
+                        <div className="am-drilldown-row-nums">
+                          <span className="am-drilldown-qty">{item.qty}x</span>
+                          {item.revenue ? <span className="am-drilldown-amount">{Number(item.revenue).toLocaleString()} RWF</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {drilldown.type === 'lowstock' && drilldown.items && (
+              <div className="am-drilldown-list">
+                {drilldown.items.length === 0 && <p className="muted" style={{ textAlign: 'center', padding: 32 }}>All stock levels are healthy</p>}
+                {drilldown.items.map((ing, idx) => (
+                  <div key={idx} className="am-drilldown-row">
+                    <div className="am-drilldown-row-info">
+                      <span className="am-drilldown-name">{ing.name}</span>
+                      <span className="am-drilldown-cat">{ing.unit}</span>
+                    </div>
+                    <div className="am-drilldown-row-nums">
+                      <span className="am-drilldown-qty" style={{ color: '#FF5722' }}>{ing.stock_level} left</span>
+                      <span className="am-drilldown-amount" style={{ color: '#999' }}>min: {ing.min_threshold}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

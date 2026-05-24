@@ -4,6 +4,7 @@ import { api, getSession } from '../../api'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
+import './OwnerModern.css'
 import { 
   HiOutlineMagnifyingGlass, 
   HiOutlineShoppingCart, 
@@ -198,60 +199,58 @@ export default function Orders() {
   }
 
   return (
-    <div className="panel animate-in">
-      <div className="section-header">
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26 }}>Orders</h2>
-          <p className="muted" style={{ fontSize: 13 }}>Build the order and send to kitchen</p>
+    <div className="owner-modern-page am-animate" style={{ minHeight: 'auto' }}>
+      <header className="am-header">
+        <div className="am-title">
+          <h1>Orders</h1>
+          <p>Build the order and send to kitchen</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ position: 'relative', width: 240 }}>
-            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}><HiOutlineMagnifyingGlass /></span>
+        <div className="orders-controls">
+          <div className="orders-search">
+            <HiOutlineMagnifyingGlass style={{ color: '#666' }} />
             <input 
               type="text" 
-              placeholder="Search products or category..." 
+              className="am-input"
+              placeholder="Search..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ paddingLeft: 40, borderRadius: 12, fontSize: 14 }}
+              style={{ border: 'none', background: 'transparent', height: 'auto', padding: '0' }}
             />
           </div>
-          <div style={{ width: 100 }}>
-            <label className="field" style={{ marginBottom: 0 }}>
-              <span style={{ fontSize: 10 }}>TABLE</span>
-              <input
-                type="number"
-                min="1"
-                style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, borderRadius: 12 }}
-                value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
-              />
-            </label>
-          </div>
-          <div style={{ width: 160 }}>
-            <label className="field" style={{ marginBottom: 0 }}>
-              <span style={{ fontSize: 10 }}>SERVED BY (WAITER)</span>
-              <select
-                style={{ fontSize: 14, fontWeight: 600, borderRadius: 12, height: 44, cursor: editId ? 'not-allowed' : 'pointer' }}
-                value={selectedWaiter}
-                disabled={!!editId}
-                onChange={(e) => setSelectedWaiter(e.target.value)}
-              >
-                <option value="">Select Waiter...</option>
-                {staff.map(s => (
-                   <option key={s.id} value={s.id}>{s.name} ({s.role.replace('SHOP_', '')})</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="am-field" style={{ width: 80 }}>
+            <span>TABLE</span>
+            <input
+              className="am-input"
+              type="number"
+              min="1"
+              style={{ textAlign: 'center', fontWeight: 700, padding: '0 8px' }}
+              value={tableNumber}
+              onChange={(e) => setTableNumber(e.target.value)}
+            />
+          </label>
+          <label className="am-field" style={{ width: 140 }}>
+            <span>WAITER</span>
+            <select
+              className="am-input"
+              style={{ cursor: editId ? 'not-allowed' : 'pointer' }}
+              value={selectedWaiter}
+              disabled={!!editId}
+              onChange={(e) => setSelectedWaiter(e.target.value)}
+            >
+              <option value="">Select...</option>
+              {staff.map(s => (
+                 <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
         </div>
-      </div>
+      </header>
 
-      {error && !editId ? <div className="error">{error}</div> : null}
-      {successMsg && !editId ? <div style={{ padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: '8px', marginBottom: '16px', fontWeight: 600 }}>{successMsg}</div> : null}
+      {error && !editId ? <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div> : null}
+      {successMsg && !editId ? <div style={{ padding: '12px 16px', background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', borderRadius: 12, marginBottom: 16, fontWeight: 600, fontSize: 13 }}>{successMsg}</div> : null}
 
-
-      <div className="billing-grid">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div className="orders-layout">
+        <div className="orders-menu-area">
           {['DRINK', 'FOOD'].map((group) => {
            const groupTitle = group === 'DRINK' ? <><IoCafeOutline /> Drinks</> : <><IoFastFoodOutline /> Food</>;
             const s = search.toLowerCase();
@@ -262,23 +261,22 @@ export default function Orders() {
             });
             if (groupItems.length === 0) return null;
 
-            // Sort and unique categories within the group
             const categories = [...new Set(groupItems.map(m => m.category || 'Uncategorized'))].sort();
 
             return (
-              <div key={group} className="stack" style={{ gap: 20 }}>
-                <h2 style={{ fontSize: 24, paddingBottom: 8, borderBottom: '2px solid var(--caramel)', color: 'var(--mahogany)' }}>
+              <div key={group} style={{ marginBottom: 28 }}>
+                <h3 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#4CAF50', borderBottom: '1px solid rgba(76,175,80,0.2)', paddingBottom: 8 }}>
                    {groupTitle}
-                </h2>
+                </h3>
                 
                 {categories.map(cat => {
                    const catItems = groupItems.filter(m => (m.category || 'Uncategorized') === cat);
                    return (
-                     <div key={cat} className="stack" style={{ gap: 12 }}>
-                        <h3 className="muted" style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                          — {cat}
-                        </h3>
-                        <div className="menu-grid">
+                     <div key={cat} style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#A0A0A0', marginBottom: 8, fontWeight: 700 }}>
+                          {cat}
+                        </p>
+                        <div className="orders-items-grid">
                           {catItems.map((m) => {
                             const qty = qtyById[m.id] ?? 0;
                             const getItemIcon = (name, category) => {
@@ -296,18 +294,16 @@ export default function Orders() {
                               return <IoCafeOutline />;
                             }
                             return (
-                              <div key={m.id} className={`menu-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
-                                <div className="menu-card-emoji">{getItemIcon(m.name, m.category)}</div>
-                                {qty > 0 && <div className="menu-card-badge">{qty}</div>}
-                                <div className="menu-card-title">{m.name}</div>
-                                <div className="menu-card-footer">
-                                  <div className="menu-card-price">{Number(m.price).toLocaleString()} RWF</div>
-                                </div>
+                              <div key={m.id} className={`orders-item-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
+                                {qty > 0 && <div className="orders-item-qty">{qty}</div>}
+                                <div style={{ color: '#4CAF50', fontSize: 20, marginBottom: 4 }}>{getItemIcon(m.name, m.category)}</div>
+                                <div style={{ fontWeight: 600, fontSize: 12, lineHeight: 1.3, marginTop: 'auto' }}>{m.name}</div>
+                                <div style={{ fontSize: 11, color: '#A0A0A0' }}>{Number(m.price).toLocaleString()}</div>
                                 {qty > 0 && (
-                                  <div className="qty-row" style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
-                                    <button type="button" className="qty-btn minus" onClick={() => setQty(m.id, qty - 1)}>−</button>
-                                    <div className="qty-val">{qty}</div>
-                                    <button type="button" className="qty-btn plus" onClick={() => setQty(m.id, qty + 1)}>+</button>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+                                    <button type="button" style={{ background: 'rgba(255,82,82,0.1)', border: 'none', color: '#FF5252', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontWeight: 700 }} onClick={() => setQty(m.id, qty - 1)}>−</button>
+                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{qty}</span>
+                                    <button type="button" style={{ background: 'rgba(76,175,80,0.1)', border: 'none', color: '#4CAF50', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontWeight: 700 }} onClick={() => setQty(m.id, qty + 1)}>+</button>
                                   </div>
                                 )}
                               </div>
@@ -322,64 +318,62 @@ export default function Orders() {
           })}
         </div>
 
-        <aside className="detail" style={{ border: '1px solid #E5E0DA', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{editId ? 'Editing Order' : 'Current Ticket'}</span>
-            {editId && <button className="btn ghost" style={{ fontSize: 11 }} onClick={() => nav('/app/billing')}>Cancel</button>}
+        <aside className="orders-ticket">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>{editId ? '📝 Editing' : '🛒 Ticket'}</span>
+            {editId && <button style={{ background: 'transparent', border: 'none', color: '#FF5252', fontSize: 12, fontWeight: 700, cursor: 'pointer' }} onClick={() => nav('/app/billing')}>Cancel</button>}
           </div>
           
-          <div style={{ padding: 24 }}>
+          <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto' }}>
             {lines.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon"><HiOutlineShoppingCart /></span>
-                <h4>Cart is empty</h4>
-                <p className="muted">Select items from the menu to start an order.</p>
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#666' }}>
+                <HiOutlineShoppingCart size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <p style={{ fontSize: 13 }}>Cart empty. Tap items to add.</p>
               </div>
             ) : (
-            <div className="stack">
-              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <>
                 {lines.map((l) => (
-                  <div key={l.menuItemId} className="line">
+                  <div key={l.menuItemId} className="am-order-row" style={{ marginBottom: 8 }}>
                     <div>
-                      <strong>{l.name}</strong>
-                      <div className="muted">{qtyById[l.menuItemId]} × {Number(menu.find(x => x.id === l.menuItemId)?.price).toFixed(0)}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{l.name}</div>
+                      <div style={{ color: '#A0A0A0', fontSize: 11 }}>{qtyById[l.menuItemId]} × {Number(menu.find(x => x.id === l.menuItemId)?.price).toLocaleString()}</div>
                     </div>
-                    <div className="row-actions">
-                       <button className="btn ghost circle" style={{ width: 24, height: 24, fontSize: 12 }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] - 1)}>−</button>
-                       <button className="btn ghost circle" style={{ width: 24, height: 24, fontSize: 12 }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] + 1)}>+</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                       <button type="button" style={{ background: 'transparent', border: 'none', color: '#FF5252', fontSize: 18, cursor: 'pointer' }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] - 1)}>−</button>
+                       <span style={{ fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{qtyById[l.menuItemId]}</span>
+                       <button type="button" style={{ background: 'transparent', border: 'none', color: '#4CAF50', fontSize: 18, cursor: 'pointer' }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] + 1)}>+</button>
                     </div>
                   </div>
                 ))}
-              </div>
-              
-              <div className="detail-total">
+              </>
+            )}
+          </div>
+          
+          {lines.length > 0 && (
+            <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18, marginBottom: 16 }}>
                 <span>Total</span>
-                <span className="detail-total-price">
-                  {lines.reduce((acc, l) => acc + (l.quantity * (menu.find(x => x.id === l.menuItemId)?.price ?? 0)), 0).toLocaleString()} RWF
-                </span>
+                <span>{lines.reduce((acc, l) => acc + (l.quantity * (menu.find(x => x.id === l.menuItemId)?.price ?? 0)), 0).toLocaleString()} RWF</span>
               </div>
 
               <button 
                 type="button" 
-                className={`btn ${editId ? 'secondary' : 'primary'} xl block`} 
-                style={{ marginTop: 12 }}
+                style={{ width: '100%', background: !shift ? '#333' : '#4CAF50', color: !shift ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: busy || !shift ? 'not-allowed' : 'pointer', boxShadow: shift ? '0 4px 15px rgba(76,175,80,0.3)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 disabled={busy || !shift} 
                 onClick={sendToKitchen}
               >
-                {!shift ? <><HiOutlineExclamationTriangle /> Shift is CLOSED</> : editId ? '💾 Update Order' : '⚡ Submit to Kitchen'}
+                {!shift ? <><HiOutlineExclamationTriangle /> Shift Closed</> : editId ? '💾 Update' : '⚡ Submit to Kitchen'}
               </button>
  
-               <button 
-                 type="button" 
-                 className="btn outline block" 
-                 style={{ marginTop: 12, borderColor: '#ccc' }}
-                 onClick={handleManualPrint}
-               >
-                 <HiOutlinePrinter /> Print Ticket (Preview)
-               </button>
+              <button 
+                type="button" 
+                style={{ width: '100%', marginTop: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#A0A0A0', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onClick={handleManualPrint}
+              >
+                <HiOutlinePrinter /> Print Preview
+              </button>
             </div>
           )}
-          </div>
         </aside>
       </div>
     </div>

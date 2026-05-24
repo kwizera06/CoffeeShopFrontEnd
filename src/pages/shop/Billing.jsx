@@ -4,6 +4,7 @@ import { api, getSession } from '../../api'
 import { printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
+import './OwnerModern.css'
 import { 
   HiOutlineBanknotes, 
   HiOutlineDevicePhoneMobile, 
@@ -138,202 +139,167 @@ export default function Billing() {
   }
 
   return (
-    <div className="panel animate-in">
-      <div className="section-header">
-        <div>
-          <h2>Billing</h2>
-          <p className="muted">Manage and checkout active orders</p>
+    <div className="owner-modern-page am-animate" style={{ minHeight: 'auto' }}>
+      <header className="am-header">
+        <div className="am-title">
+          <h1>Billing</h1>
+          <p>Manage and checkout active orders</p>
         </div>
+      </header>
+
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 }}>
+        <button type="button" onClick={() => setTab('pending')} style={{ flex: 1, padding: '10px 16px', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: tab === 'pending' ? 'rgba(255,152,0,0.1)' : 'transparent', color: tab === 'pending' ? '#FF9800' : '#A0A0A0' }}>
+          <HiOutlineClock /> Pending ({pending.length})
+        </button>
+        <button type="button" onClick={() => setTab('ready')} style={{ flex: 1, padding: '10px 16px', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: tab === 'ready' ? 'rgba(76,175,80,0.1)' : 'transparent', color: tab === 'ready' ? '#4CAF50' : '#A0A0A0' }}>
+          <HiOutlineCheckCircle /> Ready ({ready.length})
+        </button>
       </div>
 
-      <div className="segmented xl">
-        <button type="button" className={tab === 'pending' ? 'on' : ''} onClick={() => setTab('pending')}>
-          <HiOutlineClock /> Pending
-        </button>
-        <button type="button" className={tab === 'ready' ? 'on' : ''} onClick={() => setTab('ready')}>
-          <HiOutlineCheckCircle /> Ready
-        </button>
-      </div>
+      {error ? <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div> : null}
 
-      {error ? <div className="error">{error}</div> : null}
-
-      <div className="billing-grid">
-        <div className="list">
+      <div className="billing-layout">
+        <div className="billing-list">
           {(tab === 'pending' ? pending : ready).map((o) => (
             <div
               key={o.id}
-              className={`list-item ${selected?.id === o.id ? 'active' : ''}`}
-              role="presentation"
+              className={`billing-order-card ${selected?.id === o.id ? 'active' : ''}`}
               onClick={() => { setSelected(o); setPaymentMethod(null); setClientName(''); }}
             >
-              <div className="row-between" style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div>
-                  <div className="list-item-title">Order #{String(o.id).slice(0, 8)}</div>
-                  <div className="muted" style={{ fontSize: 13 }}>Table {o.tableNumber}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>#{String(o.id).slice(0, 6)}</div>
+                  <div style={{ color: '#A0A0A0', fontSize: 12 }}>Table {o.tableNumber}</div>
                 </div>
-                <div className={`badge ${tab === 'pending' ? 'badge-warning' : 'badge-success'}`}>
-                  {tab === 'pending' ? 'PREPARING' : 'READY'}
-                </div>
+                <span style={{ background: tab === 'pending' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? '#FF9800' : '#4CAF50', padding: '3px 10px', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>
+                  {tab === 'pending' ? 'PREP' : 'READY'}
+                </span>
               </div>
               
-              <div className="row-between">
-                <div className="muted" style={{ fontSize: 11 }}>{o.lines?.length ?? 0} items</div>
-                <div style={{ fontWeight: 600, color: 'var(--caramel)' }}>{Number(o.total).toLocaleString()} RWF</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#A0A0A0', fontSize: 11 }}>{o.lines?.length ?? 0} items</span>
+                <span style={{ fontWeight: 700, color: '#4CAF50' }}>{Number(o.total).toLocaleString()} RWF</span>
               </div>
 
               {tab === 'pending' && (
                 <button
                   type="button"
-                  className="btn good block"
-                  style={{ marginTop: 12, padding: '6px 0', fontSize: 12 }}
+                  style={{ width: '100%', marginTop: 10, background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '8px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
                   onClick={(e) => {
                     e.stopPropagation()
                     markReady(o.id)
                   }}
                 >
-                  Mark as Ready
+                  Mark Ready
                 </button>
               )}
             </div>
           ))}
           {(tab === 'pending' ? pending : ready).length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-icon"><HiOutlineFolderOpen /></span>
-              <p className="muted">No {tab} orders at the moment.</p>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#666' }}>
+              <HiOutlineFolderOpen size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <p style={{ fontSize: 13 }}>No {tab} orders.</p>
             </div>
           ) : null}
         </div>
 
-        <aside className="detail" style={{ border: '1px solid #E5E0DA', padding: 0, overflow: 'hidden' }}>
-          <div style={{ background: '#FAF6F0', padding: '16px 24px', borderBottom: '1px solid #E5E0DA', fontWeight: 600, color: '#2D1A11', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Order Checkout</span>
+        <aside className="billing-detail">
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Checkout</span>
             {selected && (
               <button 
-                className="btn ghost" 
-                style={{ fontSize: 11, padding: '4px 10px' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#A0A0A0', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                 onClick={handlePrintProForma}
               >
-                🖨️ Print Bill
+                🖨️ Bill
               </button>
             )}
           </div>
           
-          <div style={{ padding: 24 }}>
+          <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto' }}>
              {!selected ? (
-               <div className="empty-state" style={{ padding: '20px 0' }}>
-                 <p className="muted">Select an order from the list to view details and process payment.</p>
+               <div style={{ textAlign: 'center', padding: '32px 0', color: '#666' }}>
+                 <p style={{ fontSize: 13 }}>Select an order to checkout.</p>
                </div>
              ) : (
-            <div className="stack">
-              <div className="row-between" style={{ marginBottom: 12 }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div>
                    <div style={{ fontWeight: 700, fontSize: 16 }}>Table {selected.tableNumber}</div>
-                   <div className="muted" style={{ fontSize: 12 }}>#{selected.id.slice(0, 8)}</div>
+                   <div style={{ color: '#A0A0A0', fontSize: 11 }}>#{selected.id.slice(0, 8)}</div>
                 </div>
-                <div className={`badge ${tab === 'pending' ? 'badge-warning' : 'badge-success'}`}>
+                <span style={{ background: tab === 'pending' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? '#FF9800' : '#4CAF50', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
                   {tab === 'pending' ? 'PENDING' : 'READY'}
-                </div>
+                </span>
               </div>
 
-              <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
                 {selected.lines?.map((l) => (
-                  <div key={l.itemName + String(l.quantity)} className="row-between" style={{ fontSize: 13, padding: '4px 0' }}>
-                    <div>
-                      {l.itemName} <span className="muted" style={{ marginLeft: 4 }}>× {l.quantity}</span>
-                    </div>
-                    <div style={{ fontWeight: 500 }}>{Number(l.lineTotal).toLocaleString()}</div>
+                  <div key={l.itemName + String(l.quantity)} className="am-order-row" style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: 13 }}>{l.itemName} <span style={{ color: '#A0A0A0' }}>×{l.quantity}</span></span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{Number(l.lineTotal).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="detail-total">
-                <span>Total Amount</span>
-                <span className="detail-total-price">{Number(selected.total).toLocaleString()} RWF</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 800, fontSize: 18, marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <span>Total</span>
+                <span style={{ color: '#4CAF50' }}>{Number(selected.total).toLocaleString()} RWF</span>
               </div>
 
-              <div className="detail-actions" style={{ marginTop: 16 }}>
+              <div style={{ marginTop: 20 }}>
                 {tab === 'ready' ? (
                   <>
-                    <div>
-                      <h4 style={{ margin: '0 0 12px 0', fontSize: 13, color: '#666' }}>Select Payment Method</h4>
-                      <div className="stack" style={{ gap: 8, marginBottom: 16 }}>
+                    <p style={{ fontSize: 11, color: '#A0A0A0', marginBottom: 10, fontWeight: 700 }}>PAYMENT METHOD</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                      {[
+                        { key: 'CASH', label: 'Cash', icon: <HiOutlineBanknotes /> },
+                        { key: 'MOBILE_MONEY', label: 'MoMo', icon: <HiOutlineDevicePhoneMobile /> },
+                        { key: 'POS', label: 'Card', icon: <HiOutlineCreditCard /> },
+                        { key: 'LOAN', label: 'Credit', icon: <HiOutlineUsers /> }
+                      ].map(m => (
                         <button
+                          key={m.key}
                           type="button"
-                          className={`btn ${paymentMethod === 'CASH' ? 'primary' : 'outline'} xl block`}
-                          onClick={() => setPaymentMethod('CASH')}
-                          style={paymentMethod === 'CASH' ? {} : { borderColor: '#ccc', color: '#333' }}
+                          onClick={() => setPaymentMethod(m.key)}
+                          style={{ padding: '10px 8px', border: paymentMethod === m.key ? '1px solid #4CAF50' : '1px solid rgba(255,255,255,0.1)', borderRadius: 10, background: paymentMethod === m.key ? 'rgba(76,175,80,0.1)' : 'transparent', color: paymentMethod === m.key ? '#4CAF50' : '#A0A0A0', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                         >
-                           <HiOutlineBanknotes /> Cash
+                           {m.icon} {m.label}
                         </button>
-                        <button
-                          type="button"
-                          className={`btn ${paymentMethod === 'MOBILE_MONEY' ? 'primary' : 'outline'} xl block`}
-                          onClick={() => setPaymentMethod('MOBILE_MONEY')}
-                          style={paymentMethod === 'MOBILE_MONEY' ? {} : { borderColor: '#ccc', color: '#333' }}
-                        >
-                           <HiOutlineDevicePhoneMobile /> Mobile Money
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn ${paymentMethod === 'POS' ? 'primary' : 'outline'} xl block`}
-                          onClick={() => setPaymentMethod('POS')}
-                          style={paymentMethod === 'POS' ? {} : { borderColor: '#ccc', color: '#333' }}
-                        >
-                           <HiOutlineCreditCard /> POS (Card)
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn ${paymentMethod === 'LOAN' ? 'primary' : 'outline'} xl block`}
-                          onClick={() => setPaymentMethod('LOAN')}
-                          style={paymentMethod === 'LOAN' ? {} : { borderColor: '#ccc', color: '#333' }}
-                        >
-                          <HiOutlineUsers /> Credit / Loan
-                        </button>
-                      </div>
-
-                      {paymentMethod === 'LOAN' && (
-                        <div className="stack" style={{ gap: 12, padding: 16, background: '#FFF3E0', borderRadius: 12, marginBottom: 16 }}>
-                          <h4 style={{ margin: 0, fontSize: 14 }}>Credit Details</h4>
-                          <input 
-                            type="text" 
-                            placeholder="Client Name (Required)" 
-                            value={clientName}
-                            onChange={(e) => setClientName(e.target.value)}
-                            style={{ borderColor: 'var(--caramel)' }}
-                          />
-                        </div>
-                      )}
+                      ))}
                     </div>
-                    <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
+
+                    {paymentMethod === 'LOAN' && (
+                      <div style={{ marginBottom: 16 }}>
+                        <input 
+                          type="text" 
+                          className="am-input"
+                          placeholder="Client Name (Required)" 
+                          value={clientName}
+                          onChange={(e) => setClientName(e.target.value)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    )}
+
                     <button
                       type="button"
-                      className="btn outline xl block"
-                      style={{ borderColor: 'var(--caramel)', color: 'var(--caramel)', marginBottom: 12 }}
+                      style={{ width: '100%', background: !paymentMethod ? '#222' : '#4CAF50', color: !paymentMethod ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: !paymentMethod || busy ? 'not-allowed' : 'pointer', boxShadow: paymentMethod ? '0 4px 15px rgba(76,175,80,0.3)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                       disabled={!paymentMethod || busy}
                       onClick={() => pay(paymentMethod)}
                     >
-                      <HiOutlinePrinter /> Generate Final Ticket
+                      <HiOutlinePrinter /> Print Receipt
                     </button>
                   </>
                 ) : (
-                  <div className="stack" style={{ gap: 12 }}>
-                    <button type="button" className="btn good xl block" onClick={() => markReady(selected.id)}>
-                      <HiOutlineCheckCircle /> Mark as Ready to Pay
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <button type="button" onClick={() => markReady(selected.id)} style={{ width: '100%', background: '#4CAF50', color: '#fff', border: 'none', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <HiOutlineCheckCircle /> Mark Ready to Pay
                     </button>
-                    <button 
-                      type="button" 
-                      className="btn outline xl block" 
-                      style={{ borderColor: 'var(--mahogany)', color: 'var(--mahogany)' }}
-                      onClick={() => nav(`/app/orders?edit=${selected.id}`)}
-                    >
-                      <HiOutlinePencilSquare /> Edit Order Items
+                    <button type="button" onClick={() => nav(`/app/orders?edit=${selected.id}`)} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#A0A0A0', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <HiOutlinePencilSquare /> Edit Items
                     </button>
-                    <button 
-                      type="button" 
-                      className="btn outline xl block" 
-                      style={{ borderColor: '#E53935', color: '#E53935' }}
-                      onClick={() => cancelOrderRequest(selected.id)}
-                    >
+                    <button type="button" onClick={() => cancelOrderRequest(selected.id)} style={{ width: '100%', background: 'rgba(255,82,82,0.05)', border: '1px solid rgba(255,82,82,0.2)', color: '#FF5252', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                       <HiOutlineTrash /> Cancel Order
                     </button>
                   </div>
