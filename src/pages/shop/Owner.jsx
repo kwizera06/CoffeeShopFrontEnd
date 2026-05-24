@@ -551,7 +551,7 @@ export default function Owner() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setReportDay(today); }}
-                    style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#16A34A', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
                     Today
                   </button>
@@ -639,7 +639,7 @@ export default function Owner() {
             {/* Status Badges Grid */}
             <div className="am-status-grid">
               <div className="am-mini-status" onClick={() => openDrilldown('completed')}>
-                 <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#4CAF50' }}><HiOutlineCheckCircle /></div>
+                 <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#16A34A' }}><HiOutlineCheckCircle /></div>
                  <div className="am-status-info">
                    <h4>{overview?.todayPaidOrdersCount ?? 0}</h4>
                    <p>Completed</p>
@@ -687,12 +687,12 @@ export default function Owner() {
                     {chartsReady && charts.hourly?.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={charts.hourly.slice(6, 22)}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                           <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 10 }} />
                           <YAxis hide />
                           <Tooltip 
-                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                            contentStyle={{ background: '#161716', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                            cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                            contentStyle={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '12px', color: '#111827' }}
                           />
                           <Bar dataKey="total" fill="var(--admin-accent-green)" radius={[4, 4, 0, 0]} barSize={30} />
                         </BarChart>
@@ -733,7 +733,7 @@ export default function Owner() {
                   <h3>Payment Methods</h3>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>💵 Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
-                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#4CAF50' }} /></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#16A34A' }} /></div>
                   </div>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>📱 MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
@@ -752,7 +752,7 @@ export default function Owner() {
                   <h3>Payment Methods</h3>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
-                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#4CAF50' }} /></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#16A34A' }} /></div>
                   </div>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
@@ -782,7 +782,7 @@ export default function Owner() {
                 </div>
               </div>
             </div>
-            <footer style={{ marginTop: 48, opacity: 0.3, textAlign: 'center', fontSize: 11, borderTop: '1px solid rgba(255,255,255,0.05)', padding: '24px 0' }}>
+            <footer style={{ marginTop: 48, opacity: 0.3, textAlign: 'center', fontSize: 11, borderTop: '1px solid #E5E7EB', padding: '24px 0' }}>
                © 2026 Olitech Market POS. Midnight Espresso Premium Dashboard.
             </footer>
           </>
@@ -820,7 +820,7 @@ export default function Owner() {
           </header>
 
           {showMenuForm && <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
-            <h3 style={{ marginBottom: 24, color: '#E6CCB2', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
+            <h3 style={{ marginBottom: 24, color: '#16A34A', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
               {menuForm.id ? 'Edit Product' : `Add Product to ${menuForm.category}`}
             </h3>
 
@@ -919,8 +919,8 @@ export default function Owner() {
             </div>
 
             {menuForm.isRecipe && (
-              <div className="item-recipe-area anim-fade" style={{ marginTop: 24, padding: 20, background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)' }}>
-                 <h4 style={{ color: '#4CAF50', marginBottom: 16, fontSize: '15px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="item-recipe-area anim-fade" style={{ marginTop: 24, padding: 20, background: '#F9FAFB', borderRadius: 16, border: '1px solid #E5E7EB' }}>
+                 <h4 style={{ color: '#16A34A', marginBottom: 16, fontSize: '15px', display: 'flex', alignItems: 'center', gap: 8 }}>
                    <HiOutlineDocumentText /> Recipe Ingredients
                  </h4>
                  
@@ -979,7 +979,7 @@ export default function Owner() {
               </div>
             )}
 
-            <div className="span-2 row-actions" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div className="span-2 row-actions" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #E5E7EB', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <button className="btn primary xl" type="submit" style={{ minWidth: 160 }}>
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
@@ -1095,9 +1095,9 @@ export default function Owner() {
                    width: '100%', 
                    height: 44, 
                    fontSize: 14,
-                   background: '#111',
-                   border: '1px solid var(--admin-card-border)',
-                   color: '#fff'
+                   background: '#FFFFFF',
+                   border: '1px solid #E5E7EB',
+                   color: '#111827'
                  }}
                />
              </div>
@@ -1116,9 +1116,9 @@ export default function Owner() {
             .map(([cat, items]) => (
               <div key={cat} className="am-category-group am-animate">
                 <div className="row-between" style={{ marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: '20px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
-                    <span style={{ color: '#4CAF50' }}>•</span> {cat}
-                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>{items.length} Products</span>
+                  <h3 style={{ margin: 0, fontSize: '20px', color: '#111827', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
+                    <span style={{ color: '#16A34A' }}>•</span> {cat}
+                    <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 400 }}>{items.length} Products</span>
                   </h3>
                   <button 
                     className="btn primary tiny" 
@@ -1135,19 +1135,19 @@ export default function Owner() {
                   </button>
                 </div>
 
-                <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
                   <div className="table modern-list-table">
                     {(() => {
                       const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(cat);
                       const gridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
                       return (
-                        <div className="row head" style={{ gridTemplateColumns: gridCols, background: 'rgba(255,255,255,0.02)', padding: '16px 24px' }}>
-                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
-                          {isSimpleListing && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</div>}
-                          {isSimpleListing && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</div>}
-                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</div>
-                          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
-                          <div style={{ textAlign: 'right', color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}></div>
+                        <div className="row head" style={{ gridTemplateColumns: gridCols, background: '#F9FAFB', padding: '16px 24px' }}>
+                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
+                          {isSimpleListing && <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</div>}
+                          {isSimpleListing && <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</div>}
+                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</div>
+                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
+                          <div style={{ textAlign: 'right', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}></div>
                         </div>
                       )
                     })()}
@@ -1171,9 +1171,9 @@ export default function Owner() {
                         const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
 
                         return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'transparent', cursor: 'pointer' }} onClick={() => { editMenu(m); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer' }} onClick={() => { editMenu(m); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <div style={{ fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {m.name}
                                 {m.available ? null : <span style={{ opacity: 0.3, fontSize: '10px' }}>(Hidden)</span>}
                               </div>
@@ -1202,17 +1202,17 @@ export default function Owner() {
                               </div>
                             )}
                             {isSimpleListing && (
-                              <div style={{ color: 'rgba(255,255,255,0.7)', alignSelf: 'center' }}>
+                              <div style={{ color: '#6B7280', alignSelf: 'center' }}>
                                 {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
                               </div>
                             )}
-                            <div style={{ color: '#4CAF50', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
+                            <div style={{ color: '#16A34A', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
                             <div style={{ alignSelf: 'center' }}>
                               <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
                                 {m.available ? 'AVAILABLE' : 'HIDDEN'}
                               </span>
                             </div>
-                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
+                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center', fontSize: '11px', color: '#9CA3AF' }}>
                               Click to edit
                             </div>
                           </div>
@@ -1327,8 +1327,8 @@ export default function Owner() {
                       onClick={() => setStaffFilter(f)}
                     >
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
-                       {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#E6CCB2' }} />}
-                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#4CAF50' }} />}
+                       {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#16A34A' }} />}
+                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#16A34A' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                        {f}
                     </div>
@@ -1373,15 +1373,15 @@ export default function Owner() {
                                      <span style={{ 
                                        padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
                                        background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (u.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
-                                       color: isOwner ? '#E6CCB2' : (u.role === 'MANAGER' ? '#4CAF50' : '#2196F3'),
-                                       border: `1px solid ${isOwner ? '#E6CCB244' : (u.role === 'MANAGER' ? '#4CAF5044' : '#2196F344')}`
+                                       color: isOwner ? '#16A34A' : (u.role === 'MANAGER' ? '#16A34A' : '#2196F3'),
+                                       border: `1px solid ${isOwner ? '#16A34A44' : (u.role === 'MANAGER' ? '#16A34A44' : '#2196F344')}`
                                      }}>
                                        {isOwner ? 'Owner' : u.role.charAt(0) + u.role.slice(1).toLowerCase()}
                                      </span>
                                   </td>
                                   <td>
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                        <span className="am-priority-dot" style={{ background: active ? '#4CAF50' : '#B0B0B0' }}></span>
+                                        <span className="am-priority-dot" style={{ background: active ? '#16A34A' : '#B0B0B0' }}></span>
                                         {active ? 'Active' : 'Off shift'}
                                      </div>
                                   </td>
@@ -1439,19 +1439,19 @@ export default function Owner() {
                <div className="am-report-sel-item" style={{ background: 'var(--admin-card-bg)', padding: '16px', borderRadius: '12px' }}>
                   <label>Monthly Report</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                     <HiOutlineCalendarDays style={{ color: '#E6CCB2' }} />
+                     <HiOutlineCalendarDays style={{ color: '#16A34A' }} />
                      <span>{month.year} - {new Date(0, month.month - 1).toLocaleString('default', { month: 'long' })}</span>
                      <div style={{ display: 'flex', gap: 4 }}>
                         <input 
                            type="number" 
                            value={month.year} 
                            onChange={e => setMonth(m => ({ ...m, year: e.target.value }))}
-                           style={{ width: 60, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: 4, padding: '2px 4px' }}
+                           style={{ width: 60, background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', borderRadius: 4, padding: '2px 4px' }}
                         />
                         <select 
                            value={month.month} 
                            onChange={e => setMonth(m => ({ ...m, month: e.target.value }))}
-                           style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: 4, padding: '2px 4px' }}
+                           style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', borderRadius: 4, padding: '2px 4px' }}
                         >
                            {Array.from({ length: 12 }, (_, i) => (
                              <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
@@ -1500,7 +1500,7 @@ export default function Owner() {
                )}
                
                {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
-                 const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
+                 const colors = ['#16A34A', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
                  const catColor = colors[idx % colors.length];
                  const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
                  
@@ -1542,7 +1542,7 @@ export default function Owner() {
                  )
                })}
                
-               <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+               <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 16, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
                   <span>Total</span>
                   <span>{(overview?.todayRevenue || 0).toLocaleString()} RWF</span>
                </div>
@@ -1579,7 +1579,7 @@ export default function Owner() {
                            </tr>
                          )
                        })}
-                       <tr style={{ borderTop: '2px solid rgba(255,255,255,0.05)' }}>
+                       <tr style={{ borderTop: '2px solid #E5E7EB' }}>
                           <td style={{ fontWeight: 800 }}>Total</td>
                           <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.total_cash_sales || 0) + (c.total_momo_sales || 0)), 0).toLocaleString()}</td>
                           <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.actual_cash_on_hand || 0) + (c.actual_momo_on_hand || 0)), 0).toLocaleString()}</td>
@@ -1598,12 +1598,12 @@ export default function Owner() {
                     {chartsReady && charts.hourly?.length > 0 && (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={charts.hourly}>
-                          <XAxis dataKey="hour" fontSize={10} tick={{ fill: 'rgba(255,255,255,0.3)' }} axisLine={false} tickLine={false} />
+                          <XAxis dataKey="hour" fontSize={10} tick={{ fill: '#6B7280' }} axisLine={false} tickLine={false} />
                           <Tooltip
-                            contentStyle={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }}
-                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                            contentStyle={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 12, color: '#111827' }}
+                            cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                           />
-                          <Bar dataKey="total" fill="#4CAF50" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="total" fill="#16A34A" radius={[2, 2, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -1666,7 +1666,7 @@ export default function Owner() {
                               <span style={{ 
                                 padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800,
                                 background: r.methodLabel === 'Cash' ? 'rgba(76,175,80,0.1)' : (r.methodLabel === 'MoMo' ? 'rgba(255,152,0,0.1)' : 'rgba(33,150,243,0.1)'),
-                                color: r.methodLabel === 'Cash' ? '#4CAF50' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
+                                color: r.methodLabel === 'Cash' ? '#16A34A' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
                               }}>
                                 {r.methodLabel.toUpperCase()}
                               </span>
@@ -1921,7 +1921,7 @@ export default function Owner() {
                                  <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
                                     <div 
                                       className="am-prod-bar-fill" 
-                                      style={{ width: '100%', backgroundColor: '#4CAF50' }}
+                                      style={{ width: '100%', backgroundColor: '#16A34A' }}
                                     ></div>
                                  </div>
                               </td>
@@ -1930,7 +1930,7 @@ export default function Owner() {
                               <td>
                                  <span style={{ 
                                    padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                                   background: 'rgba(76,175,80,0.1)', color: '#4CAF50'
+                                   background: 'rgba(76,175,80,0.1)', color: '#16A34A'
                                  }}>
                                    HEALTHY
                                  </span>
@@ -2013,7 +2013,7 @@ export default function Owner() {
                   >
                      {f === 'ALL' && <HiOutlineArchiveBox size={14} />}
                      {f === 'PENDING' && <HiOutlineBell size={14} style={{ color: '#FF9800' }} />}
-                     {f === 'APPROVED' && <HiOutlineCheckCircle size={14} style={{ color: '#4CAF50' }} />}
+                     {f === 'APPROVED' && <HiOutlineCheckCircle size={14} style={{ color: '#16A34A' }} />}
                      {f === 'REJECTED' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
                      {f === 'RECEIVED' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                      {f}
@@ -2072,7 +2072,7 @@ export default function Owner() {
                                 <td>
                                    <span className="am-status-badge" style={{ 
                                      background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
-                                     color: req.status === 'APPROVED' ? '#4CAF50' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
+                                     color: req.status === 'APPROVED' ? '#16A34A' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
                                    }}>
                                      {req.status}
                                    </span>
@@ -2189,7 +2189,7 @@ export default function Owner() {
                   <div className="am-eod-grid-4">
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Revenue</span>
-                      <span className="am-eod-stat-value" style={{ color: '#4CAF50' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: '#16A34A' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Cost</span>
@@ -2197,7 +2197,7 @@ export default function Owner() {
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Net Profit</span>
-                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#4CAF50' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#16A34A' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Profit Margin</span>
@@ -2267,9 +2267,9 @@ export default function Owner() {
                       <div key={cat} className="am-eod-table-row">
                         <span className="am-eod-cell-name">{cat}</span>
                         <span>{data.qty}</span>
-                        <span style={{ color: '#4CAF50' }}>{Number(data.revenue).toLocaleString()}</span>
+                        <span style={{ color: '#16A34A' }}>{Number(data.revenue).toLocaleString()}</span>
                         <span style={{ color: '#E57373' }}>{Number(data.cost).toLocaleString()}</span>
-                        <span style={{ color: data.revenue - data.cost >= 0 ? '#4CAF50' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
+                        <span style={{ color: data.revenue - data.cost >= 0 ? '#16A34A' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -2294,8 +2294,8 @@ export default function Owner() {
                           <span className="am-eod-cell-cat">{p.category}</span>
                         </span>
                         <span>{p.qty}</span>
-                        <span style={{ color: '#4CAF50' }}>{Number(p.revenue).toLocaleString()}</span>
-                        <span style={{ color: p.revenue - p.cost >= 0 ? '#4CAF50' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
+                        <span style={{ color: '#16A34A' }}>{Number(p.revenue).toLocaleString()}</span>
+                        <span style={{ color: p.revenue - p.cost >= 0 ? '#16A34A' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -2315,7 +2315,7 @@ export default function Owner() {
                       <div key={idx} className="am-eod-table-row">
                         <span className="am-eod-cell-name">{s.name}</span>
                         <span>{s.count}</span>
-                        <span style={{ color: '#4CAF50' }}>{Number(s.amount).toLocaleString()} RWF</span>
+                        <span style={{ color: '#16A34A' }}>{Number(s.amount).toLocaleString()} RWF</span>
                       </div>
                     ))}
                   </div>
@@ -2420,7 +2420,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">Cash</span>
                                 <span>{Number(expectedCash).toLocaleString()}</span>
                                 <span>{Number(actualCash).toLocaleString()}</span>
-                                <span style={{ color: diffCash === 0 ? '#4CAF50' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffCash === 0 ? '#16A34A' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
                                 </span>
                               </div>
@@ -2428,7 +2428,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">MoMo</span>
                                 <span>{Number(expectedMomo).toLocaleString()}</span>
                                 <span>{Number(actualMomo).toLocaleString()}</span>
-                                <span style={{ color: diffMomo === 0 ? '#4CAF50' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffMomo === 0 ? '#16A34A' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffMomo > 0 ? '+' : ''}{Number(diffMomo).toLocaleString()}
                                 </span>
                               </div>
@@ -2436,7 +2436,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">POS/Card</span>
                                 <span>{Number(expectedPos).toLocaleString()}</span>
                                 <span>{Number(actualPos).toLocaleString()}</span>
-                                <span style={{ color: diffPos === 0 ? '#4CAF50' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffPos === 0 ? '#16A34A' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffPos > 0 ? '+' : ''}{Number(diffPos).toLocaleString()}
                                 </span>
                               </div>
@@ -2444,7 +2444,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">TOTAL</span>
                                 <span style={{ fontWeight: 700 }}>{Number(expectedTotal).toLocaleString()} RWF</span>
                                 <span style={{ fontWeight: 700 }}>{Number(actualTotal).toLocaleString()} RWF</span>
-                                <span style={{ color: diffTotal === 0 ? '#4CAF50' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
+                                <span style={{ color: diffTotal === 0 ? '#16A34A' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
                                   {diffTotal > 0 ? '+' : ''}{Number(diffTotal).toLocaleString()} RWF
                                 </span>
                               </div>
@@ -2619,7 +2619,7 @@ export default function Owner() {
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
                        {f === 'UNPAID' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
                        {f === 'PARTIAL' && <HiOutlineArrowTrendingUp size={14} style={{ color: '#FF9800' }} />}
-                       {f === 'PAID' && <HiOutlineCheckCircle size={14} style={{ color: '#4CAF50' }} />}
+                       {f === 'PAID' && <HiOutlineCheckCircle size={14} style={{ color: '#16A34A' }} />}
                        {f}
                     </div>
                   ))}
@@ -2660,7 +2660,7 @@ export default function Owner() {
                                   <td style={{ fontWeight: 700 }}>{Number(loan.amount).toLocaleString()} RWF</td>
                                   <td>
                                      <div style={{ fontSize: 11 }}>
-                                        <span style={{ color: '#4CAF50', fontWeight: 600 }}>{totalPaid.toLocaleString()} paid</span>
+                                        <span style={{ color: '#16A34A', fontWeight: 600 }}>{totalPaid.toLocaleString()} paid</span>
                                         {' · '}
                                         <span style={{ color: balance > 0 ? '#FF9800' : 'var(--admin-text-muted)' }}>{balance.toLocaleString()} left</span>
                                      </div>
@@ -2669,7 +2669,7 @@ export default function Owner() {
                                           className="am-loan-bar-fill" 
                                           style={{ 
                                             width: `${percent}%`, 
-                                            backgroundColor: percent === 100 ? '#4CAF50' : '#FF9800'
+                                            backgroundColor: percent === 100 ? '#16A34A' : '#FF9800'
                                           }}
                                         ></div>
                                      </div>
@@ -2678,7 +2678,7 @@ export default function Owner() {
                                   <td>
                                      <span className="am-status-badge" style={{ 
                                        background: loan.status === 'PAID' ? 'rgba(76,175,80,0.1)' : (loan.status === 'PARTIAL' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
-                                       color: loan.status === 'PAID' ? '#4CAF50' : (loan.status === 'PARTIAL' ? '#FF9800' : '#FF5252')
+                                       color: loan.status === 'PAID' ? '#16A34A' : (loan.status === 'PARTIAL' ? '#FF9800' : '#FF5252')
                                      }}>
                                        {loan.status}
                                      </span>
@@ -2746,7 +2746,7 @@ export default function Owner() {
                     <div className="am-drilldown-row-nums">
                       <span className="am-drilldown-qty">{item.qty}x</span>
                       {item.profit !== undefined ? (
-                        <span className="am-drilldown-amount" style={{ color: item.profit >= 0 ? '#4CAF50' : '#E57373' }}>
+                        <span className="am-drilldown-amount" style={{ color: item.profit >= 0 ? '#16A34A' : '#E57373' }}>
                           {Number(item.profit).toLocaleString()} RWF
                         </span>
                       ) : (
@@ -2759,7 +2759,7 @@ export default function Owner() {
             )}
 
             {drilldown.type === 'profit' && drilldown.items && (
-              <div style={{ fontSize: 11, color: '#999', padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ fontSize: 11, color: '#6B7280', padding: '8px 16px', borderTop: '1px solid #E5E7EB' }}>
                 Revenue: {drilldown.items.reduce((a, i) => a + i.revenue, 0).toLocaleString()} RWF &nbsp;|&nbsp; 
                 Cost: {drilldown.items.reduce((a, i) => a + i.cost, 0).toLocaleString()} RWF
               </div>
