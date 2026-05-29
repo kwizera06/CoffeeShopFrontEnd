@@ -1371,6 +1371,14 @@
     grid-template-columns: 1fr !important;
   }
 
+  .am-form-grid .span-2 {
+    grid-column: span 1 !important;
+  }
+  
+  .am-form-grid > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
   .am-cat-header {
     flex-direction: column;
     gap: 12px;
@@ -1405,6 +1413,14 @@
 
   .am-method-summary-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .row-actions.span-2 {
+    flex-direction: column !important;
+  }
+  .row-actions.span-2 > button {
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 }
 
@@ -1510,7 +1526,11 @@
   }
 
   .am-form-grid .span-2 {
-    grid-column: span 1;
+    grid-column: span 1 !important;
+  }
+  
+  .am-form-grid-inner {
+    grid-template-columns: 1fr !important;
   }
 
   /* Category sales card */

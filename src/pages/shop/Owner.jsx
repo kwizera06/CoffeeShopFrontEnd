@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
@@ -99,6 +100,30 @@ export default function Owner() {
     role: 'CASHIER',
   })
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })
+  
+  const [actionMenu, setActionMenu] = useState(null)
+  const longPressTimer = useRef(null)
+
+  const handlePointerDown = (ing) => {
+    longPressTimer.current = setTimeout(() => {
+      setActionMenu(ing)
+    }, 500)
+  }
+  const handlePointerUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+  
+  async function deleteIngredient(id) {
+    if (!window.confirm('Are you sure you want to delete this ingredient?')) return;
+    setError('')
+    try {
+      await api(`/api/shop/owner/inventory/${id}`, { method: 'DELETE' })
+      setActionMenu(null)
+      await reloadCore()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
   
   const [selectedRecipeItem, setSelectedRecipeItem] = useState(null)
   const [recipeLines, setRecipeLines] = useState([])
@@ -881,7 +906,7 @@ export default function Owner() {
               </label>
 
               {(!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) ? (
-                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, gridColumn: 'span 2' }}>
+                 <div className="span-2 am-form-grid-inner" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                    <label className="am-field">
                      <span>Current Stock Level</span>
                      <input 
@@ -1837,7 +1862,6 @@ export default function Owner() {
                              <th>MIN</th>
                              <th>PRICE</th>
                              <th>STATUS</th>
-                             <th></th>
                           </tr>
                        </thead>
                        <tbody>
@@ -1845,7 +1869,7 @@ export default function Owner() {
                             .filter(i => i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
                             .slice((criticalPage - 1) * 6, criticalPage * 6)
                             .map(ing => (
-                              <tr key={ing.id}>
+                              <tr key={ing.id} style={{ userSelect: 'none', WebkitUserSelect: 'none', cursor: 'pointer' }} onPointerDown={() => handlePointerDown(ing)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onContextMenu={e => e.preventDefault()}>
                                 <td>
                                   <div style={{ fontWeight: 600 }}>{ing.name}</div>
                                   <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
@@ -1875,9 +1899,6 @@ export default function Owner() {
                                      {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
                                    </span>
                                 </td>
-                                <td style={{ textAlign: 'right' }}>
-                                   <button className="btn ghost tiny" onClick={() => setIngForm(ing)}>📝</button>
-                                </td>
                               </tr>
                             ))}
                        </tbody>
@@ -1903,7 +1924,6 @@ export default function Owner() {
                            <th>MIN</th>
                            <th>PRICE</th>
                            <th>STATUS</th>
-                           <th></th>
                         </tr>
                      </thead>
                      <tbody>
@@ -1911,7 +1931,7 @@ export default function Owner() {
                           .filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
                           .slice((healthyPage - 1) * 12, healthyPage * 12)
                           .map(ing => (
-                            <tr key={ing.id}>
+                            <tr key={ing.id} style={{ userSelect: 'none', WebkitUserSelect: 'none', cursor: 'pointer' }} onPointerDown={() => handlePointerDown(ing)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onContextMenu={e => e.preventDefault()}>
                               <td>
                                 <div style={{ fontWeight: 600 }}>{ing.name}</div>
                                 <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
@@ -1935,9 +1955,6 @@ export default function Owner() {
                                    HEALTHY
                                  </span>
                               </td>
-                              <td style={{ textAlign: 'right' }}>
-                                 <button className="btn ghost tiny" onClick={() => setIngForm(ing)}>📝</button>
-                              </td>
                             </tr>
                           ))}
                      </tbody>
@@ -1952,6 +1969,20 @@ export default function Owner() {
                </div>
             </div>
           </div>
+
+           {actionMenu && createPortal(
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setActionMenu(null)}>
+               <div className="am-animate" style={{ background: '#FFF', padding: 24, borderRadius: 20, width: '90%', maxWidth: 300, boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: '#111827', textAlign: 'center' }}>Manage {actionMenu.name}</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                     <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setIngForm(actionMenu); setActionMenu(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️ Edit Item</button>
+                     <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteIngredient(actionMenu.id)}>🗑️ Delete Item</button>
+                     <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setActionMenu(null)}>Cancel</button>
+                  </div>
+               </div>
+             </div>,
+             document.body
+           )}
         </>
       ) : null}
 
