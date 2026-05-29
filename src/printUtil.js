@@ -66,50 +66,50 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   const rows = lines.map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
-      ? `<div style="font-size: 11pt; padding-left: 20px; font-style: italic; text-align: left; font-weight: bold; margin-bottom: 8px;">
+      ? `<div style="font-size: 9pt; padding-left: 10px; font-style: italic; text-align: left; font-weight: bold; margin-bottom: 8px;">
           ${ings.map(i => `• ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
          </div>`
       : '';
 
     return `
-      <div style="display:flex; justify-content:flex-start; margin: 8px 0 2px 0; font-size: 14pt;">
-         <div style="min-width: 28px; font-weight: bold;">${esc(l.quantity)}</div>
+      <div style="display:flex; justify-content:flex-start; margin: 8px 0 2px 0; font-size: 12pt;">
+         <div style="min-width: 24px; font-weight: bold;">${esc(l.quantity)}</div>
          <div style="word-break: break-word;">${esc(l.itemName)}</div>
       </div>
       ${ingText}
     `;
   }).join('');
 
-  // max-width set to a safer 60mm which easily fits 58mm & 80mm printers without wrapping wildly
+  // max-width set to 54mm for 58mm thermal printers
   root.innerHTML = `
     <div style="
       width: 100%;
-      max-width: 60mm;
+      max-width: 54mm;
       margin: 0;
       font-family: 'Courier New', Courier, monospace;
-      font-size: 12pt;
-      line-height: 1.3;
+      font-size: 10pt;
+      line-height: 1.2;
       color: #000;
       text-align: left;
     ">
-      <div style="text-align: center; font-size: 16pt; font-weight: bold; padding: 5px 0;">
+      <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
         *** KITCHEN BAR ***
       </div>
       ${lineEq}
 
       <div>Server: ${esc(waiterName || 'Staff')}</div>
       <div>Station 1</div>
-      <div style="font-size: 18pt; padding: 8px 0; text-align:center; font-weight:bold;">Dine In</div>
+      <div style="font-size: 14pt; padding: 6px 0; text-align:center; font-weight:bold;">Dine In</div>
       
-      <div style="display:flex; justify-content:space-between;">
+      <div style="display:flex; justify-content:space-between; font-size: 9pt;">
         <span>${esc(dateStr)}</span>
         <span>${esc(timeStr)}</span>
       </div>
       
       ${lineEq}
 
-      <div style="font-size: 16pt; font-weight: bold;">Table: ${esc(tableNumber)}</div>
-      <div style="font-size: 12pt;">Guests: 1</div>
+      <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(tableNumber)}</div>
+      <div style="font-size: 10pt;">Guests: 1</div>
       
       ${lineDash}
 
@@ -117,9 +117,9 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
 
       ${lineDash}
       
-      <div style="padding: 10px 0;">
-         <div style="font-size: 14pt; font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
-         <div style="font-size: 11pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
+      <div style="padding: 8px 0;">
+         <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
+         <div style="font-size: 10pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
       </div>
 
       ${lineAst}
@@ -146,18 +146,18 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   const rows = (order?.lines ?? []).map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
-      ? `<div style="font-size: 10pt; padding-left: 20px; font-style: italic; text-align: left;">
+      ? `<div style="font-size: 9pt; padding-left: 10px; font-style: italic; text-align: left;">
           ${ings.map(i => `• ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
          </div>`
       : '';
 
     return `
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin: 6px 0 2px 0; font-size: 12pt;">
-       <div style="display:flex; width: 70%;">
-          <div style="min-width: 24px; font-weight: bold;">${esc(l.quantity)}</div>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin: 6px 0 2px 0; font-size: 10pt;">
+       <div style="display:flex; width: 65%;">
+          <div style="min-width: 20px; font-weight: bold;">${esc(l.quantity)}</div>
           <div style="word-break: break-word; padding-right: 4px;">${esc(l.itemName)}</div>
        </div>
-       <div style="width: 30%; text-align: right;">${Number(l.price).toLocaleString()}</div>
+       <div style="width: 35%; text-align: right;">${Number(l.price).toLocaleString()}</div>
     </div>
     ${ingText}
   `}).join('');
@@ -169,32 +169,32 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   root.innerHTML = `
     <div style="
       width: 100%;
-      max-width: 60mm;
+      max-width: 54mm;
       margin: 0;
       font-family: 'Courier New', Courier, monospace;
-      font-size: 12pt;
-      line-height: 1.3;
+      font-size: 10pt;
+      line-height: 1.2;
       color: #000;
       text-align: left;
     ">
-      <div style="text-align: center; font-size: 16pt; font-weight: bold; padding: 5px 0;">
+      <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
         ${esc(shopName ?? "Mama Prince's Coffee")}
       </div>
       ${lineEq}
 
       <div>Server: ${esc(waiter)}</div>
       <div>Method: ${esc(methodLabel)}</div>
-      <div style="font-size: 18pt; padding: 8px 0; text-align: center; font-weight:bold;">Dine In</div>
+      <div style="font-size: 14pt; padding: 6px 0; text-align: center; font-weight:bold;">Dine In</div>
       
-      <div style="display:flex; justify-content:space-between;">
+      <div style="display:flex; justify-content:space-between; font-size: 9pt;">
         <span>${esc(dateStr)}</span>
         <span>${esc(timeStr)}</span>
       </div>
       
       ${lineEq}
 
-      <div style="font-size: 16pt; font-weight: bold;">Table: ${esc(order?.tableNumber || '1')}</div>
-      <div style="font-size: 12pt;">Guests: 1</div>
+      <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(order?.tableNumber || '1')}</div>
+      <div style="font-size: 10pt;">Guests: 1</div>
       
       ${lineDash}
 
@@ -202,18 +202,18 @@ export function printReceipt({ shopName, order, paymentMethod }) {
 
       ${lineDash}
 
-      <div style="display:flex; justify-content:space-between; font-size: 16pt; font-weight:bold; margin-top: 10px;">
+      <div style="display:flex; justify-content:space-between; font-size: 14pt; font-weight:bold; margin-top: 10px;">
          <span>TOTAL</span>
          <span>${total}</span>
       </div>
 
       ${lineAst}
       
-      <div style="padding: 10px 0;">
-         <div style="font-size: 14pt; font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
-         <div style="font-size: 11pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
+      <div style="padding: 8px 0;">
+         <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
+         <div style="font-size: 10pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
       </div>
-      <div style="text-align: center; font-size: 10pt; padding-top: 10px;">
+      <div style="text-align: center; font-size: 9pt; padding-top: 10px;">
         Thank you for your visit!
       </div>
     </div>

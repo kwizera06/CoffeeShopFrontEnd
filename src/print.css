@@ -13,12 +13,12 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 80mm;
-    padding: 3mm 4mm 30mm 4mm; /* Added large bottom padding to feed paper out past cutter */
-    box-sizing: border-box;   /* padding included in 80mm */
+    width: 58mm;
+    padding: 2mm 2mm 20mm 2mm; /* Side padding 2mm — usable print area ~54mm; bottom feeds paper past cutter */
+    box-sizing: border-box;   /* padding included in 58mm */
     margin: 0;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 11pt;
+    font-size: 10pt;
     color: #000 !important;
     background: #fff;
   }

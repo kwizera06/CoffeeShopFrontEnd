@@ -66,7 +66,7 @@ export default function CashierDashboard() {
 
   // Top header states
   const [showShiftModal, setShowShiftModal] = useState('') // 'OPEN' or 'CLOSE'
-  const [shiftForm, setShiftForm] = useState({ initialCash: '0', initialMomo: '0', actualCash: '0', actualMomo: '0', notes: '' })
+  const [shiftForm, setShiftForm] = useState({ initialCash: '0', initialMomo: '0', actualCash: '0', actualMomo: '0', cashout: '0', notes: '' })
   const [cartExpanded, setCartExpanded] = useState(false)
 
   // New Order states
@@ -174,7 +174,7 @@ export default function CashierDashboard() {
         })
       } else {
         await api('/api/shop/shifts/close', {
-          method: 'POST', body: JSON.stringify({ actualCash: Number(shiftForm.actualCash), actualMomo: Number(shiftForm.actualMomo), notes: shiftForm.notes })
+          method: 'POST', body: JSON.stringify({ actualCash: Number(shiftForm.actualCash), actualMomo: Number(shiftForm.actualMomo), cashout: Number(shiftForm.cashout), notes: shiftForm.notes })
         })
         setShift(null)
       }
@@ -488,9 +488,12 @@ export default function CashierDashboard() {
                   </div>
                   <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
-                  <div style={{background: '#1C1C1C', padding: 12, borderRadius: 8, fontSize: 13}}>
+                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{marginBottom: 4}}><strong>{l.quantity}x</strong> {l.itemName}</div>
+                       <div key={i} style={{marginBottom: 4, display: 'flex', gap: '8px'}}>
+                           <strong style={{color: '#4ADE80'}}>{l.quantity}x</strong> 
+                           <span>{l.itemName}</span>
+                       </div>
                      ))}
                   </div>
 
@@ -524,9 +527,12 @@ export default function CashierDashboard() {
                   </div>
                   <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
-                  <div style={{background: '#1C1C1C', padding: 12, borderRadius: 8, fontSize: 13}}>
+                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{marginBottom: 4}}><strong>{l.quantity}x</strong> {l.itemName}</div>
+                       <div key={i} style={{marginBottom: 4, display: 'flex', gap: '8px'}}>
+                           <strong style={{color: '#4ADE80'}}>{l.quantity}x</strong> 
+                           <span>{l.itemName}</span>
+                       </div>
                      ))}
                   </div>
 
@@ -586,6 +592,10 @@ export default function CashierDashboard() {
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Actual MoMo Count</label>
                     <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.actualMomo} onChange={e=>setShiftForm(f=>({...f, actualMomo:e.target.value}))}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Cashout (Given to Owner)</label>
+                    <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.cashout} onChange={e=>setShiftForm(f=>({...f, cashout:e.target.value}))}/>
                   </div>
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Notes</label>

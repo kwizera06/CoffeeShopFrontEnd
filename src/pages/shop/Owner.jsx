@@ -2408,7 +2408,7 @@ export default function Owner() {
                       <div className="am-eod-empty">No closed shifts for this date yet</div>
                     ) : (
                       shifts.filter(sh => sh.status === 'CLOSED').map((sh, idx) => {
-                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)
+                        const expectedCash = ((parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)) - shiftCashout
                         const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0)
                         const expectedPos = parseFloat(sh.total_pos_sales) || 0
                         const expectedTotal = expectedCash + expectedMomo + expectedPos
@@ -2417,6 +2417,7 @@ export default function Owner() {
                         const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
                         const actualPos = parseFloat(sh.actual_pos_on_hand) || 0
                         const actualTotal = actualCash + actualMomo + actualPos
+                        const shiftCashout = parseFloat(sh.cashout) || 0
 
                         const diffCash = actualCash - expectedCash
                         const diffMomo = actualMomo - expectedMomo
@@ -2481,6 +2482,12 @@ export default function Owner() {
                               </div>
                             </div>
 
+                            {shiftCashout > 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(255, 152, 0, 0.1)', border: '1px solid rgba(255, 152, 0, 0.3)', borderRadius: 8 }}>
+                                <span style={{ fontWeight: 700, color: '#FF9800', fontSize: 13 }}>💰 Cashout (Given to Owner)</span>
+                                <span style={{ fontWeight: 800, color: '#FF9800', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
+                              </div>
+                            )}
                             {sh.notes && (
                               <div className="am-eod-recon-notes">
                                 <span className="am-eod-recon-notes-label">Cashier Notes:</span>
@@ -2503,6 +2510,7 @@ export default function Owner() {
                         <span>Staff</span>
                         <span>Start</span>
                         <span>End</span>
+                        <span>Cashout</span>
                         <span>Status</span>
                       </div>
                       {shifts.map((sh, idx) => (
@@ -2510,6 +2518,9 @@ export default function Owner() {
                           <span className="am-eod-cell-name">{sh.opened_by_user?.name || 'Staff'}</span>
                           <span>{sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                           <span>{sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'Active'}</span>
+                          <span style={{ color: (parseFloat(sh.cashout) || 0) > 0 ? '#FF9800' : '#888', fontWeight: (parseFloat(sh.cashout) || 0) > 0 ? 700 : 400 }}>
+                            {(parseFloat(sh.cashout) || 0) > 0 ? `${Number(parseFloat(sh.cashout)).toLocaleString()} RWF` : '—'}
+                          </span>
                           <span>
                             <span className={`badge ${sh.status === 'CLOSED' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: 10 }}>
                               {sh.status === 'CLOSED' ? 'CLOSED' : 'ACTIVE'}
