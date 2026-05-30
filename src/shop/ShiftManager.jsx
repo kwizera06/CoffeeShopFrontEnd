@@ -94,7 +94,7 @@ export default function ShiftManager() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="shift-dot" />
                 <span>
-                    Shift ACTIVE · Started {new Date(shift.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                    Shift ACTIVE · Started {new Date(shift.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })} 
                     <span className="muted" style={{ marginLeft: 8, opacity: 0.8, fontWeight: 400 }}>
                         by {shift.opened_by_user?.name || 'Staff'} (Cash: {shift.initial_cash} | MoMo: {shift.initial_momo})
                     </span>

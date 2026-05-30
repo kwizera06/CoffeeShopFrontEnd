@@ -308,7 +308,7 @@ export default function CashierDashboard() {
           {shift ? (
             <div className={`cashier-shift-pill`}>
               <div className="dot"></div>
-              Shift active • {new Date(shift.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | 
+              Shift active • {new Date(shift.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })} | 
               Cash: {Number(shift.initial_cash).toLocaleString()} | MoMo: {Number(shift.initial_momo).toLocaleString()}
             </div>
           ) : (
@@ -484,7 +484,7 @@ export default function CashierDashboard() {
                 <div key={o.id} className="cashier-order-card">
                   <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
                     <div className="table-badge">Table {o.tableNumber}</div>
-                    <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(o.createdAt).toLocaleTimeString()}</div>
+                    <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(o.createdAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
                   </div>
                   <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
@@ -552,11 +552,11 @@ export default function CashierDashboard() {
                      <input type="text" placeholder="Client Name" value={clientName} onChange={e=>setClientName(e.target.value)} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
                   )}
                   <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
-                        Print Receipt
+                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={()=>printReceipt({ shopName, order: o, paymentMethod: null })}>
+                        Print Preview
                      </button>
-                     <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={()=>cancelOrderRequest(o.id)}>
-                        Cancel
+                     <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
+                        Pay & Print
                      </button>
                   </div>
                 </div>

@@ -60,8 +60,8 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   root.id = 'print-root';
 
   const d = createdAt ? new Date(createdAt) : new Date();
-  const dateStr = d.toLocaleDateString();
-  const timeStr = d.toLocaleTimeString();
+  const dateStr = d.toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' });
+  const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' });
 
   const rows = lines.map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
@@ -140,8 +140,8 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   root.id = 'print-root';
 
   const d = order?.createdAt ? new Date(order.createdAt) : new Date();
-  const dateStr = d.toLocaleDateString();
-  const timeStr = d.toLocaleTimeString();
+  const dateStr = d.toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' });
+  const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' });
 
   const rows = (order?.lines ?? []).map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
@@ -163,7 +163,10 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   `}).join('');
 
   const total = Number(order?.total ?? 0).toLocaleString();
-  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : (paymentMethod === 'POS' ? 'POS/CARD' : 'CASH');
+  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : 
+                      paymentMethod === 'POS' ? 'POS/CARD' : 
+                      paymentMethod === 'LOAN' ? 'LOAN' : 
+                      paymentMethod === 'CASH' ? 'CASH' : 'UNPAID';
   const waiter = order?.waiterName || 'Staff';
 
   root.innerHTML = `

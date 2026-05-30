@@ -524,13 +524,13 @@ export default function Owner() {
     }
   }
 
-  async function editStaff(u) {
+  async function editStaff(staffMember) {
     setStaffForm({
-      id: u.id,
-      name: u.name,
-      email: u.email,
+      id: staffMember.id,
+      name: staffMember.name,
+      email: staffMember.email,
       password: '', // Don't show hashed password, leave blank for 'no change'
-      role: u.role
+      role: staffMember.role
     })
   }
 
@@ -557,7 +557,7 @@ export default function Owner() {
             <header className="am-header">
               <div className="am-title">
                 <h1>Admin Dashboard</h1>
-                <p>{reportDay === today ? "Today's overview" : 'Overview'} · {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                <p>{reportDay === today ? "Today's overview" : 'Overview'} · {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
               </div>
               <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div
@@ -569,7 +569,7 @@ export default function Owner() {
                   <span>
                     {reportDay === today
                       ? 'Today'
-                      : new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      : new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Africa/Kigali' })}
                   </span>
                 </div>
                 {reportDay !== today && (
@@ -1296,7 +1296,7 @@ export default function Owner() {
              </div>
              <div className="am-metric-card">
                 <div className="am-metric-header">LAST ADDED</div>
-                <div className="am-metric-value" style={{ fontSize: 18 }}>{staff.length > 0 ? new Date(Math.max(...staff.map(s => new Date(s.created_at || Date.now())))).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'N/A'}</div>
+                <div className="am-metric-value" style={{ fontSize: 18 }}>{staff.length > 0 ? new Date(Math.max(...staff.map(s => new Date(s.created_at || Date.now())))).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Africa/Kigali' }) : 'N/A'}</div>
                 <div className="am-metric-trend am-trend-neu">newest member</div>
              </div>
           </div>
@@ -1373,35 +1373,35 @@ export default function Owner() {
                      </thead>
                      <tbody>
                         {staff
-                          .filter(u => (staffFilter === 'ALL' || (staffFilter === 'OWNER' ? u.role === 'SHOP_ADMIN' : u.role === staffFilter)) && (
-                            u.name.toLowerCase().includes(staffSearch.toLowerCase()) ||
-                            u.email.toLowerCase().includes(staffSearch.toLowerCase())
+                          .filter(staffMember => (staffFilter === 'ALL' || (staffFilter === 'OWNER' ? staffMember.role === 'SHOP_ADMIN' : staffMember.role === staffFilter)) && (
+                            staffMember.name.toLowerCase().includes(staffSearch.toLowerCase()) ||
+                            staffMember.email.toLowerCase().includes(staffSearch.toLowerCase())
                           ))
-                          .map(u => {
-                             const initials = u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                             const isOwner = u.role === 'SHOP_ADMIN'
+                          .map(staffMember => {
+                             const initials = staffMember.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                             const isOwner = staffMember.role === 'SHOP_ADMIN'
                              const active = true; // Placeholder for real shift status
                              
                              return (
-                               <tr key={u.id}>
+                               <tr key={staffMember.id}>
                                   <td>
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <div className="am-loan-avatar">{initials}</div>
                                         <div>
-                                           <div style={{ fontWeight: 700 }}>{u.name}</div>
-                                           <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>Since {new Date(u.created_at || Date.now()).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</div>
+                                           <div style={{ fontWeight: 700 }}>{staffMember.name}</div>
+                                           <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>Since {new Date(staffMember.created_at || Date.now()).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'Africa/Kigali' })}</div>
                                         </div>
                                      </div>
                                   </td>
-                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 12 }}>{u.email}</td>
+                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 12 }}>{staffMember.email}</td>
                                   <td>
                                      <span style={{ 
                                        padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-                                       background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (u.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
-                                       color: isOwner ? '#16A34A' : (u.role === 'MANAGER' ? '#16A34A' : '#2196F3'),
-                                       border: `1px solid ${isOwner ? '#16A34A44' : (u.role === 'MANAGER' ? '#16A34A44' : '#2196F344')}`
+                                       background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (staffMember.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
+                                       color: isOwner ? '#16A34A' : (staffMember.role === 'MANAGER' ? '#16A34A' : '#2196F3'),
+                                       border: `1px solid ${isOwner ? '#16A34A44' : (staffMember.role === 'MANAGER' ? '#16A34A44' : '#2196F344')}`
                                      }}>
-                                       {isOwner ? 'Owner' : u.role.charAt(0) + u.role.slice(1).toLowerCase()}
+                                       {isOwner ? 'Owner' : staffMember.role.charAt(0) + staffMember.role.slice(1).toLowerCase()}
                                      </span>
                                   </td>
                                   <td>
@@ -1412,9 +1412,9 @@ export default function Owner() {
                                   </td>
                                   <td style={{ textAlign: 'right' }}>
                                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                        <button className="btn ghost tiny" onClick={() => editStaff(u)}>📝</button>
+                                        <button className="btn ghost tiny" onClick={() => editStaff(staffMember)}>📝</button>
                                         {!isOwner && (
-                                          <button className="btn ghost tiny" style={{ color: '#FF5252' }} onClick={() => deleteStaff(u.id)}>🗑️</button>
+                                          <button className="btn ghost tiny" style={{ color: '#FF5252' }} onClick={() => deleteStaff(staffMember.id)}>🗑️</button>
                                         )}
                                      </div>
                                   </td>
@@ -1681,7 +1681,7 @@ export default function Owner() {
                    <tbody>
                       {dailyRows.slice(0, 5).map((r, idx) => (
                         <tr key={idx}>
-                           <td style={{ fontSize: '12px', color: 'var(--admin-text-muted)' }}>{new Date(r.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</td>
+                           <td style={{ fontSize: '12px', color: 'var(--admin-text-muted)' }}>{new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Kigali' })}</td>
                            <td style={{ fontWeight: 600 }}>#{String(r.orderId).slice(0, 4)}</td>
                            <td style={{ fontSize: '13px' }}>
                              {r.rawItems?.slice(0, 2).map((ri, i) => `${ri.name}${i < 1 && r.rawItems.length > 1 ? ', ' : ''}`)}
@@ -1808,7 +1808,7 @@ export default function Owner() {
                     <label className="am-field">
                       <span>Unit</span>
                       <select className="am-input" value={ingForm.unit} onChange={e => setIngForm(f => ({...f, unit: e.target.value}))}>
-                        {['ml','g','pcs','l','kg','cups','shots','oz','bags'].map(u => <option key={u} value={u}>{u}</option>)}
+                        {['ml','g','pcs','l','kg','cups','shots','oz','bags'].map(unitOption => <option key={unitOption} value={unitOption}>{unitOption}</option>)}
                       </select>
                     </label>
                     <label className="am-field">
@@ -2099,7 +2099,7 @@ export default function Owner() {
                                       {req.notes?.toLowerCase().includes('urgent') ? 'Urgent' : 'Normal'}
                                    </div>
                                 </td>
-                                <td style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{new Date(req.created_at).toLocaleDateString('en-GB')}</td>
+                                <td style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{new Date(req.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}</td>
                                 <td>
                                    <span className="am-status-badge" style={{ 
                                      background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
@@ -2200,7 +2200,7 @@ export default function Owner() {
               <header className="am-header">
                 <div className="am-title">
                   <h1>End of Day Report</h1>
-                  <p>Complete business summary for {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                  <p>Complete business summary for {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
                 </div>
                 <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input
@@ -2408,20 +2408,22 @@ export default function Owner() {
                       <div className="am-eod-empty">No closed shifts for this date yet</div>
                     ) : (
                       shifts.filter(sh => sh.status === 'CLOSED').map((sh, idx) => {
-                        const expectedCash = ((parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)) - shiftCashout
+                        const shiftCashout = parseFloat(sh.cashout) || 0
+                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)
                         const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0)
                         const expectedPos = parseFloat(sh.total_pos_sales) || 0
                         const expectedTotal = expectedCash + expectedMomo + expectedPos
 
                         const actualCash = parseFloat(sh.actual_cash_on_hand) || 0
+                        const actualAccountedCash = actualCash + shiftCashout
                         const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
-                        const actualPos = parseFloat(sh.actual_pos_on_hand) || 0
-                        const actualTotal = actualCash + actualMomo + actualPos
-                        const shiftCashout = parseFloat(sh.cashout) || 0
+                        // POS is auto‑balanced: use expectedPos as actualPos
+                        const actualPos = expectedPos
+                        const actualTotal = actualAccountedCash + actualMomo + actualPos
 
-                        const diffCash = actualCash - expectedCash
+                        const diffCash = actualAccountedCash - expectedCash
                         const diffMomo = actualMomo - expectedMomo
-                        const diffPos = actualPos - expectedPos
+                        const diffPos = 0 // POS auto-balanced
                         const diffTotal = actualTotal - expectedTotal
 
                         return (
@@ -2429,9 +2431,9 @@ export default function Owner() {
                             <div className="am-eod-recon-header">
                               <span className="am-eod-recon-staff">{sh.opened_by_user?.name || 'Cashier'}</span>
                               <span className="am-eod-recon-time">
-                                {sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''} 
+                                {sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : ''} 
                                 {' → '}
-                                {sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                {sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : ''}
                               </span>
                             </div>
 
@@ -2451,7 +2453,7 @@ export default function Owner() {
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">Cash</span>
                                 <span>{Number(expectedCash).toLocaleString()}</span>
-                                <span>{Number(actualCash).toLocaleString()}</span>
+                                <span title={`Hand: ${actualCash} | Drop: ${shiftCashout}`}>{Number(actualAccountedCash).toLocaleString()}</span>
                                 <span style={{ color: diffCash === 0 ? '#16A34A' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
                                 </span>
@@ -2516,8 +2518,8 @@ export default function Owner() {
                       {shifts.map((sh, idx) => (
                         <div key={idx} className="am-eod-table-row">
                           <span className="am-eod-cell-name">{sh.opened_by_user?.name || 'Staff'}</span>
-                          <span>{sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
-                          <span>{sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'Active'}</span>
+                          <span>{sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : '-'}</span>
+                          <span>{sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : 'Active'}</span>
                           <span style={{ color: (parseFloat(sh.cashout) || 0) > 0 ? '#FF9800' : '#888', fontWeight: (parseFloat(sh.cashout) || 0) > 0 ? 700 : 400 }}>
                             {(parseFloat(sh.cashout) || 0) > 0 ? `${Number(parseFloat(sh.cashout)).toLocaleString()} RWF` : '—'}
                           </span>
@@ -2534,7 +2536,7 @@ export default function Owner() {
 
                 {/* ── Footer ── */}
                 <div className="am-eod-footer">
-                  <p>Report generated at {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · {new Date(reportDay).toLocaleDateString('en-GB')}</p>
+                  <p>Report generated at {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })} · {new Date(reportDay).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}</p>
                   <p>Olitech POS · End of Day Summary</p>
                 </div>
               </div>
@@ -2716,7 +2718,7 @@ export default function Owner() {
                                         ></div>
                                      </div>
                                   </td>
-                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 11 }}>{new Date(loan.created_at).toLocaleDateString('en-GB')}</td>
+                                  <td style={{ color: 'var(--admin-text-muted)', fontSize: 11 }}>{new Date(loan.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}</td>
                                   <td>
                                      <span className="am-status-badge" style={{ 
                                        background: loan.status === 'PAID' ? 'rgba(76,175,80,0.1)' : (loan.status === 'PARTIAL' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
