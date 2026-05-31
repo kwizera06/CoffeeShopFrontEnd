@@ -68,7 +68,11 @@ function getLineAst(is80mm) {
 }
 
 export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
-  const is80mm = shopName && shopName.toLowerCase().includes('inganji');
+  const is80mm = shopName && (
+    shopName.toLowerCase().includes('inganji') || 
+    shopName.toLowerCase().includes('steak') || 
+    shopName.toLowerCase().includes('house')
+  );
   const paperWidth = is80mm ? '80mm' : '58mm';
   const printableWidth = is80mm ? '72mm' : '54mm';
 
@@ -151,7 +155,11 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
 }
 
 export function printReceipt({ shopName, order, paymentMethod }) {
-  const is80mm = shopName && shopName.toLowerCase().includes('inganji');
+  const is80mm = shopName && (
+    shopName.toLowerCase().includes('inganji') || 
+    shopName.toLowerCase().includes('steak') || 
+    shopName.toLowerCase().includes('house')
+  );
   const paperWidth = is80mm ? '80mm' : '58mm';
   const printableWidth = is80mm ? '72mm' : '54mm';
 
