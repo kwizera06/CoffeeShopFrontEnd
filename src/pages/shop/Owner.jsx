@@ -1187,6 +1187,23 @@ export default function Owner() {
              </div>
           </div>
 
+          {/* Global Add Product button — always visible */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+            <button
+              className="btn primary"
+              onClick={() => {
+                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' });
+                setShowMenuForm(true);
+                setTimeout(() => {
+                  document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                  document.getElementById('menu-name-input')?.focus();
+                }, 100);
+              }}
+            >
+              + Add New Product
+            </button>
+          </div>
+
           <div className="stack" style={{ gap: 40 }}>
             {Object.entries(
               menu.reduce((acc, m) => {
