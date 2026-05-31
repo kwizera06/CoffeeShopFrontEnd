@@ -166,7 +166,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
     shopName.toLowerCase().includes('house')
   );
   const paperWidth = is80mm ? '80mm' : '58mm';
-  const printableWidth = is80mm ? '68mm' : '54mm';
+  const printableWidth = is80mm ? '62mm' : '54mm';
 
   // Clear any old tickets before starting
   document.querySelectorAll('#print-root').forEach(el => el.remove());
@@ -181,8 +181,14 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   const rows = (order?.lines ?? []).map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
-      ? `<div style="font-size: 9pt; padding-left: 10px; font-style: italic; text-align: left;">
+      ? `<div style="font-size: 9pt; padding-left: 10px; font-style: italic; text-align: left; font-weight: bold;">
           ${ings.map(i => `• ${esc(i.name)}: ${esc(i.qty)} ${esc(i.unit || '')}`).join('<br/>')}
+         </div>`
+      : '';
+
+    const qtyCalculationText = l.quantity > 1
+      ? `<div style="font-size: 9pt; color: #444; padding-left: 28px; font-style: italic; text-align: left; font-weight: normal; margin-top: 2px;">
+          (${esc(l.quantity)} x ${Number(l.price).toLocaleString()})
          </div>`
       : '';
 
@@ -192,8 +198,9 @@ export function printReceipt({ shopName, order, paymentMethod }) {
           <div style="font-weight: bold; margin-right: 8px; min-width: 20px;">${esc(l.quantity)}</div>
           <div style="word-break: break-word; padding-right: 4px;">${esc(l.itemName)}</div>
        </div>
-       <div style="width: 35%; text-align: right;">${Number(l.price).toLocaleString()}</div>
+       <div style="width: 35%; text-align: right;">${Number(l.price * l.quantity).toLocaleString()}</div>
     </div>
+    ${qtyCalculationText}
     ${ingText}
   `}).join('');
 
@@ -203,6 +210,13 @@ export function printReceipt({ shopName, order, paymentMethod }) {
                       paymentMethod === 'LOAN' ? 'LOAN' : 
                       paymentMethod === 'CASH' ? 'CASH' : 'UNPAID';
   const waiter = order?.waiterName || 'Staff';
+
+  const momoPayBlock = !is80mm ? `
+    <div style="text-align: center; margin: 12px 0 6px 0; font-size: 9.5pt; border: 1.5px dashed #000; padding: 6px; border-radius: 4px; font-weight: bold; line-height: 1.4;">
+       MOMO PAY CODE: 096751<br/>
+       Name: SHUGA LTD
+    </div>
+  ` : '';
 
   root.innerHTML = `
     <div style="
@@ -252,6 +266,9 @@ export function printReceipt({ shopName, order, paymentMethod }) {
          <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>
          <div style="font-size: 10pt;">Order #: ${esc(String(order?.id ?? 'NEW').split('-')[0])}</div>
       </div>
+      
+      ${momoPayBlock}
+
       <div style="text-align: center; font-size: 9pt; padding-top: 10px;">
         Thank you for your visit!
       </div>
