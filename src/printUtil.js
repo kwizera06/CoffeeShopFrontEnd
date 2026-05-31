@@ -23,13 +23,17 @@ function withThermalPage(paperWidth, printFn) {
         margin: 0 !important; 
         padding: 0 !important; 
         background: #fff !important; 
+        height: auto !important;
+        min-height: auto !important;
       }
       #print-root {
         display: block !important;
         position: static !important;
         width: ${paperWidth} !important;
+        height: auto !important;
+        min-height: auto !important;
         margin: 0 !important;
-        padding: 2mm ${sidePadding} 20mm ${sidePadding} !important;
+        padding: 2mm ${sidePadding} 6mm ${sidePadding} !important;
         box-sizing: border-box !important;
         color: #000 !important;
       }
