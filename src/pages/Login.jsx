@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, setSession } from '../api'
 import { isSupabaseConfigured, supabase } from '../supabaseClient.js'
+import olitechLogo from '../assets/Olitech Logo.png'
 import './Login.css'
 
 export default function Login() {
@@ -109,8 +110,8 @@ export default function Login() {
         {/* RIGHT PANEL — LOGIN FORM */}
         <div className="login-right-panel">
           <div className="login-logo-area">
-            <div className="login-logo-box">☕</div>
-            <div className="login-brand-name-new">Olitech Coffee</div>
+            <div className="login-logo-box"><img src={olitechLogo} alt="Olitech Hub" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
+            <div className="login-brand-name-new">Olitech Hub</div>
             <div className="login-tagline-new">POINT OF SALE SYSTEM</div>
           </div>
 

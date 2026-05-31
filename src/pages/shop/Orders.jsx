@@ -247,7 +247,7 @@ export default function Orders() {
       </header>
 
       {error && !editId ? <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div> : null}
-      {successMsg && !editId ? <div style={{ padding: '12px 16px', background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#16A34A', borderRadius: 12, marginBottom: 16, fontWeight: 600, fontSize: 13 }}>{successMsg}</div> : null}
+      {successMsg && !editId ? <div style={{ padding: '12px 16px', background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#1D3557', borderRadius: 12, marginBottom: 16, fontWeight: 600, fontSize: 13 }}>{successMsg}</div> : null}
 
       <div className="orders-layout">
         <div className="orders-menu-area">
@@ -265,7 +265,7 @@ export default function Orders() {
 
             return (
               <div key={group} style={{ marginBottom: 28 }}>
-                <h3 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#16A34A', borderBottom: '1px solid rgba(76,175,80,0.2)', paddingBottom: 8 }}>
+                <h3 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: '#1D3557', borderBottom: '1px solid rgba(76,175,80,0.2)', paddingBottom: 8 }}>
                    {groupTitle}
                 </h3>
                 
@@ -296,14 +296,14 @@ export default function Orders() {
                             return (
                               <div key={m.id} className={`orders-item-card ${qty > 0 ? 'selected' : ''}`} onClick={() => setQty(m.id, qty + 1)}>
                                 {qty > 0 && <div className="orders-item-qty">{qty}</div>}
-                                <div style={{ color: '#16A34A', fontSize: 20, marginBottom: 4 }}>{getItemIcon(m.name, m.category)}</div>
+                                <div style={{ color: '#1D3557', fontSize: 20, marginBottom: 4 }}>{getItemIcon(m.name, m.category)}</div>
                                 <div style={{ fontWeight: 600, fontSize: 12, lineHeight: 1.3, marginTop: 'auto' }}>{m.name}</div>
                                 <div style={{ fontSize: 11, color: '#A0A0A0' }}>{Number(m.price).toLocaleString()}</div>
                                 {qty > 0 && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
                                     <button type="button" style={{ background: 'rgba(255,82,82,0.1)', border: 'none', color: '#FF5252', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontWeight: 700 }} onClick={() => setQty(m.id, qty - 1)}>−</button>
                                     <span style={{ fontWeight: 700, fontSize: 13 }}>{qty}</span>
-                                    <button type="button" style={{ background: 'rgba(76,175,80,0.1)', border: 'none', color: '#16A34A', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontWeight: 700 }} onClick={() => setQty(m.id, qty + 1)}>+</button>
+                                    <button type="button" style={{ background: 'rgba(76,175,80,0.1)', border: 'none', color: '#1D3557', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', fontWeight: 700 }} onClick={() => setQty(m.id, qty + 1)}>+</button>
                                   </div>
                                 )}
                               </div>
@@ -341,7 +341,7 @@ export default function Orders() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                        <button type="button" style={{ background: 'transparent', border: 'none', color: '#FF5252', fontSize: 18, cursor: 'pointer' }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] - 1)}>−</button>
                        <span style={{ fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{qtyById[l.menuItemId]}</span>
-                       <button type="button" style={{ background: 'transparent', border: 'none', color: '#16A34A', fontSize: 18, cursor: 'pointer' }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] + 1)}>+</button>
+                       <button type="button" style={{ background: 'transparent', border: 'none', color: '#1D3557', fontSize: 18, cursor: 'pointer' }} onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] + 1)}>+</button>
                     </div>
                   </div>
                 ))}
@@ -358,7 +358,7 @@ export default function Orders() {
 
               <button 
                 type="button" 
-                style={{ width: '100%', background: !shift ? '#333' : '#16A34A', color: !shift ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: busy || !shift ? 'not-allowed' : 'pointer', boxShadow: shift ? '0 4px 15px rgba(76,175,80,0.3)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ width: '100%', background: !shift ? '#333' : '#1D3557', color: !shift ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: busy || !shift ? 'not-allowed' : 'pointer', boxShadow: shift ? '0 4px 15px rgba(76,175,80,0.3)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 disabled={busy || !shift} 
                 onClick={sendToKitchen}
               >

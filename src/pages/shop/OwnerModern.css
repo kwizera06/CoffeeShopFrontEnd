@@ -3,9 +3,9 @@
   --admin-bg: #F3F4F6;
   --admin-card-bg: #FFFFFF;
   --admin-card-border: #E5E7EB;
-  --admin-accent-green: #16A34A;
-  --admin-accent-green-glass: rgba(22, 163, 74, 0.08);
-  --admin-accent-brown: #16A34A;
+  --admin-accent: #1D3557;
+  --admin-accent-glass: rgba(29, 53, 87, 0.08);
+  --admin-accent-orange: #E8751A;
   --admin-text-main: #111827;
   --admin-text-muted: #6B7280;
 }
@@ -54,7 +54,7 @@
 }
 
 .am-date-picker:hover {
-  border-color: var(--admin-accent-green);
+  border-color: var(--admin-accent);
 }
 
 /* Metrics Grid - 4 on top, 2 on mid */
@@ -110,8 +110,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--admin-accent-green-glass);
-  color: var(--admin-accent-green);
+  background: var(--admin-accent-glass);
+  color: var(--admin-accent);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -263,7 +263,7 @@
 
 .btn.ghost:hover {
   background: #F3F4F6 !important;
-  border-color: #16A34A !important;
+  border-color: #1D3557 !important;
 }
 
 .am-order-main {
@@ -273,8 +273,8 @@
 }
 
 .am-order-tbl {
-  background: #F0FDF4;
-  color: #16A34A;
+  background: #EDF2F9;
+  color: #1D3557;
   padding: 4px 10px;
   border-radius: 8px;
   font-weight: 700;
@@ -344,8 +344,8 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: var(--admin-accent-green-glass);
-  color: var(--admin-accent-green);
+  background: var(--admin-accent-glass);
+  color: var(--admin-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -373,7 +373,7 @@
 .am-staff-amt {
   font-size: 14px;
   font-weight: 700;
-  color: var(--admin-accent-green);
+  color: var(--admin-accent);
 }
 
 .am-staff-count {
@@ -384,8 +384,8 @@
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(22, 163, 74, 0.1);
-  border-left-color: var(--admin-accent-green);
+  border: 4px solid rgba(29, 53, 87, 0.1);
+  border-left-color: var(--admin-accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -400,8 +400,8 @@
 }
 
 .glow-active {
-  box-shadow: 0 0 20px rgba(22, 163, 74, 0.15) !important;
-  border-color: var(--admin-accent-green) !important;
+  box-shadow: 0 0 20px rgba(29, 53, 87, 0.15) !important;
+  border-color: var(--admin-accent) !important;
   transition: all 0.5s ease;
 }
 
@@ -466,8 +466,8 @@
   outline: none;
 }
 .am-input:focus {
-  border-color: #16A34A !important;
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1) !important;
+  border-color: #1D3557 !important;
+  box-shadow: 0 0 0 4px rgba(29, 53, 87, 0.1) !important;
 }
 .am-type-toggle {
   display: flex;
@@ -490,7 +490,7 @@
 }
 .am-type-toggle button.active {
   background: #FFFFFF;
-  color: #16A34A;
+  color: #1D3557;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .am-checkbox-label {
@@ -708,7 +708,7 @@
   border-radius: 6px;
 }
 
-.am-balance-pos { color: #16A34A; }
+.am-balance-pos { color: #1D3557; }
 .am-balance-neg { color: #DC2626; }
 
 .am-method-summary-grid {
@@ -749,14 +749,14 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #F0FDF4;
+  background: #EDF2F9;
   border: 1px solid var(--admin-card-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 14px;
-  color: #16A34A;
+  color: #1D3557;
 }
 
 .am-filter-pills {
@@ -785,9 +785,9 @@
 }
 
 .am-pill.active {
-  background: #F0FDF4;
-  border-color: #16A34A;
-  color: #16A34A;
+  background: #EDF2F9;
+  border-color: #1D3557;
+  color: #1D3557;
 }
 
 .am-loan-bar-bg {
@@ -887,19 +887,19 @@
 
 .orders-item-card:hover {
   transform: translateY(-2px);
-  border-color: var(--admin-accent-green);
+  border-color: var(--admin-accent);
 }
 
 .orders-item-card.selected {
-  border-color: var(--admin-accent-green);
-  background: #F0FDF4;
+  border-color: var(--admin-accent);
+  background: #EDF2F9;
 }
 
 .orders-item-qty {
   position: absolute;
   right: 8px;
   top: 8px;
-  background: var(--admin-accent-green);
+  background: var(--admin-accent);
   color: #fff;
   border-radius: 50%;
   width: 20px;
@@ -961,7 +961,7 @@
     right: 0;
     max-height: 50vh;
     border-radius: 20px 20px 0 0;
-    border-top: 2px solid var(--admin-accent-green);
+    border-top: 2px solid var(--admin-accent);
     box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
     z-index: 100;
   }
@@ -1001,8 +1001,8 @@
 }
 
 .billing-order-card.active {
-  border-color: var(--admin-accent-green);
-  background: #F0FDF4;
+  border-color: var(--admin-accent);
+  background: #EDF2F9;
 }
 
 .billing-detail {
@@ -1033,7 +1033,7 @@
     right: 0;
     max-height: 50vh;
     border-radius: 20px 20px 0 0;
-    border-top: 2px solid var(--admin-accent-green);
+    border-top: 2px solid var(--admin-accent);
     box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
     z-index: 100;
   }
@@ -1084,8 +1084,8 @@
 }
 
 .am-input:focus {
-  border-color: var(--admin-accent-green);
-  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.1);
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px rgba(29, 53, 87, 0.1);
 }
 
 .am-input::placeholder {
@@ -1700,7 +1700,7 @@
   padding: 12px 24px 4px;
   font-size: 22px;
   font-weight: 800;
-  color: #16A34A;
+  color: #1D3557;
 }
 
 .am-drilldown-list {
@@ -1762,7 +1762,7 @@
 .am-drilldown-amount {
   font-size: 13px;
   font-weight: 700;
-  color: #16A34A;
+  color: #1D3557;
   min-width: 80px;
   text-align: right;
 }
@@ -1776,7 +1776,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #16A34A;
+  color: #1D3557;
   padding: 10px 8px 6px;
   border-bottom: 1px solid #E5E7EB;
   margin-bottom: 4px;
@@ -1814,7 +1814,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #16A34A;
+  color: #1D3557;
   margin: 0 0 20px 0;
   padding-bottom: 12px;
   border-bottom: 1px solid #E5E7EB;
@@ -1935,7 +1935,7 @@
 
 .am-eod-rank {
   font-size: 11px;
-  color: #16A34A;
+  color: #1D3557;
   font-weight: 800;
   min-width: 24px;
 }
@@ -1997,7 +1997,7 @@
   align-items: center;
   gap: 16px;
   padding: 10px 14px;
-  background: #F0FDF4;
+  background: #EDF2F9;
   border: 1px solid #BBF7D0;
   border-radius: 8px;
   margin-bottom: 14px;

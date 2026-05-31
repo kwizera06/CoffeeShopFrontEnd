@@ -4,7 +4,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #F3F4F6;
+  background: #F0F2F5;
   padding: 24px;
 }
 
@@ -54,7 +54,7 @@
 }
 
 .login-left-content h1 {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 28px;
   font-weight: 700;
   color: #FFFFFF;
@@ -64,7 +64,7 @@
 
 .login-subline {
   font-size: 14px;
-  color: #16A34A;
+  color: #E8751A;
   font-weight: 500;
   margin-bottom: 24px;
 }
@@ -82,19 +82,19 @@
 .feature-icon-box {
   width: 30px;
   height: 30px;
-  background: rgba(22,163,74,0.25);
+  background: rgba(232,117,26,0.25);
   border-radius: 6px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #22C55E;
+  color: #F5A623;
 }
 
 .feature-title {
   font-size: 11px;
   font-weight: 700;
-  color: #DCFCE7;
+  color: #FDE8C8;
   display: block;
   margin-bottom: 3px;
 }
@@ -125,15 +125,19 @@
 }
 
 .login-logo-box {
-  font-size: 40px;
+  width: 80px;
+  height: 80px;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .login-brand-name-new {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 24px;
   font-weight: 700;
-  color: #111827;
+  color: #0F1B2D;
   margin-bottom: 4px;
 }
 
@@ -183,9 +187,9 @@
 }
 
 .login-input-wrapper input:focus {
-  border-color: #16A34A;
+  border-color: #1D3557;
   background: #FFFFFF;
-  box-shadow: 0 0 0 4px rgba(22,163,74,0.1);
+  box-shadow: 0 0 0 4px rgba(29,53,87,0.1);
 }
 
 .login-input-icon-left {
@@ -219,14 +223,14 @@
 }
 
 .login-input-icon-right:hover {
-  background: rgba(22,163,74,0.08);
-  color: #16A34A;
+  background: rgba(29,53,87,0.08);
+  color: #1D3557;
 }
 
 .login-btn-primary {
   width: 100%;
   height: 54px;
-  background: #16A34A;
+  background: linear-gradient(135deg, #1D3557 0%, #274B73 100%);
   color: #FFFFFF;
   border: none;
   border-radius: 12px;
@@ -236,14 +240,14 @@
   margin-top: 10px;
   margin-bottom: 20px;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(22,163,74,0.2);
+  box-shadow: 0 4px 12px rgba(29,53,87,0.2);
   font-family: 'DM Sans', sans-serif;
 }
 
 .login-btn-primary:hover {
-  background: #15803D;
+  background: #15294A;
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(22,163,74,0.3);
+  box-shadow: 0 6px 16px rgba(29,53,87,0.3);
 }
 
 .login-btn-primary:active {

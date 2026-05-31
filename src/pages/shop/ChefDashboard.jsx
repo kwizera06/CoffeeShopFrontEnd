@@ -101,7 +101,7 @@ export default function ChefDashboard() {
           <h1>Chef Dashboard</h1>
           <p>Kitchen supplies & inventory monitor</p>
         </div>
-        <button className="btn ghost" onClick={loadInventory} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px 16px', borderRadius: 12, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+        <button className="btn ghost" onClick={loadInventory} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#111827', padding: '8px 16px', borderRadius: 12, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
            <HiOutlineArrowPath /> Refresh
         </button>
       </header>
@@ -120,7 +120,7 @@ export default function ChefDashboard() {
           
           {lowStock.length === 0 ? (
             <div style={{ padding: '32px 0', textAlign: 'center' }}>
-              <HiOutlineCheckCircle size={32} style={{ color: '#4CAF50', opacity: 0.5, marginBottom: 8 }} />
+              <HiOutlineCheckCircle size={32} style={{ color: '#1D3557', opacity: 0.5, marginBottom: 8 }} />
               <p style={{ color: '#A0A0A0', fontSize: 13 }}>Inventory levels are healthy.</p>
             </div>
           ) : (
@@ -134,7 +134,7 @@ export default function ChefDashboard() {
                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                      <span style={{ fontWeight: 700, color: '#FF5722', fontSize: 14 }}>{item.stock_level} {item.unit}</span>
                      <button 
-                       style={{ background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                       style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', color: '#1D3557', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                        onClick={() => {
                          if (!supplyItems.find(s => s.name === item.name)) {
                            setSupplyItems([...supplyItems, { name: item.name, quantity: item.min_threshold, unit: item.unit }])
@@ -153,7 +153,7 @@ export default function ChefDashboard() {
         {/* Right Column: New Requisition */}
         <div className="am-chart-card" style={{ position: 'relative' }}>
            {success && (
-             <div style={{ position: 'absolute', top: 16, right: 16, background: '#4CAF50', color: 'white', padding: '6px 14px', borderRadius: 20, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, zIndex: 10, fontWeight: 700 }}>
+             <div style={{ position: 'absolute', top: 16, right: 16, background: '#1D3557', color: 'white', padding: '6px 14px', borderRadius: 20, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, zIndex: 10, fontWeight: 700 }}>
                <HiOutlineCheckCircle /> Submitted!
              </div>
            )}
@@ -186,13 +186,13 @@ export default function ChefDashboard() {
              </label>
           </div>
           
-          <button onClick={addSupplyItem} style={{ width: '100%', marginTop: 16, background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={addSupplyItem} style={{ width: '100%', marginTop: 16, background: '#EDF2F9', border: '1px solid #B8CCE4', color: '#1D3557', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             + Add to List
           </button>
 
           {supplyItems.length > 0 && (
-            <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)', borderRadius: 12, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 800, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: 1, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 8 }}>
+            <div style={{ marginTop: 16, background: '#F9FAFB', borderRadius: 12, padding: 12, border: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 800, color: '#A0A0A0', textTransform: 'uppercase', letterSpacing: 1, paddingBottom: 8, borderBottom: '1px solid #E5E7EB', marginBottom: 8 }}>
                  <span>ITEM</span>
                  <span>QTY</span>
               </div>
@@ -214,7 +214,7 @@ export default function ChefDashboard() {
           </label>
 
           <button 
-            style={{ width: '100%', marginTop: 16, background: supplyItems.length === 0 ? '#222' : '#4CAF50', color: supplyItems.length === 0 ? '#666' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: supplyItems.length === 0 ? 'not-allowed' : 'pointer', boxShadow: supplyItems.length > 0 ? '0 4px 15px rgba(76,175,80,0.3)' : 'none' }}
+            style={{ width: '100%', marginTop: 16, background: supplyItems.length === 0 ? '#E5E7EB' : '#1D3557', color: supplyItems.length === 0 ? '#9CA3AF' : '#fff', border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: supplyItems.length === 0 ? 'not-allowed' : 'pointer', boxShadow: supplyItems.length > 0 ? '0 4px 15px rgba(29,53,87,0.3)' : 'none' }}
             disabled={busy || supplyItems.length === 0}
             onClick={submitRequisition}
           >

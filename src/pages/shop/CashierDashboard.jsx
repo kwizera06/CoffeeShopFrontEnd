@@ -4,6 +4,7 @@ import { api, getSession, clearSession } from '../../api'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
+import olitechLogo from '../../assets/Olitech Logo.png'
 import './CashierDashboard.css'
 import {
   HiOutlineMagnifyingGlass,
@@ -300,8 +301,8 @@ export default function CashierDashboard() {
       {/* Top Header */}
       <header className="cashier-header">
         <div className="cashier-header-brand">
-          <div className="cashier-brand-icon"><IoCafeOutline /></div>
-          {shopName}
+          <img src={olitechLogo} alt="Olitech Hub" style={{ height: 56, width: 'auto', objectFit: 'contain', marginRight: 12 }} />
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#1D3557' }}>{shopName}</span>
         </div>
         
         <div className="cashier-header-actions">

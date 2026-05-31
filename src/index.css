@@ -1,19 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 
 :root {
   /* Login-specific tokens */
-  --coffee-espresso: #111827;
-  --coffee-dark: #1F2937;
-  --coffee-brown: #16A34A;
-  --coffee-amber: #16A34A;
-  --coffee-gold: #22C55E;
+  --coffee-espresso: #0F1B2D;
+  --coffee-dark: #1D3557;
+  --coffee-brown: #E8751A;
+  --coffee-amber: #E8751A;
+  --coffee-gold: #F5A623;
   --coffee-cream: #FFFFFF;
-  --coffee-warm: #F3F4F6;
+  --coffee-warm: #F0F2F5;
   --coffee-border: #E5E7EB;
   --coffee-muted: #6B7280;
   --coffee-label: #374151;
   --coffee-hint: #9CA3AF;
-  --page-bg: #F3F4F6;
+  --page-bg: #F0F2F5;
 }
 
 /* ΓöÇΓöÇ Typography ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
@@ -197,7 +197,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3.5px rgba(22, 163, 74, 0.1), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 0 0 3.5px rgba(29, 53, 87, 0.1), inset 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 textarea {
@@ -224,12 +224,12 @@ select {
   background: var(--gradient-brand);
   color: #FFFFFF;
   border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(22,163,74,0.2);
+  box-shadow: 0 2px 8px rgba(29,53,87,0.2);
 }
 
 .btn.primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 16px rgba(22,163,74,0.3);
+  box-shadow: 0 4px 16px rgba(29,53,87,0.3);
   transform: translateY(-1px);
 }
 
@@ -252,8 +252,7 @@ select {
 }
 
 .btn.good:hover {
-  background: #BBF7D0;
-  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.15);
+  box-shadow: 0 4px 12px rgba(29, 53, 87, 0.15);
   transform: translateY(-1px);
 }
 
@@ -355,7 +354,7 @@ select {
 }
 
 .menu-card:hover {
-  border-color: #16A34A;
+  border-color: #1D3557;
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
   transform: translateY(-4px);
 }
@@ -365,9 +364,9 @@ select {
 }
 
 .menu-card.selected {
-  border-color: #16A34A;
-  background: #F0FDF4;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1), 0 4px 12px rgba(0,0,0,0.05);
+  border-color: #1D3557;
+  background: #EDF2F9;
+  box-shadow: 0 0 0 3px rgba(29, 53, 87, 0.1), 0 4px 12px rgba(0,0,0,0.05);
 }
 
 .menu-card.selected::before {
@@ -422,7 +421,7 @@ select {
   right: 10px;
   font-size: 11px;
   font-weight: 700;
-  background: #16A34A;
+  background: #E8751A;
   color: #FFFFFF;
   width: 22px;
   height: 22px;
@@ -430,7 +429,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+  box-shadow: 0 2px 6px rgba(232, 117, 26, 0.3);
 }
 
 /* ΓöÇΓöÇ Quantity Row ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
@@ -476,11 +475,11 @@ select {
 .qty-btn.plus {
   background: var(--gradient-brand);
   color: #FFFFFF;
-  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+  box-shadow: 0 2px 6px rgba(29, 53, 87, 0.25);
 }
 
 .qty-btn.plus:hover {
-  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.35);
+  box-shadow: 0 4px 10px rgba(29, 53, 87, 0.35);
   transform: scale(1.1);
 }
 
@@ -532,7 +531,7 @@ select {
 .list-item.active {
   border-color: var(--accent);
   background: var(--bg-active);
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1), var(--shadow-md);
+  box-shadow: 0 0 0 3px rgba(29, 53, 87, 0.1), var(--shadow-md);
 }
 
 .list-item-header {
@@ -605,9 +604,9 @@ select {
   color: var(--text-primary);
   padding: 14px 16px;
   margin-top: 12px;
-  background: #F0FDF4;
+  background: #EDF2F9;
   border-radius: var(--radius-lg);
-  border: 1px solid #BBF7D0;
+  border: 1px solid #B8CCE4;
 }
 
 .detail-total-price {
@@ -668,17 +667,17 @@ select {
 }
 
 .shop-topbar-brand-icon {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
-  background: var(--gradient-brand);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 17px;
   color: #FFFFFF;
   flex-shrink: 0;
-  box-shadow: 0 2px 10px rgba(22, 163, 74, 0.2);
+  box-shadow: none;
 }
 
 .shop-topbar-brand-name {
@@ -732,7 +731,7 @@ select {
 
 .nav-btn.active {
   background: #FFFFFF;
-  color: #16A34A;
+  color: #1D3557;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   font-weight: 600;
 }
@@ -748,7 +747,7 @@ select {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #F0FDF4;
+  background: #EDF2F9;
   border: 1.5px solid #E5E7EB;
   display: flex;
   align-items: center;
@@ -776,9 +775,9 @@ select {
 }
 
 .topbar-icon-btn:hover {
-  background: #F0FDF4;
-  color: #16A34A;
-  border-color: #BBF7D0;
+  background: #EDF2F9;
+  color: #1D3557;
+  border-color: #B8CCE4;
 }
 
 /* ΓöÇΓöÇ Dashboard Stat Cards ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
@@ -826,14 +825,14 @@ select {
 
 /* Per-card color variants (all coffee-themed) */
 .card:nth-child(1) {
-  --card-accent: linear-gradient(90deg, #16A34A, #15803D);
-  --card-glow: rgba(22, 163, 74, 0.06);
+  --card-accent: linear-gradient(90deg, #1D3557, #274B73);
+  --card-glow: rgba(29, 53, 87, 0.06);
 }
 
-/* Espresso */
+/* Orange accent */
 .card:nth-child(2) {
-  --card-accent: linear-gradient(90deg, #22C55E, #16A34A);
-  --card-glow: rgba(22, 163, 74, 0.06);
+  --card-accent: linear-gradient(90deg, #E8751A, #F5A623);
+  --card-glow: rgba(232, 117, 26, 0.06);
 }
 
 /* Mahogany to Caramel */
@@ -1338,9 +1337,9 @@ select {
   font-weight: 600;
   padding: 14px 18px;
   margin-top: 10px;
-  background: #F0FDF4;
+  background: #EDF2F9;
   border-radius: var(--radius-lg);
-  border: 1px solid #BBF7D0;
+  border: 1px solid #B8CCE4;
 }
 
 /* Receipt / order line */
@@ -1466,15 +1465,15 @@ select {
 }
 
 .shift-bar.open {
-  background: #DCFCE7;
-  color: #15803D;
-  border-color: #BBF7D0;
+  background: #EDF2F9;
+  color: #1D3557;
+  border-color: #B8CCE4;
 }
 
 .shift-bar.open .shift-dot {
-  background: #16A34A;
+  background: #1D3557;
   animation: pulse-dot 1.5s ease-in-out infinite;
-  box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.5);
+  box-shadow: 0 0 0 0 rgba(29, 53, 87, 0.5);
 }
 
 .shift-bar.closed {
@@ -1567,7 +1566,7 @@ select {
 .segmented.xl button.on {
   background: var(--gradient-brand);
   color: #FFFFFF;
-  box-shadow: 0 2px 12px rgba(22, 163, 74, 0.2);
+  box-shadow: 0 2px 12px rgba(29, 53, 87, 0.2);
   font-weight: 600;
   transform: none;
 }
@@ -1931,8 +1930,8 @@ select {
 
 .m-link:hover,
 .m-link.active {
-  background: #F0FDF4;
-  color: #16A34A;
+  background: #EDF2F9;
+  color: #1D3557;
 }
 
 .mobile-divider {
@@ -1982,7 +1981,7 @@ select {
 }
 
 .b-link.active {
-  color: #16A34A;
+  color: #E8751A;
 }
 
 .b-link svg {

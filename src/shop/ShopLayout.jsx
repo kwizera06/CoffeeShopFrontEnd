@@ -21,7 +21,7 @@ import {
   HiOutlineBars3,
   HiOutlineXMark
 } from 'react-icons/hi2'
-import { IoCafeOutline } from 'react-icons/io5'
+import olitechLogo from '../assets/Olitech Logo.png'
 import './ShopModern.css'
 
 function Shell() {
@@ -65,7 +65,7 @@ function Shell() {
       {/* Modern Top Header */}
       <header className="modern-header">
         <div className="modern-header-left">
-          <div className="modern-logo"><IoCafeOutline style={{ color: 'white' }} /></div>
+          <div className="modern-logo"><img src={olitechLogo} alt="Olitech Hub" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
           <div className="modern-shop-info">
             <h3>{context?.name || "Mama Prince's Coffee Shop"}</h3>
             <p>{role === 'SHOP_ADMIN' ? 'Shop Admin' : 'Shop Staff'}</p>
@@ -101,7 +101,7 @@ function Shell() {
         {/* Global Navigation Sidebar */}
         <aside className={`am-app-sidebar ${sidebarOpen ? 'open' : ''}`}>
            <div className="am-sidebar-header">
-              <h2 className="am-sidebar-logo">Olitech POS</h2>
+              <h2 className="am-sidebar-logo">Olitech Hub</h2>
               <HiOutlineXMark className="am-sidebar-close-btn" onClick={() => setSidebarOpen(false)} />
            </div>
            
@@ -128,7 +128,7 @@ function Shell() {
         <main className="modern-viewport">
           <div className="am-mobile-toggle-bar">
              <HiOutlineBars3 className="am-hamburger-btn" onClick={() => setSidebarOpen(true)} />
-             <div className="am-mobile-logo-text">Olitech POS</div>
+             <div className="am-mobile-logo-text">Olitech Hub</div>
           </div>
           {role !== 'SHOP_ADMIN' && <ShiftManager />}
           {/* Inject sidebar controller for children if needed */}

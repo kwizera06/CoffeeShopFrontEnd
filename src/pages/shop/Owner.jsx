@@ -102,7 +102,11 @@ export default function Owner() {
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })
   
   const [actionMenu, setActionMenu] = useState(null)
+  const [productActionMenu, setProductActionMenu] = useState(null)
+  const [stockHistory, setStockHistory] = useState(null)
   const longPressTimer = useRef(null)
+  const productLongPressTimer = useRef(null)
+  const productLongPressed = useRef(false)
 
   const handlePointerDown = (ing) => {
     longPressTimer.current = setTimeout(() => {
@@ -111,6 +115,61 @@ export default function Owner() {
   }
   const handlePointerUp = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
+  const handleProductPointerDown = (e, m) => {
+    if (e && e.stopPropagation) e.stopPropagation()
+    productLongPressed.current = false
+    productLongPressTimer.current = setTimeout(() => {
+      productLongPressed.current = true
+      setProductActionMenu(m)
+    }, 400)
+  }
+  const handleProductPointerUp = (e) => {
+    if (productLongPressTimer.current) clearTimeout(productLongPressTimer.current)
+  }
+  const handleProductClick = (m) => {
+    if (productLongPressed.current) {
+      productLongPressed.current = false
+      return
+    }
+    editMenu(m)
+    setShowMenuForm(true)
+    setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }
+
+  async function openProductHistory(m) {
+    setProductActionMenu(null)
+    setError('')
+    try {
+      const isSimple = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category)
+      let itemId = m.id
+      let itemType = 'MENU_ITEM'
+      if (!isSimple) {
+        // For recipe-based items, try to find the first ingredient
+        const recipe = await api(`/api/shop/owner/recipes/${m.id}`)
+        if (recipe && recipe.length > 0 && recipe[0].ingredient_id) {
+          itemId = recipe[0].ingredient_id
+          itemType = 'INGREDIENT'
+        }
+      }
+      const data = await api(`/api/shop/owner/stock-history?itemId=${itemId}&itemType=${itemType}`)
+      setStockHistory({ ...data, productName: m.name, itemType })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function deleteProduct(id) {
+    if (!window.confirm('Remove this product?')) return
+    setError('')
+    try {
+      await api(`/api/shop/menu/${id}`, { method: 'DELETE' })
+      await reloadCore()
+      setProductActionMenu(null)
+    } catch (err) {
+      setError(err.message)
+    }
   }
   
   async function deleteIngredient(id) {
@@ -576,7 +635,7 @@ export default function Owner() {
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setReportDay(today); }}
-                    style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#16A34A', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#1D3557', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
                     Today
                   </button>
@@ -664,7 +723,7 @@ export default function Owner() {
             {/* Status Badges Grid */}
             <div className="am-status-grid">
               <div className="am-mini-status" onClick={() => openDrilldown('completed')}>
-                 <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#16A34A' }}><HiOutlineCheckCircle /></div>
+                 <div className="am-status-icon" style={{ background: 'rgba(76,175,80,0.1)', color: '#1D3557' }}><HiOutlineCheckCircle /></div>
                  <div className="am-status-info">
                    <h4>{overview?.todayPaidOrdersCount ?? 0}</h4>
                    <p>Completed</p>
@@ -758,7 +817,7 @@ export default function Owner() {
                   <h3>Payment Methods</h3>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>💵 Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
-                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#16A34A' }} /></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#1D3557' }} /></div>
                   </div>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>📱 MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
@@ -777,7 +836,7 @@ export default function Owner() {
                   <h3>Payment Methods</h3>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>Cash</span> <span>{Number(overview?.todayCashSales || 0).toLocaleString()} RWF</span></div>
-                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#16A34A' }} /></div>
+                     <div className="am-progress-bar"><div className="am-progress-fill" style={{ width: `${(overview?.todayCashSales / overview?.todayRevenue) * 100 || 0}%`, background: '#1D3557' }} /></div>
                   </div>
                   <div className="am-progress-item">
                      <div className="am-progress-label"><span>MoMo</span> <span>{Number(overview?.todayMomoSales || 0).toLocaleString()} RWF</span></div>
@@ -845,7 +904,7 @@ export default function Owner() {
           </header>
 
           {showMenuForm && <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
-            <h3 style={{ marginBottom: 24, color: '#16A34A', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
+            <h3 style={{ marginBottom: 24, color: '#1D3557', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
               {menuForm.id ? 'Edit Product' : `Add Product to ${menuForm.category}`}
             </h3>
 
@@ -945,7 +1004,7 @@ export default function Owner() {
 
             {menuForm.isRecipe && (
               <div className="item-recipe-area anim-fade" style={{ marginTop: 24, padding: 20, background: '#F9FAFB', borderRadius: 16, border: '1px solid #E5E7EB' }}>
-                 <h4 style={{ color: '#16A34A', marginBottom: 16, fontSize: '15px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                 <h4 style={{ color: '#1D3557', marginBottom: 16, fontSize: '15px', display: 'flex', alignItems: 'center', gap: 8 }}>
                    <HiOutlineDocumentText /> Recipe Ingredients
                  </h4>
                  
@@ -1142,7 +1201,7 @@ export default function Owner() {
               <div key={cat} className="am-category-group am-animate">
                 <div className="row-between" style={{ marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: '20px', color: '#111827', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
-                    <span style={{ color: '#16A34A' }}>•</span> {cat}
+                    <span style={{ color: '#1D3557' }}>•</span> {cat}
                     <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 400 }}>{items.length} Products</span>
                   </h3>
                   <button 
@@ -1196,7 +1255,7 @@ export default function Owner() {
                         const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
 
                         return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer' }} onClick={() => { editMenu(m); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation' }} onClick={() => handleProductClick(m)} onMouseDown={e => handleProductPointerDown(e, m)} onMouseUp={e => handleProductPointerUp(e)} onMouseLeave={e => handleProductPointerUp(e)} onTouchStart={e => handleProductPointerDown(e, m)} onTouchEnd={e => handleProductPointerUp(e)} onTouchMove={e => handleProductPointerUp(e)} onContextMenu={e => e.preventDefault()}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {m.name}
@@ -1231,14 +1290,20 @@ export default function Owner() {
                                 {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
                               </div>
                             )}
-                            <div style={{ color: '#16A34A', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
+                            <div style={{ color: '#1D3557', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
                             <div style={{ alignSelf: 'center' }}>
                               <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
                                 {m.available ? 'AVAILABLE' : 'HIDDEN'}
                               </span>
                             </div>
-                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center', fontSize: '11px', color: '#9CA3AF' }}>
-                              Click to edit
+                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center' }}>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setProductActionMenu(m); }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF', padding: '4px 8px', borderRadius: 6 }}
+                                title="Actions"
+                              >
+                                ⋮
+                              </button>
                             </div>
                           </div>
                         );
@@ -1352,8 +1417,8 @@ export default function Owner() {
                       onClick={() => setStaffFilter(f)}
                     >
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
-                       {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#16A34A' }} />}
-                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#16A34A' }} />}
+                       {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#1D3557' }} />}
+                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#1D3557' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                        {f}
                     </div>
@@ -1398,15 +1463,15 @@ export default function Owner() {
                                      <span style={{ 
                                        padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
                                        background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (staffMember.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
-                                       color: isOwner ? '#16A34A' : (staffMember.role === 'MANAGER' ? '#16A34A' : '#2196F3'),
-                                       border: `1px solid ${isOwner ? '#16A34A44' : (staffMember.role === 'MANAGER' ? '#16A34A44' : '#2196F344')}`
+                                       color: isOwner ? '#1D3557' : (staffMember.role === 'MANAGER' ? '#1D3557' : '#2196F3'),
+                                       border: `1px solid ${isOwner ? '#1D355744' : (staffMember.role === 'MANAGER' ? '#1D355744' : '#2196F344')}`
                                      }}>
                                        {isOwner ? 'Owner' : staffMember.role.charAt(0) + staffMember.role.slice(1).toLowerCase()}
                                      </span>
                                   </td>
                                   <td>
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                        <span className="am-priority-dot" style={{ background: active ? '#16A34A' : '#B0B0B0' }}></span>
+                                        <span className="am-priority-dot" style={{ background: active ? '#1D3557' : '#B0B0B0' }}></span>
                                         {active ? 'Active' : 'Off shift'}
                                      </div>
                                   </td>
@@ -1464,7 +1529,7 @@ export default function Owner() {
                <div className="am-report-sel-item" style={{ background: 'var(--admin-card-bg)', padding: '16px', borderRadius: '12px' }}>
                   <label>Monthly Report</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                     <HiOutlineCalendarDays style={{ color: '#16A34A' }} />
+                     <HiOutlineCalendarDays style={{ color: '#1D3557' }} />
                      <span>{month.year} - {new Date(0, month.month - 1).toLocaleString('default', { month: 'long' })}</span>
                      <div style={{ display: 'flex', gap: 4 }}>
                         <input 
@@ -1525,7 +1590,7 @@ export default function Owner() {
                )}
                
                {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
-                 const colors = ['#16A34A', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
+                 const colors = ['#1D3557', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
                  const catColor = colors[idx % colors.length];
                  const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
                  
@@ -1628,7 +1693,7 @@ export default function Owner() {
                             contentStyle={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 12, color: '#111827' }}
                             cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                           />
-                          <Bar dataKey="total" fill="#16A34A" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="total" fill="#1D3557" radius={[2, 2, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -1691,7 +1756,7 @@ export default function Owner() {
                               <span style={{ 
                                 padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800,
                                 background: r.methodLabel === 'Cash' ? 'rgba(76,175,80,0.1)' : (r.methodLabel === 'MoMo' ? 'rgba(255,152,0,0.1)' : 'rgba(33,150,243,0.1)'),
-                                color: r.methodLabel === 'Cash' ? '#16A34A' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
+                                color: r.methodLabel === 'Cash' ? '#1D3557' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
                               }}>
                                 {r.methodLabel.toUpperCase()}
                               </span>
@@ -1941,7 +2006,7 @@ export default function Owner() {
                                  <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
                                     <div 
                                       className="am-prod-bar-fill" 
-                                      style={{ width: '100%', backgroundColor: '#16A34A' }}
+                                      style={{ width: '100%', backgroundColor: '#1D3557' }}
                                     ></div>
                                  </div>
                               </td>
@@ -1950,7 +2015,7 @@ export default function Owner() {
                               <td>
                                  <span style={{ 
                                    padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                                   background: 'rgba(76,175,80,0.1)', color: '#16A34A'
+                                   background: 'rgba(76,175,80,0.1)', color: '#1D3557'
                                  }}>
                                    HEALTHY
                                  </span>
@@ -1978,6 +2043,79 @@ export default function Owner() {
                      <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setIngForm(actionMenu); setActionMenu(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️ Edit Item</button>
                      <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteIngredient(actionMenu.id)}>🗑️ Delete Item</button>
                      <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setActionMenu(null)}>Cancel</button>
+                  </div>
+               </div>
+             </div>,
+             document.body
+           )}
+
+           {/* Product Long-Press Action Menu */}
+           {productActionMenu && createPortal(
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setProductActionMenu(null)}>
+               <div className="am-animate" style={{ background: '#FFF', padding: 24, borderRadius: 20, width: '90%', maxWidth: 300, boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: '#111827', textAlign: 'center' }}>Manage {productActionMenu.name}</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                     <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setProductActionMenu(null); editMenu(productActionMenu); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>✏️ Edit Product</button>
+                     <button className="btn xl" style={{ width: '100%', background: '#EDF2F9', color: '#1D3557', borderColor: '#B8CCE4' }} onClick={() => openProductHistory(productActionMenu)}>📜 Stock History</button>
+                     <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteProduct(productActionMenu.id)}>🗑️ Delete Product</button>
+                     <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setProductActionMenu(null)}>Cancel</button>
+                  </div>
+               </div>
+             </div>,
+             document.body
+           )}
+
+           {/* Stock History Modal */}
+           {stockHistory && createPortal(
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setStockHistory(null)}>
+               <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>📜 Stock History — {stockHistory.productName}</h3>
+                     <button onClick={() => setStockHistory(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+                  </div>
+                  <div style={{ padding: 20, overflowY: 'auto' }}>
+                     {/* Summary Cards */}
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Purchased</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>+{stockHistory.summary?.totalPurchased ?? 0}</div>
+                        </div>
+                        <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Sold</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>-{stockHistory.summary?.totalSold ?? 0}</div>
+                        </div>
+                        <div style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#1D3557', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Net Change</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#1D3557', marginTop: 4 }}>{(stockHistory.summary?.totalPurchased ?? 0) - (stockHistory.summary?.totalSold ?? 0)}</div>
+                        </div>
+                     </div>
+                     {/* Movement List */}
+                     {stockHistory.history?.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No stock movements recorded yet.</p>
+                     ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                           {stockHistory.history.map((mv, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                 <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                                    background: mv.movement_type === 'SALE_DEDUCTION' ? '#FEE2E2' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#EDF2F9' : '#F0FDF4'),
+                                    color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#1D3557' : '#16A34A')
+                                 }}>
+                                    {mv.movement_type === 'SALE_DEDUCTION' ? '−' : '+'}
+                                 </div>
+                                 <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mv.notes || mv.movement_type.replace(/_/g, ' ')}</div>
+                                    <div style={{ fontSize: 11, color: '#6B7280' }}>{new Date(mv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                 </div>
+                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : '#16A34A' }}>
+                                       {mv.movement_type === 'SALE_DEDUCTION' ? '' : '+'}{mv.quantity}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
                   </div>
                </div>
              </div>,
@@ -2044,7 +2182,7 @@ export default function Owner() {
                   >
                      {f === 'ALL' && <HiOutlineArchiveBox size={14} />}
                      {f === 'PENDING' && <HiOutlineBell size={14} style={{ color: '#FF9800' }} />}
-                     {f === 'APPROVED' && <HiOutlineCheckCircle size={14} style={{ color: '#16A34A' }} />}
+                     {f === 'APPROVED' && <HiOutlineCheckCircle size={14} style={{ color: '#1D3557' }} />}
                      {f === 'REJECTED' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
                      {f === 'RECEIVED' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                      {f}
@@ -2103,7 +2241,7 @@ export default function Owner() {
                                 <td>
                                    <span className="am-status-badge" style={{ 
                                      background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
-                                     color: req.status === 'APPROVED' ? '#16A34A' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
+                                     color: req.status === 'APPROVED' ? '#1D3557' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
                                    }}>
                                      {req.status}
                                    </span>
@@ -2220,7 +2358,7 @@ export default function Owner() {
                   <div className="am-eod-grid-4">
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Revenue</span>
-                      <span className="am-eod-stat-value" style={{ color: '#16A34A' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Cost</span>
@@ -2228,7 +2366,7 @@ export default function Owner() {
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Net Profit</span>
-                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#16A34A' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Profit Margin</span>
@@ -2298,9 +2436,9 @@ export default function Owner() {
                       <div key={cat} className="am-eod-table-row">
                         <span className="am-eod-cell-name">{cat}</span>
                         <span>{data.qty}</span>
-                        <span style={{ color: '#16A34A' }}>{Number(data.revenue).toLocaleString()}</span>
+                        <span style={{ color: '#1D3557' }}>{Number(data.revenue).toLocaleString()}</span>
                         <span style={{ color: '#E57373' }}>{Number(data.cost).toLocaleString()}</span>
-                        <span style={{ color: data.revenue - data.cost >= 0 ? '#16A34A' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
+                        <span style={{ color: data.revenue - data.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -2325,8 +2463,8 @@ export default function Owner() {
                           <span className="am-eod-cell-cat">{p.category}</span>
                         </span>
                         <span>{p.qty}</span>
-                        <span style={{ color: '#16A34A' }}>{Number(p.revenue).toLocaleString()}</span>
-                        <span style={{ color: p.revenue - p.cost >= 0 ? '#16A34A' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
+                        <span style={{ color: '#1D3557' }}>{Number(p.revenue).toLocaleString()}</span>
+                        <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -2346,7 +2484,7 @@ export default function Owner() {
                       <div key={idx} className="am-eod-table-row">
                         <span className="am-eod-cell-name">{s.name}</span>
                         <span>{s.count}</span>
-                        <span style={{ color: '#16A34A' }}>{Number(s.amount).toLocaleString()} RWF</span>
+                        <span style={{ color: '#1D3557' }}>{Number(s.amount).toLocaleString()} RWF</span>
                       </div>
                     ))}
                   </div>
@@ -2454,7 +2592,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">Cash</span>
                                 <span>{Number(expectedCash).toLocaleString()}</span>
                                 <span title={`Hand: ${actualCash} | Drop: ${shiftCashout}`}>{Number(actualAccountedCash).toLocaleString()}</span>
-                                <span style={{ color: diffCash === 0 ? '#16A34A' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffCash === 0 ? '#1D3557' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
                                 </span>
                               </div>
@@ -2462,7 +2600,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">MoMo</span>
                                 <span>{Number(expectedMomo).toLocaleString()}</span>
                                 <span>{Number(actualMomo).toLocaleString()}</span>
-                                <span style={{ color: diffMomo === 0 ? '#16A34A' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffMomo === 0 ? '#1D3557' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffMomo > 0 ? '+' : ''}{Number(diffMomo).toLocaleString()}
                                 </span>
                               </div>
@@ -2470,7 +2608,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">POS/Card</span>
                                 <span>{Number(expectedPos).toLocaleString()}</span>
                                 <span>{Number(actualPos).toLocaleString()}</span>
-                                <span style={{ color: diffPos === 0 ? '#16A34A' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffPos === 0 ? '#1D3557' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
                                   {diffPos > 0 ? '+' : ''}{Number(diffPos).toLocaleString()}
                                 </span>
                               </div>
@@ -2478,7 +2616,7 @@ export default function Owner() {
                                 <span className="am-eod-recon-label">TOTAL</span>
                                 <span style={{ fontWeight: 700 }}>{Number(expectedTotal).toLocaleString()} RWF</span>
                                 <span style={{ fontWeight: 700 }}>{Number(actualTotal).toLocaleString()} RWF</span>
-                                <span style={{ color: diffTotal === 0 ? '#16A34A' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
+                                <span style={{ color: diffTotal === 0 ? '#1D3557' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
                                   {diffTotal > 0 ? '+' : ''}{Number(diffTotal).toLocaleString()} RWF
                                 </span>
                               </div>
@@ -2663,7 +2801,7 @@ export default function Owner() {
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
                        {f === 'UNPAID' && <HiOutlineExclamationTriangle size={14} style={{ color: '#FF5252' }} />}
                        {f === 'PARTIAL' && <HiOutlineArrowTrendingUp size={14} style={{ color: '#FF9800' }} />}
-                       {f === 'PAID' && <HiOutlineCheckCircle size={14} style={{ color: '#16A34A' }} />}
+                       {f === 'PAID' && <HiOutlineCheckCircle size={14} style={{ color: '#1D3557' }} />}
                        {f}
                     </div>
                   ))}
@@ -2704,7 +2842,7 @@ export default function Owner() {
                                   <td style={{ fontWeight: 700 }}>{Number(loan.amount).toLocaleString()} RWF</td>
                                   <td>
                                      <div style={{ fontSize: 11 }}>
-                                        <span style={{ color: '#16A34A', fontWeight: 600 }}>{totalPaid.toLocaleString()} paid</span>
+                                        <span style={{ color: '#1D3557', fontWeight: 600 }}>{totalPaid.toLocaleString()} paid</span>
                                         {' · '}
                                         <span style={{ color: balance > 0 ? '#FF9800' : 'var(--admin-text-muted)' }}>{balance.toLocaleString()} left</span>
                                      </div>
@@ -2713,7 +2851,7 @@ export default function Owner() {
                                           className="am-loan-bar-fill" 
                                           style={{ 
                                             width: `${percent}%`, 
-                                            backgroundColor: percent === 100 ? '#16A34A' : '#FF9800'
+                                            backgroundColor: percent === 100 ? '#1D3557' : '#FF9800'
                                           }}
                                         ></div>
                                      </div>
@@ -2722,7 +2860,7 @@ export default function Owner() {
                                   <td>
                                      <span className="am-status-badge" style={{ 
                                        background: loan.status === 'PAID' ? 'rgba(76,175,80,0.1)' : (loan.status === 'PARTIAL' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
-                                       color: loan.status === 'PAID' ? '#16A34A' : (loan.status === 'PARTIAL' ? '#FF9800' : '#FF5252')
+                                       color: loan.status === 'PAID' ? '#1D3557' : (loan.status === 'PARTIAL' ? '#FF9800' : '#FF5252')
                                      }}>
                                        {loan.status}
                                      </span>
@@ -2790,7 +2928,7 @@ export default function Owner() {
                     <div className="am-drilldown-row-nums">
                       <span className="am-drilldown-qty">{item.qty}x</span>
                       {item.profit !== undefined ? (
-                        <span className="am-drilldown-amount" style={{ color: item.profit >= 0 ? '#16A34A' : '#E57373' }}>
+                        <span className="am-drilldown-amount" style={{ color: item.profit >= 0 ? '#1D3557' : '#E57373' }}>
                           {Number(item.profit).toLocaleString()} RWF
                         </span>
                       ) : (
