@@ -5,9 +5,13 @@ export function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
-function withThermalPage(printFn) {
+function withThermalPage(paperWidth, printFn) {
   const style = document.createElement('style');
   style.id = 'print-page-override';
+  
+  const is80mm = paperWidth === '80mm';
+  const sidePadding = is80mm ? '4mm' : '2mm';
+
   style.textContent = `
     @page { 
       margin: 0; 
@@ -23,9 +27,9 @@ function withThermalPage(printFn) {
       #print-root {
         display: block !important;
         position: static !important;
-        width: 100% !important;
+        width: ${paperWidth} !important;
         margin: 0 !important;
-        padding: 5mm 5mm 20mm 5mm !important;
+        padding: 2mm ${sidePadding} 20mm ${sidePadding} !important;
         box-sizing: border-box !important;
         color: #000 !important;
       }
@@ -53,6 +57,10 @@ const lineDash = `<div style="border-bottom: 1px dashed #000; margin: 6px 0; wid
 const lineAst = `<div style="border-bottom: 2px dotted #000; margin: 8px 0; width: 100%;"></div>`;
 
 export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
+  const is80mm = shopName && shopName.toLowerCase().includes('inganji');
+  const paperWidth = is80mm ? '80mm' : '58mm';
+  const printableWidth = is80mm ? '72mm' : '54mm';
+
   // Clear any old tickets before starting
   document.querySelectorAll('#print-root').forEach(el => el.remove());
 
@@ -80,11 +88,10 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
     `;
   }).join('');
 
-  // max-width set to 54mm for 58mm thermal printers
   root.innerHTML = `
     <div style="
       width: 100%;
-      max-width: 54mm;
+      max-width: ${printableWidth};
       margin: 0;
       font-family: 'Courier New', Courier, monospace;
       font-size: 10pt;
@@ -127,12 +134,16 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   `;
 
   document.body.appendChild(root);
-  withThermalPage(() => {
+  withThermalPage(paperWidth, () => {
     window.print();
   });
 }
 
 export function printReceipt({ shopName, order, paymentMethod }) {
+  const is80mm = shopName && shopName.toLowerCase().includes('inganji');
+  const paperWidth = is80mm ? '80mm' : '58mm';
+  const printableWidth = is80mm ? '72mm' : '54mm';
+
   // Clear any old tickets before starting
   document.querySelectorAll('#print-root').forEach(el => el.remove());
 
@@ -172,7 +183,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   root.innerHTML = `
     <div style="
       width: 100%;
-      max-width: 54mm;
+      max-width: ${printableWidth};
       margin: 0;
       font-family: 'Courier New', Courier, monospace;
       font-size: 10pt;
@@ -223,7 +234,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   `;
 
   document.body.appendChild(root);
-  withThermalPage(() => {
+  withThermalPage(paperWidth, () => {
     window.print();
   });
 }

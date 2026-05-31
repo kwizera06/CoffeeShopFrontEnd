@@ -104,9 +104,9 @@ export default function Owner() {
   const [actionMenu, setActionMenu] = useState(null)
   const [productActionMenu, setProductActionMenu] = useState(null)
   const [stockHistory, setStockHistory] = useState(null)
+  const [ingredientStockHistory, setIngredientStockHistory] = useState(null)
+  const [linkedProducts, setLinkedProducts] = useState(null)
   const longPressTimer = useRef(null)
-  const productLongPressTimer = useRef(null)
-  const productLongPressed = useRef(false)
 
   const handlePointerDown = (ing) => {
     longPressTimer.current = setTimeout(() => {
@@ -117,25 +117,37 @@ export default function Owner() {
     if (longPressTimer.current) clearTimeout(longPressTimer.current)
   }
 
-  const handleProductPointerDown = (e, m) => {
-    if (e && e.stopPropagation) e.stopPropagation()
-    productLongPressed.current = false
+  const productLongPressTimer = useRef(null)
+
+  const handleProductPointerDown = (m) => {
+    if (productLongPressTimer.current) clearTimeout(productLongPressTimer.current)
     productLongPressTimer.current = setTimeout(() => {
-      productLongPressed.current = true
       setProductActionMenu(m)
-    }, 400)
+    }, 500)
   }
-  const handleProductPointerUp = (e) => {
+  const handleProductPointerUp = () => {
     if (productLongPressTimer.current) clearTimeout(productLongPressTimer.current)
   }
-  const handleProductClick = (m) => {
-    if (productLongPressed.current) {
-      productLongPressed.current = false
-      return
+
+  async function openIngredientHistory(ing) {
+    setActionMenu(null)
+    setError('')
+    try {
+      const data = await api(`/api/shop/owner/stock-history?itemId=${ing.id}&itemType=INGREDIENT`)
+      setIngredientStockHistory({ ...data, productName: ing.name, unit: ing.unit })
+    } catch (err) {
+      setError(err.message || 'Failed to load stock history')
     }
-    editMenu(m)
-    setShowMenuForm(true)
-    setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }
+
+  function openLinkedProducts(ing) {
+    setActionMenu(null)
+    // Find all menu items that use this ingredient
+    const linked = menu.filter(m => {
+      const recipe = m.recipe || m.ingredients || m.recipe_items || []
+      return recipe.some(r => r.ingredient_id === ing.id || r.id === ing.id)
+    })
+    setLinkedProducts({ ingredient: ing, products: linked })
   }
 
   async function openProductHistory(m) {
@@ -463,6 +475,16 @@ export default function Owner() {
       fetchRequestedOrders();
     }
   }, [allowed, tab, fetchRequestedOrders]);
+
+  // Close all modals when switching tabs
+  useEffect(() => {
+    setActionMenu(null)
+    setProductActionMenu(null)
+    setStockHistory(null)
+    setIngredientStockHistory(null)
+    setLinkedProducts(null)
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }, [tab])
 
   async function updateRequestedOrderStatus(id, status) {
     setError('');
@@ -1237,106 +1259,116 @@ export default function Owner() {
                 </div>
 
                 <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
-                  <div className="table modern-list-table">
-                    {(() => {
-                      const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(cat);
-                      const gridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
-                      return (
-                        <div className="row head" style={{ gridTemplateColumns: gridCols, background: '#F9FAFB', padding: '16px 24px' }}>
-                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</div>
-                          {isSimpleListing && <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</div>}
-                          {isSimpleListing && <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</div>}
-                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</div>
-                          <div style={{ color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</div>
-                          <div style={{ textAlign: 'right', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}></div>
-                        </div>
-                      )
-                    })()}
-                    {items
-                      .filter(i => 
-                        i.name.toLowerCase().includes(menuSearch.toLowerCase()) || 
-                        (i.category && i.category.toLowerCase().includes(menuSearch.toLowerCase()))
-                      )
-                      .map((m) => {
-                        const recipeList = m.recipe || m.recipe_items || m.ingredients || m.product_recipes || m.ingredients_list || [];
-                        const hasRecipeArray = Array.isArray(recipeList) && recipeList.length > 0;
-                        
-                        // Categories that MUST be recipe-based
-                        const isRecipeCategory = ['Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Fast Food', 'Main Food / Meals', 'Juice & Smoothies', 'Bakery & Desserts'].includes(m.category);
-                        
-                        // Categories that MUST be simple stock (bottles/cans)
-                        const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category);
-                        
-                        const isRecipeBased = (m.is_recipe || hasRecipeArray || isRecipeCategory) && !isSimpleCategory;
-                        const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(m.category);
-                        const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
+                  {(() => {
+                    const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(cat);
+                    const matchingItems = items.filter(i => 
+                      i.name.toLowerCase().includes(menuSearch.toLowerCase()) || 
+                      (i.category && i.category.toLowerCase().includes(menuSearch.toLowerCase()))
+                    );
 
-                        // Check if recipe is actually configured
-                        const recipeConfigured = hasRecipeArray && recipeList.length > 0;
-                        const needsRecipe = isRecipeBased && !recipeConfigured;
-                        
-                        // Row border color: purple=has recipe, orange=needs recipe, blue=simple stock
-                        const rowBorderColor = isRecipeBased 
-                          ? (needsRecipe ? '#F39C12' : '#9b59b6') 
-                          : '#3498db';
+                    if (matchingItems.length === 0) {
+                      return <p style={{ padding: '24px', color: '#6B7280', textAlign: 'center', margin: 0 }}>No matching products found.</p>;
+                    }
 
-                        return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation', borderLeft: `4px solid ${rowBorderColor}` }} onClick={() => handleProductClick(m)} onMouseDown={e => handleProductPointerDown(e, m)} onMouseUp={e => handleProductPointerUp(e)} onMouseLeave={e => handleProductPointerUp(e)} onTouchStart={e => handleProductPointerDown(e, m)} onTouchEnd={e => handleProductPointerUp(e)} onTouchMove={e => handleProductPointerUp(e)} onContextMenu={e => e.preventDefault()}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                {m.name}
-                                {m.available ? null : <span style={{ opacity: 0.3, fontSize: '10px' }}>(Hidden)</span>}
-                              </div>
-                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                                {isRecipeBased ? (
-                                  <span className="badge" style={{ background: needsRecipe ? 'rgba(243, 156, 18, 0.12)' : 'rgba(155, 89, 182, 0.12)', color: needsRecipe ? '#d35400' : '#9b59b6', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
-                                    {needsRecipe ? '⚠️ NEEDS RECIPE' : '🍳 NEEDS PREPARATION'}
-                                  </span>
-                                ) : (
-                                  <span className="badge" style={{ background: 'rgba(52, 152, 219, 0.12)', color: '#2980b9', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
-                                    ✅ READY TO SELL
-                                  </span>
-                                )}
-                                
-                                {needsRecipe && (
-                                  <span className="badge" style={{ background: 'rgba(231, 76, 60, 0.12)', color: '#c0392b', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12 }}>
-                                    <HiOutlineExclamationTriangle style={{ marginRight: 4, display: 'inline', verticalAlign: 'middle' }} /> NO RECIPE CONFIGURED
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {isSimpleListing && (
-                              <div style={{ color: 'rgba(52, 152, 219, 1)', fontWeight: 600, alignSelf: 'center' }}>
-                                {m.stock_level !== undefined && m.stock_level !== null ? m.stock_level : 0}
-                              </div>
-                            )}
-                            {isSimpleListing && (
-                              <div style={{ color: '#6B7280', alignSelf: 'center' }}>
-                                {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
-                              </div>
-                            )}
-                            <div style={{ color: '#1D3557', fontWeight: 700, alignSelf: 'center' }}>{Number(m.price).toLocaleString()} RWF</div>
-                            <div style={{ alignSelf: 'center' }}>
-                              <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
-                                {m.available ? 'AVAILABLE' : 'HIDDEN'}
-                              </span>
-                            </div>
-                            <div style={{ justifyContent: 'flex-end', alignSelf: 'center' }}>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setProductActionMenu(m); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF', padding: '4px 8px', borderRadius: 6 }}
-                                title="Actions"
+                    return (
+                      <table className="am-modern-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                            <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</th>
+                            {isSimpleListing && <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</th>}
+                            {isSimpleListing && <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</th>}
+                            <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</th>
+                            <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matchingItems.map((m) => {
+                            const recipeList = m.recipe || m.recipe_items || m.ingredients || m.product_recipes || m.ingredients_list || [];
+                            const hasRecipeArray = Array.isArray(recipeList) && recipeList.length > 0;
+                            
+                            // Categories that MUST be recipe-based
+                            const isRecipeCategory = ['Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Fast Food', 'Main Food / Meals', 'Juice & Smoothies', 'Bakery & Desserts'].includes(m.category);
+                            
+                            // Categories that MUST be simple stock (bottles/cans)
+                            const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category);
+                            
+                            const isRecipeBased = (m.is_recipe || hasRecipeArray || isRecipeCategory) && !isSimpleCategory;
+
+                            // Check if recipe is actually configured
+                            const recipeConfigured = hasRecipeArray && recipeList.length > 0;
+                            const needsRecipe = isRecipeBased && !recipeConfigured;
+                            
+                            // Row border color: purple=has recipe, orange=needs recipe, blue=simple stock
+                            const rowBorderColor = isRecipeBased 
+                              ? (needsRecipe ? '#F39C12' : '#9b59b6') 
+                              : '#3498db';
+
+                            return (
+                              <tr 
+                                key={m.id} 
+                                style={{ 
+                                  borderBottom: '1px solid #F3F4F6', 
+                                  cursor: 'pointer', 
+                                  borderLeft: `4px solid ${rowBorderColor}`,
+                                  userSelect: 'none',
+                                  WebkitUserSelect: 'none'
+                                }} 
+                                onPointerDown={() => handleProductPointerDown(m)} 
+                                onPointerUp={handleProductPointerUp} 
+                                onPointerLeave={handleProductPointerUp} 
+                                onContextMenu={e => e.preventDefault()}
                               >
-                                ⋮
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                                <td style={{ padding: '16px 24px' }}>
+                                  <div style={{ fontWeight: 600, color: '#111827' }}>
+                                    {m.name}
+                                    {m.available ? null : <span style={{ opacity: 0.3, fontSize: '10px', marginLeft: 8 }}>(Hidden)</span>}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                                    {isRecipeBased ? (
+                                      <span className="badge" style={{ background: needsRecipe ? 'rgba(243, 156, 18, 0.12)' : 'rgba(155, 89, 182, 0.12)', color: needsRecipe ? '#d35400' : '#9b59b6', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
+                                        {needsRecipe ? '⚠️ NEEDS RECIPE' : '🍳 NEEDS PREPARATION'}
+                                      </span>
+                                    ) : (
+                                      <span className="badge" style={{ background: 'rgba(52, 152, 219, 0.12)', color: '#2980b9', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
+                                        ✅ READY TO SELL
+                                      </span>
+                                    )}
+                                    
+                                    {needsRecipe && (
+                                      <span className="badge" style={{ background: 'rgba(231, 76, 60, 0.12)', color: '#c0392b', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12 }}>
+                                        <HiOutlineExclamationTriangle style={{ marginRight: 4, display: 'inline', verticalAlign: 'middle' }} /> NO RECIPE CONFIGURED
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                {isSimpleListing && (
+                                  <td style={{ padding: '16px 24px', color: 'rgba(52, 152, 219, 1)', fontWeight: 600 }}>
+                                    {m.stock_level !== undefined && m.stock_level !== null ? m.stock_level : 0}
+                                  </td>
+                                )}
+                                {isSimpleListing && (
+                                  <td style={{ padding: '16px 24px', color: '#6B7280' }}>
+                                    {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
+                                  </td>
+                                )}
+                                <td style={{ padding: '16px 24px', color: '#1D3557', fontWeight: 700 }}>
+                                  {Number(m.price).toLocaleString()} RWF
+                                </td>
+                                <td style={{ padding: '16px 24px' }}>
+                                  <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
+                                    {m.available ? 'AVAILABLE' : 'HIDDEN'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
                 </div>
-              ))}
+              </div>
+            ))}
               {menu.length === 0 && (
                 <div className="am-card" style={{ padding: 48, textAlign: 'center' }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>📦</div>
@@ -1972,6 +2004,7 @@ export default function Owner() {
                              <th>MIN</th>
                              <th>PRICE</th>
                              <th>STATUS</th>
+                             <th style={{ textAlign: 'right' }}></th>
                           </tr>
                        </thead>
                        <tbody>
@@ -2009,6 +2042,9 @@ export default function Owner() {
                                      {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
                                    </span>
                                 </td>
+                                <td style={{ textAlign: 'right' }}>
+                                  <button onClick={(e) => { e.stopPropagation(); setActionMenu(ing); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
+                                </td>
                               </tr>
                             ))}
                        </tbody>
@@ -2034,6 +2070,7 @@ export default function Owner() {
                            <th>MIN</th>
                            <th>PRICE</th>
                            <th>STATUS</th>
+                           <th style={{ textAlign: 'right' }}></th>
                         </tr>
                      </thead>
                      <tbody>
@@ -2065,6 +2102,9 @@ export default function Owner() {
                                    HEALTHY
                                  </span>
                               </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <button onClick={(e) => { e.stopPropagation(); setActionMenu(ing); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
+                              </td>
                             </tr>
                           ))}
                      </tbody>
@@ -2086,6 +2126,8 @@ export default function Owner() {
                   <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: '#111827', textAlign: 'center' }}>Manage {actionMenu.name}</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                      <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setIngForm(actionMenu); setActionMenu(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️ Edit Item</button>
+                     <button className="btn xl" style={{ width: '100%', background: '#EDF2F9', color: '#1D3557', borderColor: '#B8CCE4' }} onClick={() => openIngredientHistory(actionMenu)}>📜 Stock History</button>
+                     <button className="btn xl" style={{ width: '100%', background: '#E8F5E9', color: '#2E7D32', borderColor: '#A5D6A7' }} onClick={() => openLinkedProducts(actionMenu)}>🔗 Linked Products</button>
                      <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteIngredient(actionMenu.id)}>🗑️ Delete Item</button>
                      <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setActionMenu(null)}>Cancel</button>
                   </div>
@@ -2157,6 +2199,95 @@ export default function Owner() {
                                     </div>
                                     <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
                                  </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
+                  </div>
+               </div>
+             </div>,
+             document.body
+           )}
+
+           {/* Ingredient Stock History Modal */}
+           {ingredientStockHistory && createPortal(
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setIngredientStockHistory(null)}>
+               <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>📜 Stock History — {ingredientStockHistory.productName}</h3>
+                     <button onClick={() => setIngredientStockHistory(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+                  </div>
+                  <div style={{ padding: 20, overflowY: 'auto' }}>
+                     {/* Summary Cards */}
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Purchased</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>+{ingredientStockHistory.summary?.totalPurchased ?? 0}</div>
+                        </div>
+                        <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Sold</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>-{ingredientStockHistory.summary?.totalSold ?? 0}</div>
+                        </div>
+                        <div style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                           <div style={{ fontSize: 11, color: '#1D3557', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Net Change</div>
+                           <div style={{ fontSize: 22, fontWeight: 800, color: '#1D3557', marginTop: 4 }}>{(ingredientStockHistory.summary?.totalPurchased ?? 0) - (ingredientStockHistory.summary?.totalSold ?? 0)}</div>
+                        </div>
+                     </div>
+                     {/* Movement List */}
+                     {ingredientStockHistory.history?.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No stock movements recorded yet.</p>
+                     ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                           {ingredientStockHistory.history.map((mv, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                 <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                                    background: mv.movement_type === 'SALE_DEDUCTION' ? '#FEE2E2' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#EDF2F9' : '#F0FDF4'),
+                                    color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#1D3557' : '#16A34A')
+                                 }}>
+                                    {mv.movement_type === 'SALE_DEDUCTION' ? '−' : '+'}
+                                 </div>
+                                 <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mv.notes || mv.movement_type.replace(/_/g, ' ')}</div>
+                                    <div style={{ fontSize: 11, color: '#6B7280' }}>{new Date(mv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                                 </div>
+                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : '#16A34A' }}>
+                                       {mv.movement_type === 'SALE_DEDUCTION' ? '' : '+'}{mv.quantity}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
+                  </div>
+               </div>
+             </div>,
+             document.body
+           )}
+
+           {/* Linked Products Modal */}
+           {linkedProducts && createPortal(
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setLinkedProducts(null)}>
+               <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>🔗 Products Using {linkedProducts.ingredient?.name}</h3>
+                     <button onClick={() => setLinkedProducts(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+                  </div>
+                  <div style={{ padding: 20, overflowY: 'auto' }}>
+                     {linkedProducts.products.length === 0 ? (
+                        <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No products use this ingredient.</p>
+                     ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                           {linkedProducts.products.map(p => (
+                              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderRadius: 12, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                 <div>
+                                    <div style={{ fontWeight: 600, color: '#111827', fontSize: 14 }}>{p.name}</div>
+                                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{p.category} · {Number(p.price).toLocaleString()} RWF</div>
+                                 </div>
+                                 <span className={`badge ${p.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
+                                    {p.available ? 'AVAILABLE' : 'HIDDEN'}
+                                 </span>
                               </div>
                            ))}
                         </div>
