@@ -57,17 +57,17 @@ function withThermalPage(paperWidth, printFn) {
 
 // Text-character separators that print 100% reliably on ALL thermal printers
 function getLineEq(is80mm) {
-  const chars = is80mm ? '='.repeat(46) : '='.repeat(32);
+  const chars = is80mm ? '='.repeat(40) : '='.repeat(32);
   return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
 }
 
 function getLineDash(is80mm) {
-  const chars = is80mm ? '-'.repeat(46) : '-'.repeat(32);
+  const chars = is80mm ? '-'.repeat(40) : '-'.repeat(32);
   return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
 }
 
 function getLineAst(is80mm) {
-  const chars = is80mm ? '*'.repeat(46) : '*'.repeat(32);
+  const chars = is80mm ? '*'.repeat(40) : '*'.repeat(32);
   return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
 }
 
@@ -78,7 +78,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
     shopName.toLowerCase().includes('house')
   );
   const paperWidth = is80mm ? '80mm' : '58mm';
-  const printableWidth = is80mm ? '72mm' : '54mm';
+  const printableWidth = is80mm ? '68mm' : '54mm';
 
   // Clear any old tickets before starting
   document.querySelectorAll('#print-root').forEach(el => el.remove());
@@ -165,7 +165,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
     shopName.toLowerCase().includes('house')
   );
   const paperWidth = is80mm ? '80mm' : '58mm';
-  const printableWidth = is80mm ? '72mm' : '54mm';
+  const printableWidth = is80mm ? '68mm' : '54mm';
 
   // Clear any old tickets before starting
   document.querySelectorAll('#print-root').forEach(el => el.remove());
