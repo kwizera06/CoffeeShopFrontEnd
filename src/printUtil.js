@@ -51,10 +51,21 @@ function withThermalPage(paperWidth, printFn) {
   window.addEventListener('afterprint', cleanup, { once: true });
 }
 
-// Replaced static 50-character strings with responsive CSS borders!
-const lineEq = `<div style="border-bottom: 2px dashed #000; margin: 8px 0; width: 100%;"></div>`;
-const lineDash = `<div style="border-bottom: 1px dashed #000; margin: 6px 0; width: 100%;"></div>`;
-const lineAst = `<div style="border-bottom: 2px dotted #000; margin: 8px 0; width: 100%;"></div>`;
+// Text-character separators that print 100% reliably on ALL thermal printers
+function getLineEq(is80mm) {
+  const chars = is80mm ? '='.repeat(46) : '='.repeat(32);
+  return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
+}
+
+function getLineDash(is80mm) {
+  const chars = is80mm ? '-'.repeat(46) : '-'.repeat(32);
+  return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
+}
+
+function getLineAst(is80mm) {
+  const chars = is80mm ? '*'.repeat(46) : '*'.repeat(32);
+  return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
+}
 
 export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
   const is80mm = shopName && shopName.toLowerCase().includes('inganji');
@@ -81,7 +92,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
 
     return `
       <div style="display:flex; justify-content:flex-start; margin: 8px 0 2px 0; font-size: 12pt;">
-         <div style="min-width: 24px; font-weight: bold;">${esc(l.quantity)}</div>
+         <div style="font-weight: bold; margin-right: 12px; min-width: 24px;">${esc(l.quantity)}</div>
          <div style="word-break: break-word;">${esc(l.itemName)}</div>
       </div>
       ${ingText}
@@ -102,7 +113,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
       <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
         *** KITCHEN BAR ***
       </div>
-      ${lineEq}
+      ${getLineEq(is80mm)}
 
       <div>Server: ${esc(waiterName || 'Staff')}</div>
       <div>Station 1</div>
@@ -113,23 +124,23 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
         <span>${esc(timeStr)}</span>
       </div>
       
-      ${lineEq}
+      ${getLineEq(is80mm)}
 
       <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(tableNumber)}</div>
       <div style="font-size: 10pt;">Guests: 1</div>
       
-      ${lineDash}
+      ${getLineDash(is80mm)}
 
       ${rows}
 
-      ${lineDash}
+      ${getLineDash(is80mm)}
       
       <div style="padding: 8px 0;">
          <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
          <div style="font-size: 10pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
       </div>
 
-      ${lineAst}
+      ${getLineAst(is80mm)}
     </div>
   `;
 
@@ -165,7 +176,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
     return `
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin: 6px 0 2px 0; font-size: 10pt;">
        <div style="display:flex; width: 65%;">
-          <div style="min-width: 20px; font-weight: bold;">${esc(l.quantity)}</div>
+          <div style="font-weight: bold; margin-right: 8px; min-width: 20px;">${esc(l.quantity)}</div>
           <div style="word-break: break-word; padding-right: 4px;">${esc(l.itemName)}</div>
        </div>
        <div style="width: 35%; text-align: right;">${Number(l.price).toLocaleString()}</div>
@@ -194,7 +205,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
       <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
         ${esc(shopName ?? "Mama Prince's Coffee")}
       </div>
-      ${lineEq}
+      ${getLineEq(is80mm)}
 
       <div>Server: ${esc(waiter)}</div>
       <div>Method: ${esc(methodLabel)}</div>
@@ -205,23 +216,23 @@ export function printReceipt({ shopName, order, paymentMethod }) {
         <span>${esc(timeStr)}</span>
       </div>
       
-      ${lineEq}
+      ${getLineEq(is80mm)}
 
       <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(order?.tableNumber || '1')}</div>
       <div style="font-size: 10pt;">Guests: 1</div>
       
-      ${lineDash}
+      ${getLineDash(is80mm)}
 
       ${rows}
 
-      ${lineDash}
+      ${getLineDash(is80mm)}
 
       <div style="display:flex; justify-content:space-between; font-size: 14pt; font-weight:bold; margin-top: 10px;">
          <span>TOTAL</span>
          <span>${total}</span>
       </div>
 
-      ${lineAst}
+      ${getLineAst(is80mm)}
       
       <div style="padding: 8px 0;">
          <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(order?.id ?? 'NEW').slice(0, 4))}</div>

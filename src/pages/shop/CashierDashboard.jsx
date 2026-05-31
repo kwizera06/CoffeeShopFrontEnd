@@ -229,6 +229,7 @@ export default function CashierDashboard() {
         printKitchenTicket({
           orderId: editId, 
           tableNumber: tn, 
+          shopName,
           lines: cartLines.map(l => ({ quantity: l.quantity, itemName: l.name, ingredients: l.ingredients })), 
           waiterName: staff.find(x=>x.id===selectedWaiter)?.name || 'Staff'
         })
@@ -244,6 +245,7 @@ export default function CashierDashboard() {
         printKitchenTicket({
           orderId: created.id, 
           tableNumber: tn, 
+          shopName,
           lines: cartLines.map(l => ({ quantity: l.quantity, itemName: l.name, ingredients: l.ingredients })), 
           waiterName: staff.find(x=>x.id===selectedWaiter)?.name || 'Staff'
         })
