@@ -1258,7 +1258,7 @@ export default function Owner() {
                         (i.category && i.category.toLowerCase().includes(menuSearch.toLowerCase()))
                       )
                       .map((m) => {
-                        const recipeList = m.recipe || m.product_recipes || m.ingredients_list || [];
+                        const recipeList = m.recipe || m.recipe_items || m.ingredients || m.product_recipes || m.ingredients_list || [];
                         const hasRecipeArray = Array.isArray(recipeList) && recipeList.length > 0;
                         
                         // Categories that MUST be recipe-based
@@ -1271,28 +1271,36 @@ export default function Owner() {
                         const isSimpleListing = ['Beer & Alcohol', 'Wines', 'Soft Drinks'].includes(m.category);
                         const rowGridCols = isSimpleListing ? '2fr 1fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr';
 
+                        // Check if recipe is actually configured
+                        const recipeConfigured = hasRecipeArray && recipeList.length > 0;
+                        const needsRecipe = isRecipeBased && !recipeConfigured;
+                        
+                        // Row border color: purple=has recipe, orange=needs recipe, blue=simple stock
+                        const rowBorderColor = isRecipeBased 
+                          ? (needsRecipe ? '#F39C12' : '#9b59b6') 
+                          : '#3498db';
+
                         return (
-                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation' }} onClick={() => handleProductClick(m)} onMouseDown={e => handleProductPointerDown(e, m)} onMouseUp={e => handleProductPointerUp(e)} onMouseLeave={e => handleProductPointerUp(e)} onTouchStart={e => handleProductPointerDown(e, m)} onTouchEnd={e => handleProductPointerUp(e)} onTouchMove={e => handleProductPointerUp(e)} onContextMenu={e => e.preventDefault()}>
+                          <div key={m.id} className="row" style={{ gridTemplateColumns: rowGridCols, padding: '16px 24px', borderBottom: '1px solid #F3F4F6', background: 'transparent', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation', borderLeft: `4px solid ${rowBorderColor}` }} onClick={() => handleProductClick(m)} onMouseDown={e => handleProductPointerDown(e, m)} onMouseUp={e => handleProductPointerUp(e)} onMouseLeave={e => handleProductPointerUp(e)} onTouchStart={e => handleProductPointerDown(e, m)} onTouchEnd={e => handleProductPointerUp(e)} onTouchMove={e => handleProductPointerUp(e)} onContextMenu={e => e.preventDefault()}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {m.name}
                                 {m.available ? null : <span style={{ opacity: 0.3, fontSize: '10px' }}>(Hidden)</span>}
                               </div>
-                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                                 {isRecipeBased ? (
-                                  <span className="badge" style={{ background: 'rgba(155, 89, 182, 0.1)', color: '#9b59b6', fontSize: '9px', padding: '1px 6px', fontWeight: 800 }}>
-                                    🍳 RECIPE-BASED
+                                  <span className="badge" style={{ background: needsRecipe ? 'rgba(243, 156, 18, 0.12)' : 'rgba(155, 89, 182, 0.12)', color: needsRecipe ? '#d35400' : '#9b59b6', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
+                                    {needsRecipe ? '⚠️ NEEDS RECIPE' : '🍳 NEEDS PREPARATION'}
                                   </span>
                                 ) : (
-                                  <span className="badge" style={{ background: 'rgba(52, 152, 219, 0.1)', color: '#3498db', fontSize: '9px', padding: '1px 6px', fontWeight: 800 }}>
-                                    📦 SIMPLE STOCK
+                                  <span className="badge" style={{ background: 'rgba(52, 152, 219, 0.12)', color: '#2980b9', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12, letterSpacing: '0.5px' }}>
+                                    ✅ READY TO SELL
                                   </span>
                                 )}
                                 
-                                {/* Only show warning if we are absolutely sure m.recipe exists as an empty array */}
-                                {isRecipeCategory && Array.isArray(m.recipe) && m.recipe.length === 0 && (
-                                  <span style={{ color: '#E74C3C', fontSize: '10px', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
-                                    <HiOutlineExclamationTriangle /> NO RECIPE ADDED
+                                {needsRecipe && (
+                                  <span className="badge" style={{ background: 'rgba(231, 76, 60, 0.12)', color: '#c0392b', fontSize: '10px', padding: '3px 10px', fontWeight: 800, borderRadius: 12 }}>
+                                    <HiOutlineExclamationTriangle style={{ marginRight: 4, display: 'inline', verticalAlign: 'middle' }} /> NO RECIPE CONFIGURED
                                   </span>
                                 )}
                               </div>
@@ -1329,6 +1337,26 @@ export default function Owner() {
                   </div>
                 </div>
               ))}
+              {menu.length === 0 && (
+                <div className="am-card" style={{ padding: 48, textAlign: 'center' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📦</div>
+                  <h3 style={{ color: '#1D3557', marginBottom: 8 }}>No Products Yet</h3>
+                  <p style={{ color: '#6B7280', marginBottom: 24 }}>Get started by adding your first product to the menu.</p>
+                  <button
+                    className="btn primary"
+                    onClick={() => {
+                      setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' });
+                      setShowMenuForm(true);
+                      setTimeout(() => {
+                        document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                        document.getElementById('menu-name-input')?.focus();
+                      }, 100);
+                    }}
+                  >
+                    + Add First Product
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : null}
