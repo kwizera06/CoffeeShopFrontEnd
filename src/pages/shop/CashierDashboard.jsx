@@ -92,9 +92,9 @@ export default function CashierDashboard() {
   const [pending, setPending] = useState([])
   const [ready, setReady] = useState([])
   
-  // Payment states for Awaiting Payment tab
-  const [paymentMethod, setPaymentMethod] = useState(null)
-  const [clientName, setClientName] = useState('')
+  // Payment states for Awaiting Payment tab (tracked per order ID)
+  const [paymentMethods, setPaymentMethods] = useState({})
+  const [clientNames, setClientNames] = useState({})
 
   // Load Menu & Staff (once)
   const loadMenu = useCallback(async () => {
@@ -275,16 +275,27 @@ export default function CashierDashboard() {
 
   // Awaiting Payment Actions
   async function payOrder(o) {
-    if (!paymentMethod) { alert("Select payment method"); return; }
-    if (paymentMethod === 'LOAN' && !clientName.trim()) { alert("Enter client name"); return; }
+    const method = paymentMethods[o.id]
+    const cName = clientNames[o.id] || ''
+    if (!method) { alert("Select payment method"); return; }
+    if (method === 'LOAN' && !cName.trim()) { alert("Enter client name"); return; }
     setBusy(true)
     try {
       const paid = await api(`/api/shop/orders/${o.id}/pay`, {
-        method: 'POST', body: JSON.stringify({ method: paymentMethod, clientName: paymentMethod === 'LOAN' ? clientName : undefined })
+        method: 'POST', body: JSON.stringify({ method, clientName: method === 'LOAN' ? cName : undefined })
       })
-      printReceipt({ shopName, order: paid, paymentMethod })
-      setPaymentMethod(null)
-      setClientName('')
+      printReceipt({ shopName, order: paid, paymentMethod: method })
+      
+      setPaymentMethods(prev => {
+        const copy = { ...prev };
+        delete copy[o.id];
+        return copy;
+      })
+      setClientNames(prev => {
+        const copy = { ...prev };
+        delete copy[o.id];
+        return copy;
+      })
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
@@ -543,19 +554,22 @@ export default function CashierDashboard() {
                      {['CASH', 'MOBILE_MONEY', 'POS', 'LOAN'].map(m => (
                        <button 
                          key={m} 
-                         className={`cashier-cat-pill ${paymentMethod === m ? 'active' : ''}`}
-                         onClick={()=>setPaymentMethod(m)}
+                         className={`cashier-cat-pill ${paymentMethods[o.id] === m ? 'active' : ''}`}
+                         onClick={()=>setPaymentMethods(prev => ({ ...prev, [o.id]: m }))}
                          style={{ flex: 1, justifyContent: 'center' }}
                        >
                          {m === 'MOBILE_MONEY' ? 'MoMo' : m === 'CASH' ? 'Cash' : m}
                        </button>
                      ))}
                   </div>
-                  {paymentMethod === 'LOAN' && (
-                     <input type="text" placeholder="Client Name" value={clientName} onChange={e=>setClientName(e.target.value)} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
+                  {paymentMethods[o.id] === 'LOAN' && (
+                     <input type="text" placeholder="Client Name" value={clientNames[o.id] || ''} onChange={e=>{
+                       const val = e.target.value;
+                       setClientNames(prev => ({ ...prev, [o.id]: val }));
+                     }} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
                   )}
                   <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={()=>printReceipt({ shopName, order: o, paymentMethod: null })}>
+                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={()=>printReceipt({ shopName, order: o, paymentMethod: paymentMethods[o.id] || null })}>
                         Print Preview
                      </button>
                      <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
