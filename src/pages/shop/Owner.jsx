@@ -1317,6 +1317,14 @@ export default function Owner() {
                                 onPointerUp={handleProductPointerUp} 
                                 onPointerLeave={handleProductPointerUp} 
                                 onContextMenu={e => e.preventDefault()}
+                                onClick={() => {
+                                  editMenu(m);
+                                  setShowMenuForm(true);
+                                  setTimeout(() => {
+                                    document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
+                                    document.getElementById('menu-name-input')?.focus();
+                                  }, 100);
+                                }}
                               >
                                 <td style={{ padding: '16px 24px' }}>
                                   <div style={{ fontWeight: 600, color: '#111827' }}>

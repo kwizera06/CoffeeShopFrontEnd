@@ -205,10 +205,34 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   `}).join('');
 
   const total = Number(order?.total ?? 0).toLocaleString();
-  const methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : 
-                      paymentMethod === 'POS' ? 'POS/CARD' : 
-                      paymentMethod === 'LOAN' ? 'LOAN' : 
-                      paymentMethod === 'CASH' ? 'CASH' : 'UNPAID';
+  
+  let methodLabel = 'UNPAID';
+  let splitPaymentBreakdownHTML = '';
+
+  if (Array.isArray(paymentMethod)) {
+    methodLabel = 'SPLIT';
+    splitPaymentBreakdownHTML = `
+      ${getLineDash(is80mm)}
+      <div style="font-size: 10pt; font-weight: bold; padding: 4px 0 2px 0; text-align: left;">PAYMENT BREAKDOWN:</div>
+      ${paymentMethod.map(p => {
+        const mLabel = p.method === 'MOBILE_MONEY' ? 'MOMO' : 
+                       p.method === 'POS' ? 'CARD' : 
+                       p.method === 'LOAN' ? `LOAN (${p.clientName || 'Client'})` : p.method;
+        return `
+        <div style="display: flex; justify-content: space-between; font-size: 9.5pt; font-weight: bold; margin: 3px 0;">
+           <span>• ${esc(mLabel)}</span>
+           <span>${Number(p.amount).toLocaleString()}</span>
+        </div>
+        `;
+      }).join('')}
+    `;
+  } else if (paymentMethod) {
+    methodLabel = paymentMethod === 'MOBILE_MONEY' ? 'MOMO' : 
+                  paymentMethod === 'POS' ? 'POS/CARD' : 
+                  paymentMethod === 'LOAN' ? 'LOAN' : 
+                  paymentMethod === 'CASH' ? 'CASH' : paymentMethod;
+  }
+
   const waiter = order?.waiterName || 'Staff';
 
   const momoPayBlock = !is80mm ? `
@@ -259,6 +283,8 @@ export function printReceipt({ shopName, order, paymentMethod }) {
          <span>TOTAL</span>
          <span>${total}</span>
       </div>
+
+      ${splitPaymentBreakdownHTML}
 
       ${getLineAst(is80mm)}
       

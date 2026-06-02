@@ -95,6 +95,29 @@ export default function CashierDashboard() {
   // Payment states for Awaiting Payment tab (tracked per order ID)
   const [paymentMethods, setPaymentMethods] = useState({})
   const [clientNames, setClientNames] = useState({})
+  const [splitModes, setSplitModes] = useState({})
+  const [splitAmounts, setSplitAmounts] = useState({})
+
+  const handleSplitAmountChange = (orderId, method, value) => {
+    setSplitAmounts(prev => {
+      const orderSplits = prev[orderId] || {};
+      return {
+        ...prev,
+        [orderId]: {
+          ...orderSplits,
+          [method]: value
+        }
+      };
+    });
+  };
+
+  const getSplitTotal = (orderId) => {
+    const splits = splitAmounts[orderId] || {};
+    return (parseFloat(splits.CASH) || 0) + 
+           (parseFloat(splits.MOBILE_MONEY) || 0) + 
+           (parseFloat(splits.POS) || 0) + 
+           (parseFloat(splits.LOAN) || 0);
+  };
 
   // Load Menu & Staff (once)
   const loadMenu = useCallback(async () => {
@@ -275,23 +298,78 @@ export default function CashierDashboard() {
 
   // Awaiting Payment Actions
   async function payOrder(o) {
-    const method = paymentMethods[o.id]
-    const cName = clientNames[o.id] || ''
-    if (!method) { alert("Select payment method"); return; }
-    if (method === 'LOAN' && !cName.trim()) { alert("Enter client name"); return; }
     setBusy(true)
     try {
+      let payload = {};
+      let printPayMethod = null;
+
+      if (splitModes[o.id]) {
+        const splits = splitAmounts[o.id] || {};
+        const paymentsList = [];
+        const totalPaidInput = getSplitTotal(o.id);
+
+        if (Math.abs(totalPaidInput - o.total) > 0.05) {
+          alert(`Split payments sum (${totalPaidInput.toLocaleString()} RWF) must match order total of ${Number(o.total).toLocaleString()} RWF`);
+          setBusy(false);
+          return;
+        }
+
+        if (parseFloat(splits.CASH || 0) > 0) {
+          paymentsList.push({ method: 'CASH', amount: parseFloat(splits.CASH) });
+        }
+        if (parseFloat(splits.MOBILE_MONEY || 0) > 0) {
+          paymentsList.push({ method: 'MOBILE_MONEY', amount: parseFloat(splits.MOBILE_MONEY) });
+        }
+        if (parseFloat(splits.POS || 0) > 0) {
+          paymentsList.push({ method: 'POS', amount: parseFloat(splits.POS) });
+        }
+        if (parseFloat(splits.LOAN || 0) > 0) {
+          const cName = clientNames[o.id] || '';
+          if (!cName.trim()) {
+            alert("Enter loan client name");
+            setBusy(false);
+            return;
+          }
+          paymentsList.push({ method: 'LOAN', amount: parseFloat(splits.LOAN), clientName: cName });
+        }
+
+        payload = { payments: paymentsList };
+        // We will pass the list of split payments as paymentMethod param to printReceipt!
+        printPayMethod = paymentsList;
+      } else {
+        const method = paymentMethods[o.id]
+        const cName = clientNames[o.id] || ''
+        if (!method) { alert("Select payment method"); setBusy(false); return; }
+        if (method === 'LOAN' && !cName.trim()) { alert("Enter client name"); setBusy(false); return; }
+
+        payload = { method, clientName: method === 'LOAN' ? cName : undefined };
+        printPayMethod = method;
+      }
+
       const paid = await api(`/api/shop/orders/${o.id}/pay`, {
-        method: 'POST', body: JSON.stringify({ method, clientName: method === 'LOAN' ? cName : undefined })
+        method: 'POST',
+        body: JSON.stringify(payload)
       })
-      printReceipt({ shopName, order: paid, paymentMethod: method })
+
+      printReceipt({ shopName, order: paid, paymentMethod: printPayMethod })
       
+      // Cleanup states
       setPaymentMethods(prev => {
         const copy = { ...prev };
         delete copy[o.id];
         return copy;
       })
       setClientNames(prev => {
+        const copy = { ...prev };
+        delete copy[o.id];
+        return copy;
+      })
+      setSplitModes(prev => {
+        const copy = { ...prev };
+        delete copy[o.id];
+        return copy;
+      })
+      setSplitAmounts(prev => {
         const copy = { ...prev };
         delete copy[o.id];
         return copy;
@@ -550,26 +628,132 @@ export default function CashierDashboard() {
                      ))}
                   </div>
 
-                  <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
-                     {['CASH', 'MOBILE_MONEY', 'POS', 'LOAN'].map(m => (
-                       <button 
-                         key={m} 
-                         className={`cashier-cat-pill ${paymentMethods[o.id] === m ? 'active' : ''}`}
-                         onClick={()=>setPaymentMethods(prev => ({ ...prev, [o.id]: m }))}
-                         style={{ flex: 1, justifyContent: 'center' }}
-                       >
-                         {m === 'MOBILE_MONEY' ? 'MoMo' : m === 'CASH' ? 'Cash' : m}
-                       </button>
-                     ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: '700', color: '#E6CCB2' }}>Billing Option</span>
+                    <button 
+                      onClick={() => setSplitModes(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
+                      style={{
+                        background: splitModes[o.id] ? '#D90429' : '#1D3557',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        transition: '0.2s'
+                      }}
+                    >
+                      {splitModes[o.id] ? '← Single Payment' : '⇌ Split Payment'}
+                    </button>
                   </div>
-                  {paymentMethods[o.id] === 'LOAN' && (
-                     <input type="text" placeholder="Client Name" value={clientNames[o.id] || ''} onChange={e=>{
-                       const val = e.target.value;
-                       setClientNames(prev => ({ ...prev, [o.id]: val }));
-                     }} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
+
+                  {!splitModes[o.id] ? (
+                     <>
+                        <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
+                           {['CASH', 'MOBILE_MONEY', 'POS', 'LOAN'].map(m => (
+                             <button 
+                               key={m} 
+                               className={`cashier-cat-pill ${paymentMethods[o.id] === m ? 'active' : ''}`}
+                               onClick={()=>setPaymentMethods(prev => ({ ...prev, [o.id]: m }))}
+                               style={{ flex: 1, justifyContent: 'center' }}
+                             >
+                               {m === 'MOBILE_MONEY' ? 'MoMo' : m === 'CASH' ? 'Cash' : m}
+                             </button>
+                           ))}
+                        </div>
+                        {paymentMethods[o.id] === 'LOAN' && (
+                           <input type="text" placeholder="Client Name" value={clientNames[o.id] || ''} onChange={e=>{
+                             const val = e.target.value;
+                             setClientNames(prev => ({ ...prev, [o.id]: val }));
+                           }} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
+                        )}
+                     </>
+                  ) : (
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#181818', padding: '10px 12px', borderRadius: 8, border: '1px solid #333' }}>
+                        {/* Cash Amount */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Cash (RWF):</span>
+                           <input 
+                              type="number" 
+                              placeholder="0" 
+                              value={splitAmounts[o.id]?.CASH || ''} 
+                              onChange={e => handleSplitAmountChange(o.id, 'CASH', e.target.value)}
+                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
+                           />
+                        </div>
+                        {/* MoMo Amount */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>MoMo (RWF):</span>
+                           <input 
+                              type="number" 
+                              placeholder="0" 
+                              value={splitAmounts[o.id]?.MOBILE_MONEY || ''} 
+                              onChange={e => handleSplitAmountChange(o.id, 'MOBILE_MONEY', e.target.value)}
+                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
+                           />
+                        </div>
+                        {/* POS Amount */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Card/POS:</span>
+                           <input 
+                              type="number" 
+                              placeholder="0" 
+                              value={splitAmounts[o.id]?.POS || ''} 
+                              onChange={e => handleSplitAmountChange(o.id, 'POS', e.target.value)}
+                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
+                           />
+                        </div>
+                        {/* Loan Amount */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Loan (RWF):</span>
+                           <input 
+                              type="number" 
+                              placeholder="0" 
+                              value={splitAmounts[o.id]?.LOAN || ''} 
+                              onChange={e => handleSplitAmountChange(o.id, 'LOAN', e.target.value)}
+                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
+                           />
+                        </div>
+                        {/* Loan Client Name if Loan amount > 0 */}
+                        {parseFloat(splitAmounts[o.id]?.LOAN || 0) > 0 && (
+                           <input 
+                              type="text" 
+                              placeholder="Loan Client Name" 
+                              value={clientNames[o.id] || ''} 
+                              onChange={e => {
+                                 const val = e.target.value;
+                                 setClientNames(prev => ({ ...prev, [o.id]: val }));
+                              }}
+                              style={{ padding: '6px 8px', border: '1px solid #3E3E3E', borderRadius: 6, background: '#111', color: 'white', fontSize: 12, marginTop: 2 }}
+                           />
+                        )}
+                        {/* Live Balance / Remaining Check */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 'bold', borderTop: '1px solid #2A2828', paddingTop: 6, marginTop: 4 }}>
+                           <span style={{ color: '#A0A0A0' }}>Sum Entered:</span>
+                           <span style={{ color: Math.abs(getSplitTotal(o.id) - o.total) <= 0.05 ? '#4ADE80' : '#FF4D4D' }}>
+                              {getSplitTotal(o.id).toLocaleString()} / {Number(o.total).toLocaleString()} RWF
+                           </span>
+                        </div>
+                     </div>
                   )}
+
                   <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={()=>printReceipt({ shopName, order: o, paymentMethod: paymentMethods[o.id] || null })}>
+                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={() => {
+                        let printPayMethod = null;
+                        if (splitModes[o.id]) {
+                           const splits = splitAmounts[o.id] || {};
+                           const pList = [];
+                           if (parseFloat(splits.CASH || 0) > 0) pList.push({ method: 'CASH', amount: parseFloat(splits.CASH) });
+                           if (parseFloat(splits.MOBILE_MONEY || 0) > 0) pList.push({ method: 'MOBILE_MONEY', amount: parseFloat(splits.MOBILE_MONEY) });
+                           if (parseFloat(splits.POS || 0) > 0) pList.push({ method: 'POS', amount: parseFloat(splits.POS) });
+                           if (parseFloat(splits.LOAN || 0) > 0) pList.push({ method: 'LOAN', amount: parseFloat(splits.LOAN), clientName: clientNames[o.id] || 'Client' });
+                           printPayMethod = pList;
+                        } else {
+                           printPayMethod = paymentMethods[o.id] || null;
+                        }
+                        printReceipt({ shopName, order: o, paymentMethod: printPayMethod });
+                     }}>
                         Print Preview
                      </button>
                      <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
