@@ -792,8 +792,8 @@ export default function CashierDashboard() {
                   </div>
 
                   <div>
-                    <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Cashout (Given to Owner)</label>
-                    <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.cashout} onChange={e=>setShiftForm(f=>({...f, cashout:e.target.value}))}/>
+                    <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>MoMo Withdrawn (Given to Owner)</label>
+                    <input type="number" className="cashier-search" title="Amount deducted from MoMo and given to Owner" style={{width: '100%', marginTop: 4}} value={shiftForm.cashout} onChange={e=>setShiftForm(f=>({...f, cashout:e.target.value}))}/>
                   </div>
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Expenses (Deducted from Cash)</label>

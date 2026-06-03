@@ -2733,12 +2733,12 @@ export default function Owner() {
                         const shiftCashout = parseFloat(sh.cashout) || 0
                         const shiftExpenses = parseFloat(sh.expenses) || 0
                         const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0) - shiftExpenses
-                        const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0)
+                        const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0) - shiftCashout
                         const expectedPos = parseFloat(sh.total_pos_sales) || 0
                         const expectedTotal = expectedCash + expectedMomo + expectedPos
 
                         const actualCash = parseFloat(sh.actual_cash_on_hand) || 0
-                        const actualAccountedCash = actualCash + shiftCashout
+                        const actualAccountedCash = actualCash
                         const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
                         // POS is auto‑balanced: use expectedPos as actualPos
                         const actualPos = expectedPos
@@ -2776,7 +2776,7 @@ export default function Owner() {
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">Cash</span>
                                 <span>{Number(expectedCash).toLocaleString()}</span>
-                                <span title={`Hand: ${actualCash} | Drop: ${shiftCashout}`}>{Number(actualAccountedCash).toLocaleString()}</span>
+                                <span title={`Count: ${actualCash}`}>{Number(actualAccountedCash).toLocaleString()}</span>
                                 <span style={{ color: diffCash === 0 ? '#34D399' : diffCash > 0 ? '#60A5FA' : '#F87171', fontWeight: 700 }}>
                                   {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
                                 </span>
@@ -2804,9 +2804,9 @@ export default function Owner() {
                             </div>
 
                             {shiftCashout > 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(255, 152, 0, 0.1)', border: '1px solid rgba(255, 152, 0, 0.3)', borderRadius: 8 }}>
-                                <span style={{ fontWeight: 700, color: '#FCD34D', fontSize: 13 }}>💰 Cashout (Given to Owner)</span>
-                                <span style={{ fontWeight: 800, color: '#FCD34D', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8 }}>
+                                <span style={{ fontWeight: 700, color: '#38BDF8', fontSize: 13 }}>📱 MoMo Given to Owner</span>
+                                <span style={{ fontWeight: 800, color: '#38BDF8', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
                               </div>
                             )}
                             {sh.notes && (
