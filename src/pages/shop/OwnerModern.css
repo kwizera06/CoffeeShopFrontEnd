@@ -1961,11 +1961,13 @@
 
 /* EOD Reconciliation */
 .am-eod-reconciliation-block {
-  background: #F9FAFB;
-  border: 1px solid #E5E7EB;
+  background: #1E293B;
+  border: 1px solid #0F172A;
+  color: #F8FAFC;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .am-eod-reconciliation-block:last-child {
@@ -1984,12 +1986,12 @@
 .am-eod-recon-staff {
   font-weight: 700;
   font-size: 15px;
-  color: #111827;
+  color: #F8FAFC;
 }
 
 .am-eod-recon-time {
   font-size: 12px;
-  color: #6B7280;
+  color: #94A3B8;
 }
 
 .am-eod-recon-opening {
@@ -1997,17 +1999,17 @@
   align-items: center;
   gap: 16px;
   padding: 10px 14px;
-  background: #EDF2F9;
-  border: 1px solid #BBF7D0;
+  background: #0F172A;
+  border: 1px solid #334155;
   border-radius: 8px;
   margin-bottom: 14px;
   font-size: 13px;
-  color: #374151;
+  color: #E2E8F0;
   flex-wrap: wrap;
 }
 
 .am-eod-recon-opening strong {
-  color: #111827;
+  color: #38BDF8; /* Sky 400 for balance */
 }
 
 .am-eod-recon-grid {
@@ -2020,11 +2022,15 @@
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr 1fr;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 12px;
   align-items: center;
   font-size: 13px;
-  color: #374151;
-  border-bottom: 1px solid #F3F4F6;
+  color: #CBD5E1;
+  border-bottom: 1px solid #334155;
+  transition: background 0.2s;
+}
+.am-eod-recon-col:hover {
+  background: #0F172A;
 }
 
 .am-eod-recon-col:last-child {
@@ -2032,36 +2038,40 @@
 }
 
 .am-eod-recon-col-head {
-  background: #F3F4F6;
+  background: #0F172A;
   border-radius: 6px;
   margin-bottom: 4px;
+  border-bottom: none;
 }
+.am-eod-recon-col-head:hover { background: #0F172A; }
 
 .am-eod-recon-col-head span {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.7px;
-  color: #6B7280;
+  color: #94A3B8;
 }
 
 .am-eod-recon-col-total {
-  background: #F3F4F6;
+  background: #0F172A;
   border-radius: 6px;
   margin-top: 4px;
   padding: 12px;
+  border-bottom: none;
 }
+.am-eod-recon-col-total:hover { background: #0F172A; }
 
 .am-eod-recon-label {
   font-weight: 600;
-  color: #6B7280;
+  color: #F8FAFC;
 }
 
 .am-eod-recon-notes {
   margin-top: 16px;
   padding: 14px;
-  background: #FFF7ED;
-  border: 1px solid #FED7AA;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 8px;
 }
 
@@ -2070,7 +2080,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #D97706;
+  color: #FCD34D;
   display: block;
   margin-bottom: 6px;
 }
@@ -2078,7 +2088,7 @@
 .am-eod-recon-notes p {
   margin: 0;
   font-size: 13px;
-  color: #374151;
+  color: #E2E8F0;
   line-height: 1.5;
   white-space: pre-wrap;
 }

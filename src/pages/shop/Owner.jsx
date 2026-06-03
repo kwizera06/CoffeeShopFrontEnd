@@ -2770,41 +2770,43 @@ export default function Owner() {
                               <div className="am-eod-recon-col am-eod-recon-col-head">
                                 <span></span>
                                 <span>Expected</span>
-                                <span>Actual</span>
+                                <span>Actual (Count/Sales)</span>
                                 <span>Difference</span>
                               </div>
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">Cash</span>
                                 <span>{Number(expectedCash).toLocaleString()}</span>
                                 <span title={`Hand: ${actualCash} | Drop: ${shiftCashout}`}>{Number(actualAccountedCash).toLocaleString()}</span>
-                                <span style={{ color: diffCash === 0 ? '#1D3557' : diffCash > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
+                                <span style={{ color: diffCash === 0 ? '#34D399' : diffCash > 0 ? '#60A5FA' : '#F87171', fontWeight: 700 }}>
                                   {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
                                 </span>
                               </div>
+                              {shiftExpenses > 0 && (
+                                <div className="am-eod-recon-col" style={{ background: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                  <span className="am-eod-recon-label" style={{ color: '#FCA5A5', paddingLeft: 8 }}>↳ Expenses</span>
+                                  <span style={{ color: '#FCA5A5' }}>{Number(shiftExpenses).toLocaleString()}</span>
+                                  <span>—</span>
+                                  <span>—</span>
+                                </div>
+                              )}
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">MoMo</span>
                                 <span>{Number(expectedMomo).toLocaleString()}</span>
-                                <span>—</span>
+                                <span style={{ color: '#60A5FA', fontWeight: 600 }} title="Sales Made">{Number(parseFloat(sh.total_momo_sales) || 0).toLocaleString()}</span>
                                 <span>—</span>
                               </div>
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">POS/Card</span>
                                 <span>{Number(expectedPos).toLocaleString()}</span>
-                                <span>—</span>
+                                <span style={{ color: '#60A5FA', fontWeight: 600 }} title="Sales Made">{Number(parseFloat(sh.total_pos_sales) || 0).toLocaleString()}</span>
                                 <span>—</span>
                               </div>
                             </div>
 
                             {shiftCashout > 0 && (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(255, 152, 0, 0.1)', border: '1px solid rgba(255, 152, 0, 0.3)', borderRadius: 8 }}>
-                                <span style={{ fontWeight: 700, color: '#FF9800', fontSize: 13 }}>💰 Cashout (Given to Owner)</span>
-                                <span style={{ fontWeight: 800, color: '#FF9800', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
-                              </div>
-                            )}
-                            {shiftExpenses > 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, padding: '10px 14px', background: 'rgba(229, 115, 115, 0.1)', border: '1px solid rgba(229, 115, 115, 0.3)', borderRadius: 8 }}>
-                                <span style={{ fontWeight: 700, color: '#E57373', fontSize: 13 }}>💸 Expenses Deducted from Cash</span>
-                                <span style={{ fontWeight: 800, color: '#E57373', fontSize: 15 }}>{Number(shiftExpenses).toLocaleString()} RWF</span>
+                                <span style={{ fontWeight: 700, color: '#FCD34D', fontSize: 13 }}>💰 Cashout (Given to Owner)</span>
+                                <span style={{ fontWeight: 800, color: '#FCD34D', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
                               </div>
                             )}
                             {sh.notes && (
