@@ -2731,7 +2731,8 @@ export default function Owner() {
                     ) : (
                       shifts.filter(sh => sh.status === 'CLOSED').map((sh, idx) => {
                         const shiftCashout = parseFloat(sh.cashout) || 0
-                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0)
+                        const shiftExpenses = parseFloat(sh.expenses) || 0
+                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0) - shiftExpenses
                         const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0)
                         const expectedPos = parseFloat(sh.total_pos_sales) || 0
                         const expectedTotal = expectedCash + expectedMomo + expectedPos
@@ -2798,6 +2799,12 @@ export default function Owner() {
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(255, 152, 0, 0.1)', border: '1px solid rgba(255, 152, 0, 0.3)', borderRadius: 8 }}>
                                 <span style={{ fontWeight: 700, color: '#FF9800', fontSize: 13 }}>💰 Cashout (Given to Owner)</span>
                                 <span style={{ fontWeight: 800, color: '#FF9800', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
+                              </div>
+                            )}
+                            {shiftExpenses > 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, padding: '10px 14px', background: 'rgba(229, 115, 115, 0.1)', border: '1px solid rgba(229, 115, 115, 0.3)', borderRadius: 8 }}>
+                                <span style={{ fontWeight: 700, color: '#E57373', fontSize: 13 }}>💸 Expenses Deducted from Cash</span>
+                                <span style={{ fontWeight: 800, color: '#E57373', fontSize: 15 }}>{Number(shiftExpenses).toLocaleString()} RWF</span>
                               </div>
                             )}
                             {sh.notes && (

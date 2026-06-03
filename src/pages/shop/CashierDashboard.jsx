@@ -67,7 +67,7 @@ export default function CashierDashboard() {
 
   // Top header states
   const [showShiftModal, setShowShiftModal] = useState('') // 'OPEN' or 'CLOSE'
-  const [shiftForm, setShiftForm] = useState({ initialCash: '0', initialMomo: '0', actualCash: '0', actualMomo: '0', cashout: '0', notes: '' })
+  const [shiftForm, setShiftForm] = useState({ initialCash: '0', initialMomo: '0', actualCash: '0', actualMomo: '0', cashout: '0', expenses: '0', notes: '' })
   const [cartExpanded, setCartExpanded] = useState(false)
 
   // New Order states
@@ -198,7 +198,7 @@ export default function CashierDashboard() {
         })
       } else {
         await api('/api/shop/shifts/close', {
-          method: 'POST', body: JSON.stringify({ actualCash: Number(shiftForm.actualCash), actualMomo: Number(shiftForm.actualMomo), cashout: Number(shiftForm.cashout), notes: shiftForm.notes })
+          method: 'POST', body: JSON.stringify({ actualCash: Number(shiftForm.actualCash), actualMomo: Number(shiftForm.actualMomo), cashout: Number(shiftForm.cashout), expenses: Number(shiftForm.expenses), notes: shiftForm.notes })
         })
         setShift(null)
       }
@@ -794,6 +794,10 @@ export default function CashierDashboard() {
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Cashout (Given to Owner)</label>
                     <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.cashout} onChange={e=>setShiftForm(f=>({...f, cashout:e.target.value}))}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Expenses (Deducted from Cash)</label>
+                    <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.expenses} onChange={e=>setShiftForm(f=>({...f, expenses:e.target.value}))}/>
                   </div>
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Notes</label>
