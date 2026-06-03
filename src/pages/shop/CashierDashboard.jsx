@@ -401,7 +401,7 @@ export default function CashierDashboard() {
             <div className={`cashier-shift-pill`}>
               <div className="dot"></div>
               Shift active • {new Date(shift.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })} | 
-              Cash: {Number(shift.initial_cash).toLocaleString()} | MoMo: {Number(shift.initial_momo).toLocaleString()}
+              Cash: {Number(shift.initial_cash).toLocaleString()}
             </div>
           ) : (
              <div className={`cashier-shift-pill closed`}>
@@ -790,10 +790,7 @@ export default function CashierDashboard() {
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Actual Cash Count</label>
                     <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.actualCash} onChange={e=>setShiftForm(f=>({...f, actualCash:e.target.value}))}/>
                   </div>
-                  <div>
-                    <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Actual MoMo Count</label>
-                    <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.actualMomo} onChange={e=>setShiftForm(f=>({...f, actualMomo:e.target.value}))}/>
-                  </div>
+
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Cashout (Given to Owner)</label>
                     <input type="number" className="cashier-search" style={{width: '100%', marginTop: 4}} value={shiftForm.cashout} onChange={e=>setShiftForm(f=>({...f, cashout:e.target.value}))}/>

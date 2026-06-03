@@ -2783,26 +2783,14 @@ export default function Owner() {
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">MoMo</span>
                                 <span>{Number(expectedMomo).toLocaleString()}</span>
-                                <span>{Number(actualMomo).toLocaleString()}</span>
-                                <span style={{ color: diffMomo === 0 ? '#1D3557' : diffMomo > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
-                                  {diffMomo > 0 ? '+' : ''}{Number(diffMomo).toLocaleString()}
-                                </span>
+                                <span>—</span>
+                                <span>—</span>
                               </div>
                               <div className="am-eod-recon-col">
                                 <span className="am-eod-recon-label">POS/Card</span>
                                 <span>{Number(expectedPos).toLocaleString()}</span>
-                                <span>{Number(actualPos).toLocaleString()}</span>
-                                <span style={{ color: diffPos === 0 ? '#1D3557' : diffPos > 0 ? '#2196F3' : '#E57373', fontWeight: 700 }}>
-                                  {diffPos > 0 ? '+' : ''}{Number(diffPos).toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="am-eod-recon-col am-eod-recon-col-total">
-                                <span className="am-eod-recon-label">TOTAL</span>
-                                <span style={{ fontWeight: 700 }}>{Number(expectedTotal).toLocaleString()} RWF</span>
-                                <span style={{ fontWeight: 700 }}>{Number(actualTotal).toLocaleString()} RWF</span>
-                                <span style={{ color: diffTotal === 0 ? '#1D3557' : diffTotal > 0 ? '#2196F3' : '#E57373', fontWeight: 800, fontSize: 15 }}>
-                                  {diffTotal > 0 ? '+' : ''}{Number(diffTotal).toLocaleString()} RWF
-                                </span>
+                                <span>—</span>
+                                <span>—</span>
                               </div>
                             </div>
 
