@@ -77,7 +77,7 @@ export default function Owner() {
   const SUB_CATEGORIES = [
     'Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Soft Drinks', 
     'Beer & Alcohol', 'Juice & Smoothies', 'Fast Food', 
-    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks','Accompaniments','breakFast'
+    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks','Accompaniments','breakFast','whisky'
   ]
 
   const CATEGORY_MAP = {
@@ -576,12 +576,27 @@ export default function Owner() {
       price: String(mi.price), 
       category: mi.category || 'Hot Coffee',
       available: mi.available,
-      productRecipe: currentRecipe.map(r => ({ 
-        ingredient_id: r.ingredient_id, 
-        quantity_required: r.quantity_required, 
-        name: r.ingredients?.name, 
-        unit: r.ingredients?.unit 
-      })),
+      productRecipe: currentRecipe.map(r => {
+        if (r.ingredient_id) {
+          return {
+            ingredient_id: r.ingredient_id,
+            quantity_required: r.quantity_required,
+            name: r.ingredients?.name,
+            unit: r.ingredients?.unit,
+            type: 'INGREDIENT'
+          };
+        }
+        if (r.component_menu_item_id) {
+          return {
+            component_menu_item_id: r.component_menu_item_id,
+            quantity_required: r.quantity_required,
+            name: r.component_menu_item?.name,
+            unit: 'unit',
+            type: 'MENU_ITEM'
+          };
+        }
+        return null;
+      }).filter(Boolean),
       isRecipe: mi.is_recipe || currentRecipe.length > 0,
       stockLevel: autoStock,
       buyingPrice: autoBuyingPrice
@@ -1032,17 +1047,32 @@ export default function Owner() {
                  
                  <div className="am-recipe-input-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 12, alignItems: 'flex-end' }}>
                     <label className="am-field">
-                      <span style={{ fontSize: '11px' }}>Ingredient</span>
+                      <span style={{ fontSize: '11px' }}>Component</span>
                       <select 
                         className="am-input"
-                        value={tempRecipeLine.ingredient_id} 
+                        value={tempRecipeLine.componentValue || ''} 
                         style={{ height: '38px' }}
-                        onChange={e => setTempRecipeLine(f => ({ ...f, ingredient_id: e.target.value }))}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (!val) {
+                            setTempRecipeLine({ componentValue: '', quantity_required: '' });
+                            return;
+                          }
+                          const [type, id] = val.split(':');
+                          setTempRecipeLine(f => ({ ...f, componentValue: val, componentType: type, componentId: id }));
+                        }}
                       >
                         <option value="">-- Select --</option>
-                        {ingredients.map(ing => (
-                          <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
-                        ))}
+                        <optgroup label="Raw Ingredients">
+                          {ingredients.map(ing => (
+                            <option key={ing.id} value={`ing:${ing.id}`}>{ing.name} ({ing.unit})</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Menu Products">
+                          {menu.filter(m => m.id !== menuForm.id && m.id !== selectedRecipeItem?.id).map(m => (
+                            <option key={m.id} value={`prod:${m.id}`}>{m.name}</option>
+                          ))}
+                        </optgroup>
                       </select>
                     </label>
                     <label className="am-field">
@@ -1061,13 +1091,22 @@ export default function Owner() {
                       className="btn primary" 
                       style={{ height: 38, padding: '0 20px' }}
                       onClick={() => {
-                        if (!tempRecipeLine.ingredient_id || !tempRecipeLine.quantity_required) return;
-                        const ing = ingredients.find(x => x.id === tempRecipeLine.ingredient_id);
+                        if (!tempRecipeLine.componentValue || !tempRecipeLine.quantity_required) return;
+                        const type = tempRecipeLine.componentType;
+                        const id = tempRecipeLine.componentId;
+                        let line = { quantity_required: tempRecipeLine.quantity_required };
+                        if (type === 'ing') {
+                          const ing = ingredients.find(x => x.id === id);
+                          line = { ...line, ingredient_id: id, name: ing?.name, unit: ing?.unit, type: 'INGREDIENT' };
+                        } else if (type === 'prod') {
+                          const prod = menu.find(x => x.id === id);
+                          line = { ...line, component_menu_item_id: id, name: prod?.name, unit: 'unit', type: 'MENU_ITEM' };
+                        }
                         setMenuForm(f => ({
                           ...f,
-                          productRecipe: [...f.productRecipe, { ...tempRecipeLine, name: ing?.name, unit: ing?.unit }]
+                          productRecipe: [...f.productRecipe, line]
                         }))
-                        setTempRecipeLine({ ingredient_id: '', quantity_required: '' })
+                        setTempRecipeLine({ componentValue: '', componentType: '', componentId: '', quantity_required: '' })
                       }}
                     >
                       Add
@@ -1077,7 +1116,10 @@ export default function Owner() {
                  <div className="am-recipe-list" style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                    {menuForm.productRecipe.map((line, idx) => (
                    <div key={idx} className="am-recipe-tag">
-                        <span>{line.name}: <strong>{line.quantity_required} {line.unit}</strong></span>
+                        <span>
+                          {line.type === 'MENU_ITEM' ? '📦 ' : '🧪 '}
+                          {line.name}: <strong>{line.quantity_required} {line.unit}</strong>
+                        </span>
                         <button type="button" onClick={() => setMenuForm(f => ({ ...f, productRecipe: f.productRecipe.filter((_, i) => i !== idx) }))}>×</button>
                      </div>
                    ))}
@@ -1109,36 +1151,53 @@ export default function Owner() {
 
           {menuForm.id && (
             <div className="card" style={{ marginTop: 20, border: '2px solid var(--caramel-light)' }}>
-              <h3>📜 Ingredients & Recipe for {menuForm.name}</h3>
-              <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>Specify what this product consumes when sold.</p>
+              <h3>📜 Recipe Components for {menuForm.name}</h3>
+              <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>Specify what this product consumes when sold (ingredients or other menu products).</p>
               
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 try {
+                  const val = recipeForm.componentValue || '';
+                  const [type, id] = val.split(':');
+                  const body = {
+                    menu_item_id: menuForm.id,
+                    quantity_required: Number(recipeForm.quantity_required)
+                  };
+                  if (type === 'ing') {
+                    body.ingredient_id = id;
+                  } else if (type === 'prod') {
+                    body.component_menu_item_id = id;
+                  } else {
+                    setError('Please select a component');
+                    return;
+                  }
                   await api('/api/shop/owner/recipes', { 
                     method: 'POST', 
-                    body: JSON.stringify({ 
-                      menu_item_id: menuForm.id,
-                      ingredient_id: recipeForm.ingredient_id,
-                      quantity_required: Number(recipeForm.quantity_required)
-                    }) 
+                    body: JSON.stringify(body) 
                   });
-                  setRecipeForm({ ingredient_id: '', quantity_required: 0 });
+                  setRecipeForm({ componentValue: '', quantity_required: 0 });
                   const updated = await api(`/api/shop/owner/recipes/${menuForm.id}`);
                   setRecipeLines(updated);
                 } catch (err) { setError(err.message) }
               }} className="grid-form">
                 <label className="field">
-                  <span>Ingredient</span>
+                  <span>Component</span>
                   <select 
-                    value={recipeForm.ingredient_id} 
-                    onChange={e => setRecipeForm(f => ({ ...f, ingredient_id: e.target.value }))}
+                    value={recipeForm.componentValue || ''} 
+                    onChange={e => setRecipeForm(f => ({ ...f, componentValue: e.target.value }))}
                     required
                   >
-                    <option value="">-- Choose Ingredient --</option>
-                    {ingredients.map(ing => (
-                      <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>
-                    ))}
+                    <option value="">-- Choose Component --</option>
+                    <optgroup label="Raw Ingredients">
+                      {ingredients.map(ing => (
+                        <option key={ing.id} value={`ing:${ing.id}`}>{ing.name} ({ing.unit})</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Menu Products">
+                      {menu.filter(m => m.id !== menuForm.id).map(m => (
+                        <option key={m.id} value={`prod:${m.id}`}>{m.name}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </label>
                 <label className="field">
@@ -1152,15 +1211,18 @@ export default function Owner() {
                   />
                 </label>
                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button type="submit" className="btn primary" style={{ height: 42, width: '100%' }}>Add Step</button>
+                  <button type="submit" className="btn primary" style={{ height: 42, width: '100%' }}>Add Component</button>
                 </div>
               </form>
 
               <div className="table tiny" style={{ marginTop: 16 }}>
                 {recipeLines.map(line => (
                   <div key={line.id} className="row" style={{ fontSize: 13 }}>
-                    <div style={{ fontWeight: 600 }}>{line.ingredients?.name}</div>
-                    <div>{line.quantity_required} {line.ingredients?.unit}</div>
+                    <div style={{ fontWeight: 600 }}>
+                      {line.ingredients?.name || line.component_menu_item?.name || 'Unknown'}
+                      {line.component_menu_item_id && <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 6 }}>(product)</span>}
+                    </div>
+                    <div>{line.quantity_required} {line.ingredients?.unit || 'unit'}</div>
                     <div className="row-actions">
                       <button 
                         className="btn warn" 
@@ -1180,7 +1242,7 @@ export default function Owner() {
                 ))}
                 {recipeLines.length === 0 && (
                   <div style={{ padding: 20, textAlign: 'center' }} className="muted text-sm italic">
-                    No ingredients linked to this recipe yet.
+                    No components linked to this recipe yet.
                   </div>
                 )}
               </div>
@@ -2475,9 +2537,11 @@ export default function Owner() {
           const catBreakdown = {}
           const hourlyMap = {}
           let totalItemsSold = 0
+          const processedOrders = new Set()
 
           dailyRows.forEach(row => {
-            if (row.rawItems) {
+            if (row.rawItems && !processedOrders.has(row.orderId)) {
+              processedOrders.add(row.orderId)
               row.rawItems.forEach(item => {
                 const key = item.name || 'Unknown'
                 const cat = item.category || 'Uncategorized'
