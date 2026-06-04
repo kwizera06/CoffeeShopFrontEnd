@@ -2694,7 +2694,7 @@ export default function Owner() {
 
                 {/* ── Top Products ── */}
                 <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Top Products</h3>
+                  <h3 className="am-eod-section-title">Top Products <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({topProducts.length} total)</span></h3>
                   <div className="am-eod-table">
                     <div className="am-eod-table-head">
                       <span>Product</span>
@@ -2715,6 +2715,23 @@ export default function Owner() {
                         <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
                       </div>
                     ))}
+                    {topProducts.length > 15 && (() => {
+                      const remaining = topProducts.slice(15)
+                      const remQty = remaining.reduce((s, p) => s + p.qty, 0)
+                      const remRev = remaining.reduce((s, p) => s + p.revenue, 0)
+                      const remCost = remaining.reduce((s, p) => s + p.cost, 0)
+                      return (
+                        <div className="am-eod-table-row" style={{ background: '#f8f9fa', fontWeight: 600 }}>
+                          <span className="am-eod-cell-name">
+                            <span className="am-eod-rank">…</span>
+                            {remaining.length} Other Products
+                          </span>
+                          <span>{remQty}</span>
+                          <span style={{ color: '#1D3557' }}>{Number(remRev).toLocaleString()}</span>
+                          <span style={{ color: remRev - remCost >= 0 ? '#1D3557' : '#E57373' }}>{Number(remRev - remCost).toLocaleString()}</span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </section>
 
