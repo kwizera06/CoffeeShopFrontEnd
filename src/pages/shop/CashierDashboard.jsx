@@ -28,6 +28,23 @@ import {
 } from 'react-icons/io5'
 import { MdOutlineLocalDrink, MdOutlineDinnerDining, MdBakeryDining } from 'react-icons/md'
 
+const CATEGORY_THEMES = {
+  'Hot Coffee':           { bg: '#FFF3E0', border: '#FFB74D', text: '#E65100' },
+  'Tea & Hot Drinks':     { bg: '#E8F5E9', border: '#66BB6A', text: '#2E7D32' },
+  'Juice & Smoothies':    { bg: '#FCE4EC', border: '#F48FB1', text: '#AD1457' },
+  'Main Food / Meals':    { bg: '#E3F2FD', border: '#42A5F5', text: '#1565C0' },
+  'Beer & Alcohol':       { bg: '#F3E5F5', border: '#CE93D8', text: '#6A1B9A' },
+  'Soft Drinks':          { bg: '#E0F7FA', border: '#4DD0E1', text: '#00695C' },
+  'Wines':                { bg: '#FFF8E1', border: '#FFD54F', text: '#F57F17' },
+  'Fast Food':            { bg: '#FBE9E7', border: '#FF8A65', text: '#BF360C' },
+  'Snacks':               { bg: '#F9FBE7', border: '#DCE775', text: '#827717' },
+  'Accompaniments':       { bg: '#EFEBE9', border: '#A1887F', text: '#4E342E' },
+};
+
+function getCategoryColors(category) {
+  return CATEGORY_THEMES[category] || { bg: '#FFFFFF', border: '#E5E7EB', text: '#1D3557' };
+}
+
 function getItemIcon(name, category) {
   const n = (name || '').toLowerCase();
   const c = (category || '').toLowerCase();
@@ -477,12 +494,22 @@ export default function CashierDashboard() {
               <div className="cashier-grid">
                 {filteredMenu.map(m => {
                   const qty = qtyById[m.id] || 0;
+                  const theme = getCategoryColors(m.category);
                   return (
-                    <div key={m.id} className="cashier-card" onClick={() => setQty(m.id, qty + 1)}>
+                    <div
+                      key={m.id}
+                      className="cashier-card"
+                      onClick={() => setQty(m.id, qty + 1)}
+                      style={{
+                        background: theme.bg,
+                        borderColor: theme.border,
+                      }}
+                    >
+                      <div className="cashier-card-decor" style={{ background: theme.border }} />
                       {qty > 0 && <div className="cashier-card-qty">{qty}</div>}
-                      <div className="cashier-card-icon">{getItemIcon(m.name, m.category)}</div>
-                      <div className="cashier-card-title">{m.name}</div>
-                      <div className="cashier-card-price">{Number(m.price).toLocaleString()} RWF</div>
+                      <div className="cashier-card-icon" style={{ color: theme.text }}>{getItemIcon(m.name, m.category)}</div>
+                      <div className="cashier-card-title" style={{ color: theme.text }}>{m.name}</div>
+                      <div className="cashier-card-price" style={{ color: theme.text }}>{Number(m.price).toLocaleString()} RWF</div>
                     </div>
                   )
                 })}
