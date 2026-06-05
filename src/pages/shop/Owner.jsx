@@ -52,6 +52,7 @@ export default function Owner() {
   const setTab = (t) => setSearchParams({ tab: t })
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [eodProductPage, setEodProductPage] = useState(1)
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
@@ -2703,33 +2704,45 @@ export default function Owner() {
                       <span>Profit</span>
                     </div>
                     {topProducts.length === 0 && <div className="am-eod-empty">No products sold this date</div>}
-                    {topProducts.slice(0, 15).map((p, idx) => (
-                      <div key={idx} className="am-eod-table-row">
-                        <span className="am-eod-cell-name">
-                          <span className="am-eod-rank">#{idx + 1}</span>
-                          {p.name}
-                          <span className="am-eod-cell-cat">{p.category}</span>
-                        </span>
-                        <span>{p.qty}</span>
-                        <span style={{ color: '#1D3557' }}>{Number(p.revenue).toLocaleString()}</span>
-                        <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
-                      </div>
-                    ))}
-                    {topProducts.length > 15 && (() => {
-                      const remaining = topProducts.slice(15)
-                      const remQty = remaining.reduce((s, p) => s + p.qty, 0)
-                      const remRev = remaining.reduce((s, p) => s + p.revenue, 0)
-                      const remCost = remaining.reduce((s, p) => s + p.cost, 0)
+                    {(() => {
+                      const perPage = 15
+                      const totalPages = Math.ceil(topProducts.length / perPage)
+                      const start = (eodProductPage - 1) * perPage
+                      const pageItems = topProducts.slice(start, start + perPage)
                       return (
-                        <div className="am-eod-table-row" style={{ background: '#f8f9fa', fontWeight: 600 }}>
-                          <span className="am-eod-cell-name">
-                            <span className="am-eod-rank">…</span>
-                            {remaining.length} Other Products
-                          </span>
-                          <span>{remQty}</span>
-                          <span style={{ color: '#1D3557' }}>{Number(remRev).toLocaleString()}</span>
-                          <span style={{ color: remRev - remCost >= 0 ? '#1D3557' : '#E57373' }}>{Number(remRev - remCost).toLocaleString()}</span>
-                        </div>
+                        <>
+                          {pageItems.map((p, idx) => (
+                            <div key={start + idx} className="am-eod-table-row">
+                              <span className="am-eod-cell-name">
+                                <span className="am-eod-rank">#{start + idx + 1}</span>
+                                {p.name}
+                                <span className="am-eod-cell-cat">{p.category}</span>
+                              </span>
+                              <span>{p.qty}</span>
+                              <span style={{ color: '#1D3557' }}>{Number(p.revenue).toLocaleString()}</span>
+                              <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
+                            </div>
+                          ))}
+                          {totalPages > 1 && (
+                            <div className="am-eod-table-row" style={{ background: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px' }}>
+                              <span style={{ fontSize: 12, color: '#666' }}>Page {eodProductPage} of {totalPages}</span>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                  className="btn tiny"
+                                  style={{ opacity: eodProductPage === 1 ? 0.4 : 1, cursor: eodProductPage === 1 ? 'not-allowed' : 'pointer' }}
+                                  onClick={() => setEodProductPage(p => Math.max(1, p - 1))}
+                                  disabled={eodProductPage === 1}
+                                >← Prev</button>
+                                <button
+                                  className="btn tiny"
+                                  style={{ opacity: eodProductPage === totalPages ? 0.4 : 1, cursor: eodProductPage === totalPages ? 'not-allowed' : 'pointer' }}
+                                  onClick={() => setEodProductPage(p => Math.min(totalPages, p + 1))}
+                                  disabled={eodProductPage === totalPages}
+                                >Next →</button>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )
                     })()}
                   </div>
