@@ -17,7 +17,9 @@ import {
   HiOutlineArrowRightOnRectangle,
   HiOutlineMinusCircle,
   HiOutlinePlusCircle,
-  HiOutlineChartBar
+  HiOutlineChartBar,
+  HiOutlineClock,
+  HiOutlineCalendar
 } from 'react-icons/hi2'
 import {
   IoCafeOutline,
@@ -108,6 +110,16 @@ export default function CashierDashboard() {
   // Billing (Pending & Ready) states
   const [pending, setPending] = useState([])
   const [ready, setReady] = useState([])
+
+  // History states
+  const [historyDate, setHistoryDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  })
+  const [historyData, setHistoryData] = useState([])
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   
   // Payment states for Awaiting Payment tab (tracked per order ID)
   const [paymentMethods, setPaymentMethods] = useState({})
@@ -150,6 +162,54 @@ export default function CashierDashboard() {
       if (s?.some(x => x.id === myId)) setSelectedWaiter(myId)
     } catch(e) { /* ignore */ }
   }, [])
+
+  // Load History
+  const loadHistory = useCallback(async (date) => {
+    setLoadingHistory(true)
+    try {
+      const res = await api(`/api/shop/owner/reports/daily?date=${date}`)
+      
+      let totalAmount = 0
+      const summary = {}
+      const processedOrders = new Set()
+
+      res.forEach(p => {
+        totalAmount += Number(p.amount || 0)
+
+        // Count products (only once per order to avoid duplicating items on split payments)
+        if (p.rawItems && p.orderId && !processedOrders.has(p.orderId)) {
+          processedOrders.add(p.orderId)
+          p.rawItems.forEach(item => {
+            if (!summary[item.name]) {
+              summary[item.name] = { name: item.name, qty: 0, amount: 0, category: item.category }
+            }
+            summary[item.name].qty += Number(item.qty)
+            summary[item.name].amount += (Number(item.qty) * Number(item.price))
+          })
+        }
+      })
+      
+      const sorted = Object.values(summary).sort((a, b) => b.qty - a.qty)
+      setHistoryData(sorted)
+      
+      const itemsSum = sorted.reduce((acc, item) => acc + item.amount, 0)
+      
+      // Store BOTH the raw payments and the items sum so we can show the discrepancy
+      setHistoryTotal(itemsSum)
+      // We will attach total payments as a separate property to use in the view
+      sorted._totalPaymentsReceived = totalAmount
+    } catch (e) {
+      console.error("Failed to load history:", e)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'history') {
+      loadHistory(historyDate)
+    }
+  }, [tab, historyDate, loadHistory])
 
   // Load Billing (real-time)
   const loadBilling = useCallback(async () => {
@@ -460,6 +520,9 @@ export default function CashierDashboard() {
         <button className={`cashier-tab ${tab==='ready'?'active':''}`} onClick={()=>setTab('ready')}>
           <IoCafeOutline /> Awaiting Payment
           <span className="cashier-tab-badge blue">{ready.length}</span>
+        </button>
+        <button className={`cashier-tab ${tab==='history'?'active':''}`} onClick={()=>setTab('history')}>
+          <HiOutlineClock /> History
         </button>
       </div>
 
@@ -789,6 +852,72 @@ export default function CashierDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* HISTORY TAB */}
+        {tab === 'history' && (
+          <div style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+            <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: '#111827' }}>Sales History</h2>
+                  <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: 14 }}>View products and amounts sold on past dates.</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <label style={{ fontWeight: 600, color: '#374151' }}><HiOutlineCalendar style={{verticalAlign:'text-bottom', fontSize: 18}}/> Select Date:</label>
+                  <input 
+                    type="date" 
+                    value={historyDate}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={e => setHistoryDate(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid var(--pos-border)', borderRadius: 8, outline: 'none', background: '#F9FAFB', fontWeight: 600 }}
+                  />
+                </div>
+              </div>
+
+              {loadingHistory ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#6B7280' }}>Loading history...</div>
+              ) : (
+                <>
+                  {historyData.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#6B7280', background: '#F9FAFB', borderRadius: 12 }}>
+                      No sales recorded for {new Date(historyDate).toLocaleDateString()}.
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--pos-bg)', borderRadius: '12px 12px 0 0', fontWeight: 700, color: '#374151', border: '1px solid var(--pos-border)', borderBottom: 'none' }}>
+                        <div style={{ flex: 2 }}>Product</div>
+                        <div style={{ flex: 1, textAlign: 'center' }}>Quantity Sold</div>
+                        <div style={{ flex: 1, textAlign: 'right' }}>Total Amount (RWF)</div>
+                      </div>
+                      <div style={{ border: '1px solid var(--pos-border)', borderRadius: '0 0 12px 12px', background: '#FFFFFF' }}>
+                        {historyData.map((item, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', borderBottom: i < historyData.length - 1 ? '1px solid var(--pos-border)' : 'none', color: '#111827', fontSize: 15 }}>
+                            <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 20 }}>{getItemIcon(item.name, item.category)}</span>
+                              <span style={{ fontWeight: 600 }}>{item.name}</span>
+                            </div>
+                            <div style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{item.qty}</div>
+                            <div style={{ flex: 1, textAlign: 'right', color: '#10B981', fontWeight: 800 }}>{item.amount.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, padding: 16, background: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0', color: '#065F46' }}>
+                        <span style={{ fontSize: 16, fontWeight: 700, marginRight: 16 }}>Total Products Value:</span>
+                        <span style={{ fontSize: 20, fontWeight: 800 }}>{historyTotal.toLocaleString()} RWF</span>
+                      </div>
+
+                      {historyData._totalPaymentsReceived && historyData._totalPaymentsReceived !== historyTotal && (
+                        <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, border: '1px solid #FFD54F', fontSize: 13, color: '#F57F17' }}>
+                          <strong>Note:</strong> Total cash payments received in the drawer was <strong>{Number(historyData._totalPaymentsReceived).toLocaleString()} RWF</strong>. The {Math.abs(historyData._totalPaymentsReceived - historyTotal).toLocaleString()} RWF difference is usually due to free bundled accompaniments, multi-day loans, or manual discounts.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}

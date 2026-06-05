@@ -2635,7 +2635,7 @@ export default function Owner() {
                   </div>
                   {eodRevenue !== paidRevenue && (
                     <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, border: '1px solid #FFD54F', fontSize: 12, color: '#F57F17' }}>
-                      <strong>Note:</strong> Revenue excludes {Number(eodRevenue - paidRevenue).toLocaleString()} RWF in bundled accompaniments (free items served with meals). Total payments received: {Number(eodRevenue).toLocaleString()} RWF.
+                      <strong>Note:</strong> The sum of the menu products you sold is {Number(paidRevenue).toLocaleString()} RWF, but your cashiers physically collected <strong>{Number(eodRevenue).toLocaleString()} RWF</strong> today. The {Number(Math.abs(eodRevenue - paidRevenue)).toLocaleString()} RWF difference represents multi-day loan repayments, overpayments, or custom price adjustments logged by cashiers today.
                     </div>
                   )}
                 </section>
