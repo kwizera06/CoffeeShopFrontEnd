@@ -2569,11 +2569,20 @@ export default function Owner() {
             }
           })
 
-          const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue)
+          const allProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue)
+          const paidProducts = allProducts.filter(p => p.revenue > 0)
+          const bundledItems = allProducts.filter(p => p.revenue === 0)
           const sortedCategories = Object.entries(catBreakdown).sort((a, b) => b[1].revenue - a[1].revenue)
           const peakHour = Object.entries(hourlyMap).sort((a, b) => b[1] - a[1])[0]
-          const avgOrderValue = eodOrders > 0 ? Math.round(eodRevenue / eodOrders) : 0
-          const profitMargin = eodRevenue > 0 ? ((eodProfit / eodRevenue) * 100).toFixed(1) : 0
+
+          // Net figures excluding free bundled accompaniments
+          const paidRevenue = paidProducts.reduce((s, p) => s + p.revenue, 0)
+          const paidCost = paidProducts.reduce((s, p) => s + p.cost, 0)
+          const paidProfit = paidRevenue - paidCost
+          const bundledCost = bundledItems.reduce((s, p) => s + p.cost, 0)
+
+          const avgOrderValue = eodOrders > 0 ? Math.round(paidRevenue / eodOrders) : 0
+          const profitMargin = paidRevenue > 0 ? ((paidProfit / paidRevenue) * 100).toFixed(1) : 0
 
           // Low stock
           const lowStockItems = ingredients.filter(i => i.stock_level < i.min_threshold)
@@ -2607,21 +2616,28 @@ export default function Owner() {
                   <div className="am-eod-grid-4">
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Revenue</span>
-                      <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(eodRevenue).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(paidRevenue).toLocaleString()} RWF</span>
+                      <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>Payments received: {Number(eodRevenue).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Total Cost</span>
-                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(eodCost).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(paidCost).toLocaleString()} RWF</span>
+                      {bundledCost > 0 && <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>+ {Number(bundledCost).toLocaleString()} RWF bundled cost</span>}
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Net Profit</span>
-                      <span className="am-eod-stat-value" style={{ color: eodProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(eodProfit).toLocaleString()} RWF</span>
+                      <span className="am-eod-stat-value" style={{ color: paidProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(paidProfit).toLocaleString()} RWF</span>
                     </div>
                     <div className="am-eod-stat">
                       <span className="am-eod-stat-label">Profit Margin</span>
                       <span className="am-eod-stat-value">{profitMargin}%</span>
                     </div>
                   </div>
+                  {eodRevenue !== paidRevenue && (
+                    <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, border: '1px solid #FFD54F', fontSize: 12, color: '#F57F17' }}>
+                      <strong>Note:</strong> Revenue excludes {Number(eodRevenue - paidRevenue).toLocaleString()} RWF in bundled accompaniments (free items served with meals). Total payments received: {Number(eodRevenue).toLocaleString()} RWF.
+                    </div>
+                  )}
                 </section>
 
                 {/* ── Payment Breakdown ── */}
@@ -2695,7 +2711,7 @@ export default function Owner() {
 
                 {/* ── Top Products ── */}
                 <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Top Products <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({topProducts.length} total)</span></h3>
+                  <h3 className="am-eod-section-title">Top Products <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({paidProducts.length} paid products)</span></h3>
                   <div className="am-eod-table">
                     <div className="am-eod-table-head">
                       <span>Product</span>
@@ -2703,12 +2719,12 @@ export default function Owner() {
                       <span>Revenue</span>
                       <span>Profit</span>
                     </div>
-                    {topProducts.length === 0 && <div className="am-eod-empty">No products sold this date</div>}
+                    {paidProducts.length === 0 && <div className="am-eod-empty">No products sold this date</div>}
                     {(() => {
                       const perPage = 15
-                      const totalPages = Math.ceil(topProducts.length / perPage)
+                      const totalPages = Math.ceil(paidProducts.length / perPage)
                       const start = (eodProductPage - 1) * perPage
-                      const pageItems = topProducts.slice(start, start + perPage)
+                      const pageItems = paidProducts.slice(start, start + perPage)
                       return (
                         <>
                           {pageItems.map((p, idx) => (
@@ -2723,6 +2739,15 @@ export default function Owner() {
                               <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
                             </div>
                           ))}
+                          <div className="am-eod-table-row" style={{ background: '#EDF2F9', borderTop: '2px solid #1D3557', fontWeight: 800 }}>
+                            <span className="am-eod-cell-name">
+                              <span className="am-eod-rank">∑</span>
+                              Total Products Revenue
+                            </span>
+                            <span>{paidProducts.reduce((s, p) => s + p.qty, 0)}</span>
+                            <span style={{ color: '#1D3557' }}>{Number(paidProducts.reduce((s, p) => s + p.revenue, 0)).toLocaleString()}</span>
+                            <span style={{ color: '#1D3557' }}>{Number(paidProducts.reduce((s, p) => s + (p.revenue - p.cost), 0)).toLocaleString()}</span>
+                          </div>
                           {totalPages > 1 && (
                             <div className="am-eod-table-row" style={{ background: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px' }}>
                               <span style={{ fontSize: 12, color: '#666' }}>Page {eodProductPage} of {totalPages}</span>
@@ -2747,6 +2772,33 @@ export default function Owner() {
                     })()}
                   </div>
                 </section>
+
+                {/* ── Bundled Items (Free Accompaniments) ── */}
+                {bundledItems.length > 0 && (
+                  <section className="am-eod-section">
+                    <h3 className="am-eod-section-title">Bundled Items <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({bundledItems.length} free accompaniments)</span></h3>
+                    <div className="am-eod-table">
+                      <div className="am-eod-table-head">
+                        <span>Product</span>
+                        <span>Qty</span>
+                        <span>Revenue</span>
+                        <span>Note</span>
+                      </div>
+                      {bundledItems.map((p, idx) => (
+                        <div key={idx} className="am-eod-table-row" style={{ opacity: 0.8 }}>
+                          <span className="am-eod-cell-name">
+                            <span className="am-eod-rank">#{idx + 1}</span>
+                            {p.name}
+                            <span className="am-eod-cell-cat">{p.category}</span>
+                          </span>
+                          <span>{p.qty}</span>
+                          <span style={{ color: '#888', fontStyle: 'italic' }}>—</span>
+                          <span style={{ fontSize: 12, color: '#888' }}>Bundled with meal</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 {/* ── Staff Performance ── */}
                 <section className="am-eod-section">
