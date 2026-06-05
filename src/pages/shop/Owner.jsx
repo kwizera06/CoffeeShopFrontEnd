@@ -2813,83 +2813,78 @@ export default function Owner() {
                       shifts.filter(sh => sh.status === 'CLOSED').map((sh, idx) => {
                         const shiftCashout = parseFloat(sh.cashout) || 0
                         const shiftExpenses = parseFloat(sh.expenses) || 0
-                        const expectedCash = (parseFloat(sh.initial_cash) || 0) + (parseFloat(sh.total_cash_sales) || 0) - shiftExpenses
-                        const expectedMomo = (parseFloat(sh.initial_momo) || 0) + (parseFloat(sh.total_momo_sales) || 0) - shiftCashout
-                        const expectedPos = parseFloat(sh.total_pos_sales) || 0
-                        const expectedTotal = expectedCash + expectedMomo + expectedPos
-
+                        const initialCash = parseFloat(sh.initial_cash) || 0
+                        const initialMomo = parseFloat(sh.initial_momo) || 0
+                        const cashSales = parseFloat(sh.total_cash_sales) || 0
+                        const momoSales = parseFloat(sh.total_momo_sales) || 0
+                        const posSales = parseFloat(sh.total_pos_sales) || 0
                         const actualCash = parseFloat(sh.actual_cash_on_hand) || 0
-                        const actualAccountedCash = actualCash
                         const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
-                        // POS is auto‑balanced: use expectedPos as actualPos
-                        const actualPos = expectedPos
-                        const actualTotal = actualAccountedCash + actualMomo + actualPos
 
-                        const diffCash = actualAccountedCash - expectedCash
-                        const diffMomo = actualMomo - expectedMomo
-                        const diffPos = 0 // POS auto-balanced
-                        const diffTotal = actualTotal - expectedTotal
+                        const expectedCash = initialCash + cashSales - shiftExpenses
+                        const expectedMomo = initialMomo + momoSales - shiftCashout
+
+                        const diffCash = actualCash - expectedCash
+
+                        const format = n => Number(n).toLocaleString()
+
+                        const FlowRow = ({ label, value, color = '#E2E8F0', isTotal }) => (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: isTotal ? `2px solid ${color}` : '1px solid rgba(255,255,255,0.06)', fontWeight: isTotal ? 700 : 400, fontSize: isTotal ? 15 : 13 }}>
+                            <span style={{ color: isTotal ? '#F8FAFC' : '#94A3B8' }}>{label}</span>
+                            <span style={{ color: isTotal ? '#F8FAFC' : '#CBD5E1', fontFamily: 'monospace' }}>{value} RWF</span>
+                          </div>
+                        )
 
                         return (
                           <div key={idx} className="am-eod-reconciliation-block">
                             <div className="am-eod-recon-header">
                               <span className="am-eod-recon-staff">{sh.opened_by_user?.name || 'Cashier'}</span>
                               <span className="am-eod-recon-time">
-                                {sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : ''} 
+                                {sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : ''}
                                 {' → '}
                                 {sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : ''}
                               </span>
                             </div>
 
-                            <div className="am-eod-recon-opening">
-                              <span className="am-eod-recon-label">Opening Balance:</span>
-                              <span>Cash: <strong>{Number(parseFloat(sh.initial_cash) || 0).toLocaleString()} RWF</strong></span>
-                              {(parseFloat(sh.initial_momo) || 0) > 0 && <span>MoMo: <strong>{Number(parseFloat(sh.initial_momo) || 0).toLocaleString()} RWF</strong></span>}
-                            </div>
-
-                            <div className="am-eod-recon-grid">
-                              <div className="am-eod-recon-col am-eod-recon-col-head">
-                                <span></span>
-                                <span>Expected</span>
-                                <span>Actual (Count/Sales)</span>
-                                <span>Difference</span>
-                              </div>
-                              <div className="am-eod-recon-col">
-                                <span className="am-eod-recon-label">Cash</span>
-                                <span>{Number(expectedCash).toLocaleString()}</span>
-                                <span title={`Count: ${actualCash}`}>{Number(actualAccountedCash).toLocaleString()}</span>
-                                <span style={{ color: diffCash === 0 ? '#34D399' : diffCash > 0 ? '#60A5FA' : '#F87171', fontWeight: 700 }}>
-                                  {diffCash > 0 ? '+' : ''}{Number(diffCash).toLocaleString()}
-                                </span>
-                              </div>
-                              {shiftExpenses > 0 && (
-                                <div className="am-eod-recon-col" style={{ background: 'rgba(239,68,68,0.1)', borderBottom: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                  <span className="am-eod-recon-label" style={{ color: '#FCA5A5', paddingLeft: 8 }}>↳ Expenses</span>
-                                  <span style={{ color: '#FCA5A5' }}>{Number(shiftExpenses).toLocaleString()}</span>
-                                  <span>—</span>
-                                  <span>—</span>
+                            <div style={{ display: 'grid', gap: 16, marginTop: 12 }}>
+                              {/* ── CASH ── */}
+                              <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                  <span style={{ fontSize: 18 }}>💵</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: '#34D399' }}>Cash</span>
                                 </div>
-                              )}
-                              <div className="am-eod-recon-col">
-                                <span className="am-eod-recon-label">MoMo</span>
-                                <span>{Number(expectedMomo).toLocaleString()}</span>
-                                <span style={{ color: '#60A5FA', fontWeight: 600 }} title="Sales Made">{Number(parseFloat(sh.total_momo_sales) || 0).toLocaleString()}</span>
-                                <span>—</span>
+                                <FlowRow label="Opening Balance" value={format(initialCash)} />
+                                <FlowRow label="Sales" value={`+ ${format(cashSales)}`} />
+                                {shiftExpenses > 0 && <FlowRow label="Expenses" value={`- ${format(shiftExpenses)}`} color="#FCA5A5" />}
+                                <FlowRow label="Should Remain" value={format(expectedCash)} color="#34D399" isTotal />
+                                <FlowRow label="Cashier Counted" value={format(actualCash)} />
+                                <FlowRow label="Variance" value={`${diffCash >= 0 ? '+' : ''}${format(diffCash)}`} color={diffCash === 0 ? '#34D399' : diffCash > 0 ? '#60A5FA' : '#F87171'} isTotal />
                               </div>
-                              <div className="am-eod-recon-col">
-                                <span className="am-eod-recon-label">POS/Card</span>
-                                <span>{Number(expectedPos).toLocaleString()}</span>
-                                <span style={{ color: '#60A5FA', fontWeight: 600 }} title="Sales Made">{Number(parseFloat(sh.total_pos_sales) || 0).toLocaleString()}</span>
-                                <span>—</span>
+
+                              {/* ── MOMO ── */}
+                              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                  <span style={{ fontSize: 18 }}>📱</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: '#38BDF8' }}>MoMo</span>
+                                </div>
+                                <FlowRow label="Opening Balance" value={format(initialMomo)} />
+                                <FlowRow label="Sales Received" value={`+ ${format(momoSales)}`} />
+                                {shiftCashout > 0 && <FlowRow label="Transferred to Owner" value={`- ${format(shiftCashout)}`} color="#FCA5A5" />}
+                                <FlowRow label="Should Remain" value={format(expectedMomo)} color="#38BDF8" isTotal />
+                                <FlowRow label="Phone Balance" value={format(actualMomo)} />
+                              </div>
+
+                              {/* ── POS / CARD ── */}
+                              <div style={{ background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                  <span style={{ fontSize: 18 }}>💳</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: '#A78BFA' }}>POS / Card</span>
+                                </div>
+                                <FlowRow label="Sales" value={`+ ${format(posSales)}`} />
+                                <FlowRow label="Total" value={format(posSales)} color="#A78BFA" isTotal />
                               </div>
                             </div>
 
-                            {shiftCashout > 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: '10px 14px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: 8 }}>
-                                <span style={{ fontWeight: 700, color: '#38BDF8', fontSize: 13 }}>📱 MoMo Given to Owner</span>
-                                <span style={{ fontWeight: 800, color: '#38BDF8', fontSize: 15 }}>{Number(shiftCashout).toLocaleString()} RWF</span>
-                              </div>
-                            )}
                             {sh.notes && (
                               <div className="am-eod-recon-notes">
                                 <span className="am-eod-recon-notes-label">Cashier Notes:</span>
