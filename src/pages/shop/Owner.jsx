@@ -2885,6 +2885,8 @@ export default function Owner() {
                         const posSales = parseFloat(sh.total_pos_sales) || 0
                         const actualCash = parseFloat(sh.actual_cash_on_hand) || 0
                         const actualMomo = parseFloat(sh.actual_momo_on_hand) || 0
+                        const loanSales = parseFloat(sh.total_loan_sales) || 0
+                        const loanRepayments = parseFloat(sh.total_loan_repayments) || 0
 
                         const expectedCash = initialCash + cashSales - shiftExpenses
                         const expectedMomo = initialMomo + momoSales - shiftCashout
@@ -2919,7 +2921,7 @@ export default function Owner() {
                                   <span style={{ fontWeight: 700, fontSize: 14, color: '#34D399' }}>Cash</span>
                                 </div>
                                 <FlowRow label="Opening Balance" value={format(initialCash)} />
-                                <FlowRow label="Sales" value={`+ ${format(cashSales)}`} />
+                                <FlowRow label="Sales & Repayments" value={`+ ${format(cashSales)}`} />
                                 {shiftExpenses > 0 && <FlowRow label="Expenses" value={`- ${format(shiftExpenses)}`} color="#FCA5A5" />}
                                 <FlowRow label="Should Remain" value={format(expectedCash)} color="#34D399" isTotal />
                                 <FlowRow label="Cashier Counted" value={format(actualCash)} />
@@ -2933,7 +2935,7 @@ export default function Owner() {
                                   <span style={{ fontWeight: 700, fontSize: 14, color: '#38BDF8' }}>MoMo</span>
                                 </div>
                                 <FlowRow label="Opening Balance" value={format(initialMomo)} />
-                                <FlowRow label="Sales Received" value={`+ ${format(momoSales)}`} />
+                                <FlowRow label="Sales / Repayments Received" value={`+ ${format(momoSales)}`} />
                                 {shiftCashout > 0 && <FlowRow label="Transferred to Owner" value={`- ${format(shiftCashout)}`} color="#FCA5A5" />}
                                 <FlowRow label="Should Remain" value={format(expectedMomo)} color="#38BDF8" isTotal />
                                 <FlowRow label="Phone Balance" value={format(actualMomo)} />
@@ -2947,6 +2949,17 @@ export default function Owner() {
                                 </div>
                                 <FlowRow label="Sales" value={`+ ${format(posSales)}`} />
                                 <FlowRow label="Total" value={format(posSales)} color="#A78BFA" isTotal />
+                              </div>
+
+                              {/* ── LOANS ── */}
+                              <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                  <span style={{ fontSize: 18 }}>🤝</span>
+                                  <span style={{ fontWeight: 700, fontSize: 14, color: '#F59E0B' }}>Loans</span>
+                                </div>
+                                <FlowRow label="Loans Issued (Credit out)" value={`${format(loanSales)}`} />
+                                <FlowRow label="Loans Repaid (Cash/MoMo in)" value={`${format(loanRepayments)}`} />
+                                <FlowRow label="Net Outstanding Change" value={`${loanSales - loanRepayments > 0 ? '+' : ''}${format(loanSales - loanRepayments)}`} color="#F59E0B" isTotal />
                               </div>
                             </div>
 

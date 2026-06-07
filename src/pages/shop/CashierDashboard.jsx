@@ -19,7 +19,8 @@ import {
   HiOutlinePlusCircle,
   HiOutlineChartBar,
   HiOutlineClock,
-  HiOutlineCalendar
+  HiOutlineCalendar,
+  HiOutlineReceiptPercent
 } from 'react-icons/hi2'
 import {
   IoCafeOutline,
@@ -121,7 +122,12 @@ export default function CashierDashboard() {
   const [historyTotal, setHistoryTotal] = useState(0)
   const [loadingHistory, setLoadingHistory] = useState(false)
   
-  // Payment states for Awaiting Payment tab (tracked per order ID)
+  // Loan states
+  const [loans, setLoans] = useState([])
+  const [loadingLoans, setLoadingLoans] = useState(false)
+  const [showRepaymentModal, setShowRepaymentModal] = useState(null) // loan object
+  const [repaymentForm, setRepaymentForm] = useState({ amount: '', method: 'CASH' })
+  
   const [paymentMethods, setPaymentMethods] = useState({})
   const [clientNames, setClientNames] = useState({})
   const [splitModes, setSplitModes] = useState({})
@@ -205,11 +211,27 @@ export default function CashierDashboard() {
     }
   }, [])
 
+  // Load Loans
+  const loadLoans = useCallback(async (status) => {
+    setLoadingLoans(true)
+    try {
+      const res = await api(`/api/shop/loans?status=${status || ''}`)
+      setLoans(res)
+    } catch (e) {
+      console.error("Failed to load loans:", e)
+    } finally {
+      setLoadingLoans(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (tab === 'history') {
       loadHistory(historyDate)
     }
-  }, [tab, historyDate, loadHistory])
+    if (tab === 'loans') {
+      loadLoans('UNPAID')
+    }
+  }, [tab, historyDate, loadHistory, loadLoans])
 
   // Load Billing (real-time)
   const loadBilling = useCallback(async () => {
@@ -456,6 +478,27 @@ export default function CashierDashboard() {
   }
 
 
+  // Loan Repayment Actions
+  async function handleRepayment() {
+    if (!showRepaymentModal) return;
+    const { id } = showRepaymentModal;
+    const { amount, method } = repaymentForm;
+    if (!amount || Number(amount) <= 0) { alert("Enter valid amount"); return; }
+    
+    setBusy(true)
+    try {
+      await api(`/api/shop/loans/${id}/pay`, {
+        method: 'POST',
+        body: JSON.stringify({ amount: Number(amount), method })
+      })
+      setShowRepaymentModal(null)
+      setRepaymentForm({ amount: '', method: 'CASH' })
+      void loadLoans('UNPAID')
+      void reloadShift()
+    } catch(e) { alert(e.message) }
+    finally { setBusy(false) }
+  }
+
   /* --- RENDER --- */
 
   const filteredMenu = menu.filter(m => {
@@ -523,6 +566,9 @@ export default function CashierDashboard() {
         </button>
         <button className={`cashier-tab ${tab==='history'?'active':''}`} onClick={()=>setTab('history')}>
           <HiOutlineClock /> History
+        </button>
+        <button className={`cashier-tab ${tab==='loans'?'active':''}`} onClick={()=>setTab('loans')}>
+          <HiOutlineReceiptPercent /> Loans
         </button>
       </div>
 
@@ -922,6 +968,77 @@ export default function CashierDashboard() {
           </div>
         )}
 
+        {/* LOANS TAB */}
+        {tab === 'loans' && (
+          <div style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+            <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: '#111827' }}>Pending Loans</h2>
+                  <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: 14 }}>Track and receive payments for outstanding customer loans.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                   <button 
+                     className={`cashier-cat-pill ${!loans.some(l => l.status === 'PAID') ? 'active' : ''}`}
+                     onClick={() => loadLoans('UNPAID')}
+                   >Unpaid Only</button>
+                   <button 
+                     className="cashier-cat-pill"
+                     onClick={() => loadLoans('')}
+                   >All Loans</button>
+                </div>
+              </div>
+
+              {loadingLoans ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#6B7280' }}>Loading loans...</div>
+              ) : (
+                <div className="cashier-billing-grid">
+                  {loans.length === 0 && <p className="muted" style={{padding: 24}}>No loans found.</p>}
+                  {loans.map(l => {
+                    const totalPaid = (l.loan_payments || []).reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                    const remaining = parseFloat(l.amount) - totalPaid;
+                    return (
+                      <div key={l.id} className="cashier-order-card" style={{borderColor: remaining > 0 ? '#FFD54F' : '#BBF7D0'}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
+                           <div className="table-badge" style={{background: remaining > 0 ? '#FFF8E1' : '#F0FDF4', color: remaining > 0 ? '#F57F17' : '#065F46'}}>
+                              {l.status}
+                           </div>
+                           <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(l.created_at).toLocaleDateString()}</div>
+                        </div>
+                        
+                        <div style={{marginTop: 12}}>
+                           <div style={{fontSize: 16, fontWeight: 800, color: '#111827'}}>{l.client_name}</div>
+                           <div style={{fontSize: 13, color: '#6B7280'}}>Total Amount: {Number(l.amount).toLocaleString()} RWF</div>
+                        </div>
+
+                        <div style={{background: '#F9FAFB', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #E5E7EB'}}>
+                           <div style={{display:'flex', justifyContent:'space-between', fontSize: 13, marginBottom: 4}}>
+                              <span>Already Paid:</span>
+                              <span style={{fontWeight: 700, color: '#10B981'}}>{totalPaid.toLocaleString()} RWF</span>
+                           </div>
+                           <div style={{display:'flex', justifyContent:'space-between', fontSize: 14, fontWeight: 800, borderTop: '1px solid #E5E7EB', paddingTop: 4}}>
+                              <span>Balance:</span>
+                              <span style={{color: remaining > 0 ? '#EF4444' : '#10B981'}}>{remaining.toLocaleString()} RWF</span>
+                           </div>
+                        </div>
+
+                        {remaining > 0 && (
+                           <button className="cashier-btn-submit active" style={{marginTop: 16, width: '100%'}} onClick={() => {
+                              setShowRepaymentModal(l);
+                              setRepaymentForm({ amount: String(remaining), method: 'CASH' });
+                           }}>
+                              Receive Payment
+                           </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* SHIFT MODAL */}
@@ -959,12 +1076,88 @@ export default function CashierDashboard() {
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Notes</label>
                     <textarea className="cashier-search" style={{width: '100%', marginTop: 4, padding:8}} value={shiftForm.notes} onChange={e=>setShiftForm(f=>({...f, notes:e.target.value}))}/>
                   </div>
+
+                  <div style={{ background: '#F9FAFB', padding: 12, borderRadius: 12, marginTop: 8, border: '1px solid #E5E7EB', fontSize: 13 }}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ color: '#6B7280' }}>Shift Sales (Cash):</span>
+                        <span style={{ fontWeight: 700 }}>{(shift.current_cash_sales - (shift.current_loan_repayments || 0)).toLocaleString()} RWF</span>
+                     </div>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ color: '#6B7280' }}>Loan Repayments:</span>
+                        <span style={{ fontWeight: 700, color: '#10B981' }}>+{(shift.current_loan_repayments || 0).toLocaleString()} RWF</span>
+                     </div>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, borderTop: '1px solid #E5E7EB', paddingTop: 4 }}>
+                        <span style={{ color: '#111827', fontWeight: 700 }}>Total Cash in Drawer:</span>
+                        <span style={{ fontWeight: 800, color: '#1D3557' }}>{(Number(shift.initial_cash) + shift.current_cash_sales).toLocaleString()} RWF</span>
+                     </div>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: '#F59E0B' }}>
+                        <span>Loans Taken (Today):</span>
+                        <span style={{ fontWeight: 700 }}>{(shift.current_loan_sales || 0).toLocaleString()} RWF</span>
+                     </div>
+                  </div>
                 </div>
              )}
              
              <div style={{display:'flex', gap: 12, marginTop: 24}}>
                 <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={handleShiftAction} disabled={busy}>Confirm</button>
                 <button className="cashier-btn-close-shift" style={{padding: 12}} onClick={()=>setShowShiftModal('')}>Cancel</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPAYMENT MODAL */}
+      {showRepaymentModal && (
+        <div className="cashier-modal-overlay">
+          <div className="cashier-modal" style={{ maxWidth: 400 }}>
+             <h3 style={{ marginBottom: 4 }}>💸 Receive Repayment</h3>
+             <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 20 }}>Receiving payment from <strong>{showRepaymentModal.client_name}</strong></p>
+             
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                   <label style={{ fontSize: 12, fontWeight: 700, color: '#8C9993' }}>Amount to Pay (RWF)</label>
+                   <input 
+                      type="number" 
+                      className="cashier-search" 
+                      style={{ width: '100%', marginTop: 4, fontSize: 18, fontWeight: 700 }} 
+                      value={repaymentForm.amount} 
+                      onChange={e => setRepaymentForm(f => ({ ...f, amount: e.target.value }))}
+                   />
+                </div>
+
+                <div>
+                   <label style={{ fontSize: 12, fontWeight: 700, color: '#8C9993' }}>Payment Method</label>
+                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      {['CASH', 'MOBILE_MONEY', 'POS'].map(m => (
+                         <button 
+                            key={m}
+                            className={`cashier-cat-pill ${repaymentForm.method === m ? 'active' : ''}`}
+                            onClick={() => setRepaymentForm(f => ({ ...f, method: m }))}
+                            style={{ flex: 1, justifyContent: 'center' }}
+                         >
+                            {m === 'MOBILE_MONEY' ? 'MoMo' : m.charAt(0) + m.slice(1).toLowerCase()}
+                         </button>
+                      ))}
+                   </div>
+                </div>
+             </div>
+
+             <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
+                <button 
+                  className="cashier-btn-submit active" 
+                  style={{ flex: 1, padding: 14, fontSize: 15 }} 
+                  onClick={handleRepayment} 
+                  disabled={busy}
+                >
+                  Confirm Repayment
+                </button>
+                <button 
+                  className="cashier-btn-close-shift" 
+                  style={{ padding: 14 }} 
+                  onClick={() => setShowRepaymentModal(null)}
+                >
+                  Cancel
+                </button>
              </div>
           </div>
         </div>
