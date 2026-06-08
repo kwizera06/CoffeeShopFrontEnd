@@ -1,3 +1,5 @@
+import { clearCachedShopContext, getCachedShopContext, setCachedShopContext } from './utils/shopContextCache.js'
+
 const AUTH = {
   token: 'olitech_auth_token',
   role: 'olitech_auth_role',
@@ -21,6 +23,10 @@ export function getSession() {
 }
 
 export function setSession({ token, role, tenantId, name, email }) {
+  const prevTenant = sessionStorage.getItem(AUTH.tenantId)
+  if (prevTenant && tenantId && prevTenant !== tenantId) {
+    clearCachedShopContext()
+  }
   sessionStorage.setItem(AUTH.token, token)
   sessionStorage.setItem(AUTH.role, role)
   if (tenantId) {
@@ -38,6 +44,7 @@ export function clearSession() {
   sessionStorage.removeItem(AUTH.tenantId)
   sessionStorage.removeItem(AUTH.name)
   sessionStorage.removeItem(AUTH.email)
+  clearCachedShopContext()
 }
 
 async function parseError(res) {
@@ -80,7 +87,13 @@ export async function api(path, options = {}) {
   const text = await res.text()
   if (!text) return null;
   try {
-    return JSON.parse(text)
+    const data = JSON.parse(text)
+    const pathOnly = path.split('?')[0]
+    if (pathOnly === '/api/shop/context' && data?.name) {
+      const tenantId = getSession().tenantId
+      if (tenantId) setCachedShopContext(tenantId, data)
+    }
+    return data
   } catch {
     return text
   }

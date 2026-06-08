@@ -5,54 +5,59 @@ export function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
-function withThermalPage(paperWidth, printFn) {
-  const style = document.createElement('style');
-  style.id = 'print-page-override';
-  
+/** Print via hidden iframe — faster than printing the full POS page */
+function printHtmlInIframe(bodyHtml, paperWidth) {
   const is80mm = paperWidth === '80mm';
   const sidePadding = is80mm ? '4mm' : '2mm';
 
-  style.textContent = `
-    @page { 
-      margin: 0; 
-      size: auto; 
+  document.getElementById('pos-print-iframe')?.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'pos-print-iframe';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = win?.document;
+  if (!doc || !win) {
+    iframe.remove();
+    return;
+  }
+
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>
+    @page { margin: 0; size: auto; }
+    html, body {
+      margin: 0;
+      padding: 2mm ${sidePadding} 6mm ${sidePadding};
+      width: ${paperWidth};
+      box-sizing: border-box;
+      font-family: 'Courier New', Courier, monospace;
+      color: #000;
+      background: #fff;
     }
-    @media print {
-      body > *:not(#print-root) { display: none !important; }
-      body, html { 
-        margin: 0 !important; 
-        padding: 0 !important; 
-        background: #fff !important; 
-        height: auto !important;
-        min-height: auto !important;
-      }
-      #print-root {
-        display: block !important;
-        position: static !important;
-        width: ${paperWidth} !important;
-        height: auto !important;
-        min-height: auto !important;
-        margin: 0 !important;
-        padding: 2mm ${sidePadding} 6mm ${sidePadding} !important;
-        box-sizing: border-box !important;
-        color: #000 !important;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-  
-  // Set timeout to allow the DOM to absorb the injected styles before spawning print dialog
-  setTimeout(() => {
-    printFn();
-  }, 100);
+  </style></head><body>${bodyHtml}</body></html>`);
+  doc.close();
 
   const cleanup = () => {
-    style.remove();
-    document.querySelectorAll('#print-root').forEach(el => el.remove());
+    iframe.remove();
+    win.removeEventListener('afterprint', cleanup);
+  };
+  win.addEventListener('afterprint', cleanup, { once: true });
+
+  const triggerPrint = () => {
+    requestAnimationFrame(() => {
+      win.focus();
+      win.print();
+    });
   };
 
-  // Cleanup happens immediately after print dialog is closed
-  window.addEventListener('afterprint', cleanup, { once: true });
+  if (doc.readyState === 'complete') {
+    triggerPrint();
+  } else {
+    iframe.onload = triggerPrint;
+  }
 }
 
 // Text-character separators that print 100% reliably on ALL thermal printers
@@ -80,12 +85,6 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   const paperWidth = is80mm ? '80mm' : '58mm';
   const printableWidth = is80mm ? '62mm' : '46mm';
 
-  // Clear any old tickets before starting
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
-
-  const root = document.createElement('div');
-  root.id = 'print-root';
-
   const d = createdAt ? new Date(createdAt) : new Date();
   const dateStr = d.toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' });
   const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' });
@@ -107,7 +106,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
     `;
   }).join('');
 
-  root.innerHTML = `
+  const html = `
     <div style="
       width: 100%;
       max-width: ${printableWidth};
@@ -153,10 +152,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
     </div>
   `;
 
-  document.body.appendChild(root);
-  withThermalPage(paperWidth, () => {
-    window.print();
-  });
+  printHtmlInIframe(html, paperWidth);
 }
 
 export function printReceipt({ shopName, order, paymentMethod }) {
@@ -167,12 +163,6 @@ export function printReceipt({ shopName, order, paymentMethod }) {
   );
   const paperWidth = is80mm ? '80mm' : '58mm';
   const printableWidth = is80mm ? '62mm' : '46mm';
-
-  // Clear any old tickets before starting
-  document.querySelectorAll('#print-root').forEach(el => el.remove());
-
-  const root = document.createElement('div');
-  root.id = 'print-root';
 
   const d = order?.createdAt ? new Date(order.createdAt) : new Date();
   const dateStr = d.toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' });
@@ -242,7 +232,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
     </div>
   ` : '';
 
-  root.innerHTML = `
+  const html = `
     <div style="
       width: 100%;
       max-width: ${printableWidth};
@@ -255,7 +245,7 @@ export function printReceipt({ shopName, order, paymentMethod }) {
       text-align: left;
     ">
       <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
-        ${esc(shopName ?? "Mama Prince's Coffee")}
+        ${esc(shopName ?? 'Olitech Hub')}
       </div>
       ${getLineEq(is80mm)}
 
@@ -301,8 +291,5 @@ export function printReceipt({ shopName, order, paymentMethod }) {
     </div>
   `;
 
-  document.body.appendChild(root);
-  withThermalPage(paperWidth, () => {
-    window.print();
-  });
+  printHtmlInIframe(html, paperWidth);
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { api } from '../api'
+import { api, getSession } from '../api'
 import { useShopContext } from './ShopContext'
 
 export default function ShiftManager() {
+    const { role } = getSession()
+    const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN'
     const { shift, reload, setShift } = useShopContext()
     const [busy, setBusy] = useState(false)
     const [showModal, setShowModal] = useState(false)
@@ -10,6 +12,8 @@ export default function ShiftManager() {
     const [initialMomo, setInitialMomo] = useState('0')
     const [actualCash, setActualCash] = useState('0')
     const [actualMomo, setActualMomo] = useState('0')
+    const [cashout, setCashout] = useState('0')
+    const [expenses, setExpenses] = useState('0')
     const [notes, setNotes] = useState('')
 
     async function handleOpen() {
@@ -39,6 +43,8 @@ export default function ShiftManager() {
                 body: JSON.stringify({ 
                     actualCash: Number(actualCash), 
                     actualMomo: Number(actualMomo),
+                    cashout: Number(cashout),
+                    expenses: Number(expenses),
                     notes 
                 })
             })
@@ -59,11 +65,15 @@ export default function ShiftManager() {
                     <span className="shift-dot" />
                     <span>🔴 Shift CLOSED — you cannot process orders</span>
                 </div>
-                <button className="btn good" style={{ padding: '6px 18px', fontSize: 13 }} onClick={() => {
+                {canManageShift ? (
+                  <button className="btn good" style={{ padding: '6px 18px', fontSize: 13 }} onClick={() => {
                     setInitialCash('0')
                     setInitialMomo('0')
                     setShowModal(true)
-                }}>Open Shift</button>
+                  }}>Open Shift</button>
+                ) : (
+                  <span className="muted" style={{ fontSize: 13 }}>Only cashier can open shift</span>
+                )}
 
                 {showModal && (
                     <div className="modal-overlay">
@@ -100,11 +110,17 @@ export default function ShiftManager() {
                     </span>
                 </span>
             </div>
-            <button className="btn warn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => {
+            {canManageShift ? (
+              <button className="btn warn" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => {
                 setActualCash('0')
                 setActualMomo('0')
+                setCashout('0')
+                setExpenses('0')
                 setShowModal(true)
-            }}>Close Shift</button>
+              }}>Close Shift</button>
+            ) : (
+              <span className="muted" style={{ fontSize: 13 }}>Only cashier can close shift</span>
+            )}
 
             {showModal && (
                 <div className="modal-overlay">
@@ -118,6 +134,14 @@ export default function ShiftManager() {
                         <label className="field">
                             <span>Actual Mobile Money Balance (Phone Count)</span>
                             <input type="number" value={actualMomo} onChange={e => setActualMomo(e.target.value)} />
+                        </label>
+                        <label className="field">
+                            <span>MoMo Withdrawn (Given to Owner)</span>
+                            <input type="number" value={cashout} onChange={e => setCashout(e.target.value)} />
+                        </label>
+                        <label className="field">
+                            <span>Expenses (Deducted from Cash)</span>
+                            <input type="number" value={expenses} onChange={e => setExpenses(e.target.value)} />
                         </label>
                         <label className="field">
                             <span>End of Day Notes</span>

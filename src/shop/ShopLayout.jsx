@@ -67,7 +67,7 @@ function Shell() {
         <div className="modern-header-left">
           <div className="modern-logo"><img src={olitechLogo} alt="Olitech Hub" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
           <div className="modern-shop-info">
-            <h3>{context?.name || "Mama Prince's Coffee Shop"}</h3>
+            <h3>{context?.name || 'Olitech Hub'}</h3>
             <p>{role === 'SHOP_ADMIN' ? 'Shop Admin' : 'Shop Staff'}</p>
           </div>
         </div>
@@ -101,7 +101,13 @@ function Shell() {
         {/* Global Navigation Sidebar */}
         <aside className={`am-app-sidebar ${sidebarOpen ? 'open' : ''}`}>
            <div className="am-sidebar-header">
-              <h2 className="am-sidebar-logo">Olitech Hub</h2>
+              <div className="am-sidebar-brand">
+                <img src={olitechLogo} alt="Olitech Hub" className="am-sidebar-logo-img" />
+                <h2 className="am-sidebar-logo">
+                  <span className="brand-olitech">Olitech</span>{' '}
+                  <span className="brand-hub">Hub</span>
+                </h2>
+              </div>
               <HiOutlineXMark className="am-sidebar-close-btn" onClick={() => setSidebarOpen(false)} />
            </div>
            

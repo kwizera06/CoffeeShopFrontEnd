@@ -5,6 +5,7 @@ import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
 import olitechLogo from '../../assets/Olitech Logo.png'
+import { getKigaliToday } from '../../utils/kigaliDate.js'
 import './CashierDashboard.css'
 import {
   HiOutlineMagnifyingGlass,
@@ -62,11 +63,29 @@ function getItemIcon(name, category) {
   return <IoCafeOutline />;
 }
 
+function formatShiftTime(iso) {
+  return new Date(iso).toLocaleString('en-GB', {
+    timeZone: 'Africa/Kigali',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatShiftLabel(s) {
+  const opener = s.opened_by_user?.name || 'Staff';
+  const closed = s.closed_at ? formatShiftTime(s.closed_at) : '—';
+  return `${formatShiftTime(s.opened_at)} → ${closed} · ${opener}`;
+}
+
 export default function CashierDashboard() {
   const nav = useNavigate()
   const { role } = getSession()
   const { context, shift, reload: reloadShift, setShift } = useShopContext()
-  const shopName = context?.name || "Mama Prince's Coffee Shop"
+  const shopName = context?.name || ''
+  const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN'
 
   // Query Params
   const [searchParams, setSearchParams] = useSearchParams()
@@ -112,12 +131,10 @@ export default function CashierDashboard() {
   const [pending, setPending] = useState([])
   const [ready, setReady] = useState([])
 
-  // History states
-  const [historyDate, setHistoryDate] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 1)
-    return d.toISOString().slice(0, 10)
-  })
+  // History states (closed shifts only)
+  const [historyDate, setHistoryDate] = useState(() => getKigaliToday())
+  const [closedShifts, setClosedShifts] = useState([])
+  const [selectedShiftId, setSelectedShiftId] = useState('')
   const [historyData, setHistoryData] = useState([])
   const [historyTotal, setHistoryTotal] = useState(0)
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -169,11 +186,34 @@ export default function CashierDashboard() {
     } catch(e) { /* ignore */ }
   }, [])
 
-  // Load History
-  const loadHistory = useCallback(async (date) => {
+  const loadClosedShifts = useCallback(async (date) => {
+    try {
+      const shifts = await api(`/api/shop/shifts/closed?date=${date}`)
+      setClosedShifts(shifts)
+      if (shifts.length > 0) {
+        setSelectedShiftId(prev => (prev && shifts.some(s => s.id === prev) ? prev : shifts[0].id))
+      } else {
+        setSelectedShiftId('')
+        setHistoryData([])
+        setHistoryTotal(0)
+      }
+    } catch (e) {
+      console.error('Failed to load closed shifts:', e)
+    }
+  }, [])
+
+  const isHistoryToday = historyDate === getKigaliToday()
+
+  // Load History for a closed shift only
+  const loadHistory = useCallback(async (shiftId) => {
+    if (!shiftId) {
+      setHistoryData([])
+      setHistoryTotal(0)
+      return
+    }
     setLoadingHistory(true)
     try {
-      const res = await api(`/api/shop/owner/reports/daily?date=${date}`)
+      const res = await api(`/api/shop/reports/shift/${shiftId}/sales`)
       
       let totalAmount = 0
       const summary = {}
@@ -226,12 +266,18 @@ export default function CashierDashboard() {
 
   useEffect(() => {
     if (tab === 'history') {
-      loadHistory(historyDate)
+      void loadClosedShifts(historyDate)
     }
     if (tab === 'loans') {
       loadLoans('UNPAID')
     }
-  }, [tab, historyDate, loadHistory, loadLoans])
+  }, [tab, historyDate, loadClosedShifts, loadLoans])
+
+  useEffect(() => {
+    if (tab === 'history' && selectedShiftId) {
+      void loadHistory(selectedShiftId)
+    }
+  }, [tab, selectedShiftId, loadHistory])
 
   // Load Billing (real-time)
   const loadBilling = useCallback(async () => {
@@ -265,11 +311,21 @@ export default function CashierDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { loadBilling().catch(()=>{}) })
       .subscribe()
 
+    const channel3 = supabase.channel('cashier-shifts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { reloadShift().catch(()=>{}) })
+      .subscribe()
+
+    const channel4 = supabase.channel('cashier-loans')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { loadLoans('UNPAID').catch(()=>{}) })
+      .subscribe()
+
     return () => {
       void supabase.removeChannel(channel1)
       void supabase.removeChannel(channel2)
+      void supabase.removeChannel(channel3)
+      void supabase.removeChannel(channel4)
     }
-  }, [loadMenu, loadBilling])
+  }, [loadMenu, loadBilling, reloadShift, loadLoans])
 
   // Load Order to edit (and switch to tab if needed)
   useEffect(() => {
@@ -290,6 +346,7 @@ export default function CashierDashboard() {
   // Shift Actions
   async function handleShiftAction() {
     setBusy(true)
+    const closingShift = showShiftModal === 'CLOSE'
     try {
       if (showShiftModal === 'OPEN') {
         await api('/api/shop/shifts/open', {
@@ -303,6 +360,7 @@ export default function CashierDashboard() {
       }
       setShowShiftModal('')
       await reloadShift()
+      if (closingShift) void loadClosedShifts(historyDate)
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
@@ -332,8 +390,16 @@ export default function CashierDashboard() {
   }, [qtyById, menu])
   const cartTotal = cartLines.reduce((acc, l) => acc + (l.quantity * l.price), 0)
 
-  // Checkout (New Order)
-  async function submitOrder() {
+  const kitchenTicketLines = () => cartLines.map(l => ({
+    quantity: l.quantity,
+    itemName: l.name,
+    ingredients: l.ingredients,
+  }))
+
+  const waiterLabel = () => staff.find(x => x.id === selectedWaiter)?.name || 'Staff'
+
+  // Checkout (New Order) — printKitchen=false skips kitchen ticket
+  async function submitOrder(printKitchen = false) {
     if (!shift) { alert("Please open a shift first."); return; }
     if (!editId && !selectedWaiter) { alert("Select Waiter"); return; }
     const tn = Number(tableNumber)
@@ -347,15 +413,16 @@ export default function CashierDashboard() {
           method: 'PATCH',
           body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter }),
         })
-        // Print Kitchen Ticket for updated order too
-        printKitchenTicket({
-          orderId: editId, 
-          tableNumber: tn, 
-          shopName,
-          lines: cartLines.map(l => ({ quantity: l.quantity, itemName: l.name, ingredients: l.ingredients })), 
-          waiterName: staff.find(x=>x.id===selectedWaiter)?.name || 'Staff'
-        })
-        setSearchParams({})
+        if (printKitchen) {
+          printKitchenTicket({
+            orderId: editId,
+            tableNumber: tn,
+            shopName,
+            lines: kitchenTicketLines(),
+            waiterName: waiterLabel(),
+          })
+        }
+        setSearchParams({ tab: 'pending' })
         setQtyById({})
         setTableNumber('1')
       } else {
@@ -363,30 +430,40 @@ export default function CashierDashboard() {
           method: 'POST',
           body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter, submitToKitchen: true })
         })
-        // Print Kitchen Ticket immediately
-        printKitchenTicket({
-          orderId: created.id, 
-          tableNumber: tn, 
-          shopName,
-          lines: cartLines.map(l => ({ quantity: l.quantity, itemName: l.name, ingredients: l.ingredients })), 
-          waiterName: staff.find(x=>x.id===selectedWaiter)?.name || 'Staff'
-        })
+        if (printKitchen) {
+          printKitchenTicket({
+            orderId: created.id,
+            tableNumber: tn,
+            shopName,
+            lines: kitchenTicketLines(),
+            waiterName: waiterLabel(),
+          })
+        }
         setQtyById({})
         setTableNumber('1')
+        setTab('pending')
       }
+      await loadBilling()
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
 
   // Pending Actions
   async function markReady(id) {
-    try { await api(`/api/shop/orders/${id}/mark-ready`, { method: 'POST' }) } 
-    catch(e) { alert(e.message) }
+    setBusy(true)
+    try {
+      await api(`/api/shop/orders/${id}/mark-ready`, { method: 'POST' })
+      await loadBilling()
+      setTab('ready')
+    } catch(e) { alert(e.message) }
+    finally { setBusy(false) }
   }
   async function cancelOrderRequest(id) {
     if(!window.confirm('Cancel this order?')) return;
-    try { await api(`/api/shop/orders/${id}`, { method: 'DELETE' }) }
-    catch(e) { alert(e.message) }
+    try {
+      await api(`/api/shop/orders/${id}`, { method: 'DELETE' })
+      await loadBilling()
+    } catch(e) { alert(e.message) }
   }
 
   async function handleLogout() {
@@ -451,6 +528,7 @@ export default function CashierDashboard() {
       })
 
       printReceipt({ shopName, order: paid, paymentMethod: printPayMethod })
+      await loadBilling()
       
       // Cleanup states
       setPaymentMethods(prev => {
@@ -543,10 +621,13 @@ export default function CashierDashboard() {
              </button>
            )}
           
-          {shift ? (
+          {canManageShift && (shift ? (
             <button className="cashier-btn-close-shift" onClick={()=>setShowShiftModal('CLOSE')}><span>Close Shift</span></button>
           ) : (
             <button className="cashier-btn-open-shift" onClick={()=>setShowShiftModal('OPEN')}><span>Open Shift</span></button>
+          ))}
+          {!canManageShift && !shift && (
+            <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>Ask cashier to open shift</span>
           )}
         </div>
       </header>
@@ -691,13 +772,23 @@ export default function CashierDashboard() {
                     <span>Total</span>
                     <span>{cartTotal.toLocaleString()} RWF</span>
                   </div>
-                  <button 
-                    className={`cashier-btn-submit ${cartLines.length > 0 ? 'active' : ''}`}
-                    disabled={cartLines.length === 0 || busy}
-                    onClick={submitOrder}
-                  >
-                    {editId ? '📝 Update Order' : '✈️ Post Order + Print Kitchen Ticket'}
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      className={`cashier-btn-submit ${cartLines.length > 0 ? 'active' : ''}`}
+                      disabled={cartLines.length === 0 || busy}
+                      onClick={() => submitOrder(false)}
+                    >
+                      {editId ? '📝 Update Order' : '✈️ Post Order'}
+                    </button>
+                    <button
+                      className={`cashier-btn-submit ${cartLines.length > 0 ? 'active' : ''}`}
+                      disabled={cartLines.length === 0 || busy}
+                      onClick={() => submitOrder(true)}
+                      style={{ background: '#E8751A', borderColor: '#D06612' }}
+                    >
+                      {editId ? '🖨️ Update + Kitchen Ticket' : '🖨️ Post + Kitchen Ticket'}
+                    </button>
+                  </div>
                </div>
             </div>
           </>
@@ -726,7 +817,7 @@ export default function CashierDashboard() {
                   </div>
 
                   <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-close-shift active" style={{flex: 1, padding: 0}} onClick={()=>markReady(o.id)}>
+                     <button className="cashier-btn-close-shift active" style={{flex: 1, padding: 0}} onClick={()=>markReady(o.id)} disabled={busy}>
                         <HiOutlineCheckCircle /> Mark Ready
                      </button>
                       <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
@@ -888,7 +979,15 @@ export default function CashierDashboard() {
                         } else {
                            printPayMethod = paymentMethods[o.id] || null;
                         }
-                        printReceipt({ shopName, order: o, paymentMethod: printPayMethod });
+                        const previewOrder = {
+                          ...o,
+                          total: o.total ?? o.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.price || 0), 0),
+                          lines: o.lines.map(l => ({
+                            ...l,
+                            itemName: l.itemName || l.name,
+                          })),
+                        }
+                        printReceipt({ shopName, order: previewOrder, paymentMethod: printPayMethod });
                      }}>
                         Print Preview
                      </button>
@@ -909,27 +1008,56 @@ export default function CashierDashboard() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <div>
                   <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: '#111827' }}>Sales History</h2>
-                  <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: 14 }}>View products and amounts sold on past dates.</p>
+                  <p style={{ margin: '4px 0 0', color: '#6B7280', fontSize: 14 }}>Pick a date, then view sales from closed shifts on that day.</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <label style={{ fontWeight: 600, color: '#374151' }}><HiOutlineCalendar style={{verticalAlign:'text-bottom', fontSize: 18}}/> Select Date:</label>
-                  <input 
-                    type="date" 
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                  <label style={{ fontWeight: 600, color: '#374151' }}>
+                    <HiOutlineCalendar style={{ verticalAlign: 'text-bottom', fontSize: 18 }} /> Date:
+                  </label>
+                  <input
+                    type="date"
                     value={historyDate}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={getKigaliToday()}
                     onChange={e => setHistoryDate(e.target.value)}
                     style={{ padding: '8px 12px', border: '1px solid var(--pos-border)', borderRadius: 8, outline: 'none', background: '#F9FAFB', fontWeight: 600 }}
                   />
+                  {closedShifts.length > 0 && (
+                    <>
+                      <label style={{ fontWeight: 600, color: '#374151' }}>
+                        <HiOutlineClock style={{ verticalAlign: 'text-bottom', fontSize: 18 }} /> Shift:
+                      </label>
+                      <select
+                        value={selectedShiftId}
+                        onChange={e => setSelectedShiftId(e.target.value)}
+                        style={{ padding: '8px 12px', border: '1px solid var(--pos-border)', borderRadius: 8, outline: 'none', background: '#F9FAFB', fontWeight: 600, minWidth: 240, maxWidth: 380 }}
+                      >
+                        {closedShifts.map(s => (
+                          <option key={s.id} value={s.id}>{formatShiftLabel(s)}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </div>
               </div>
 
+              {shift && isHistoryToday && (
+                <div style={{ marginBottom: 16, padding: '10px 14px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE', fontSize: 13, color: '#1D3557' }}>
+                  Current shift is still open. Its sales will appear here after you close the shift.
+                </div>
+              )}
+
               {loadingHistory ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#6B7280' }}>Loading history...</div>
+              ) : closedShifts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#6B7280', background: '#F9FAFB', borderRadius: 12 }}>
+                  No closed shifts found for {new Date(historyDate + 'T12:00:00').toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}.
+                  {isHistoryToday && shift ? ' The current shift is still open.' : ''}
+                </div>
               ) : (
                 <>
                   {historyData.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#6B7280', background: '#F9FAFB', borderRadius: 12 }}>
-                      No sales recorded for {new Date(historyDate).toLocaleDateString()}.
+                      No sales recorded for this closed shift.
                     </div>
                   ) : (
                     <div>
@@ -1046,6 +1174,11 @@ export default function CashierDashboard() {
         <div className="cashier-modal-overlay">
           <div className="cashier-modal">
              <h3 style={{marginBottom: 16}}>{showShiftModal === 'OPEN' ? '☕ Open Shift' : '🔒 Close Shift'}</h3>
+             {showShiftModal === 'CLOSE' && (
+               <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>
+                 All sales from when this shift was opened until now are included in this shift report.
+               </p>
+             )}
              {showShiftModal === 'OPEN' ? (
                 <div style={{display:'flex', flexDirection:'column', gap: 16}}>
                   <div>

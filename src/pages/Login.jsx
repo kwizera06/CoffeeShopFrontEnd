@@ -111,8 +111,12 @@ export default function Login() {
         <div className="login-right-panel">
           <div className="login-logo-area">
             <div className="login-logo-box"><img src={olitechLogo} alt="Olitech Hub" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
-            <div className="login-brand-name-new">Olitech Hub</div>
-            <div className="login-tagline-new">POINT OF SALE SYSTEM</div>
+            <div className="login-brand-name-new">
+              <span className="brand-olitech">Olitech</span>{' '}
+              <span className="brand-hub">Hub</span>
+            </div>
+            <div className="login-tagline-new">Point of Sale System</div>
+            <div className="login-motto">We create. We build. <strong>You grow.</strong></div>
           </div>
 
           <form className="login-form-new" onSubmit={onSubmit}>

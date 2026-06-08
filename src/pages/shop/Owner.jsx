@@ -4,6 +4,7 @@ import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
 import { supabase } from '../../supabaseClient'
+import { getKigaliToday, formatShiftRange } from '../../utils/kigaliDate.js'
 import {
   BarChart,
   Bar,
@@ -201,17 +202,7 @@ export default function Owner() {
   const [recipeLines, setRecipeLines] = useState([])
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: '', quantity_required: 0 })
 
-  // Today's BUSINESS day in Kigali, Rwanda (UTC+2) with 6 AM cutoff.
-  // Sales between 00:00–05:59 Kigali still count toward the previous day,
-  // so the dashboard "Today" matches the operator's mental model.
-  const kigaliToday = () => {
-    const KIGALI_OFFSET_HOURS = 2
-    const BUSINESS_DAY_CUTOFF_HOUR = 6
-    const ms = Date.now() + (KIGALI_OFFSET_HOURS - BUSINESS_DAY_CUTOFF_HOUR) * 60 * 60 * 1000
-    return new Date(ms).toISOString().slice(0, 10)
-  }
-  const today = useMemo(() => kigaliToday(), [])
-  const [reportDay, setReportDay] = useState(() => kigaliToday())
+  const [reportDay, setReportDay] = useState(() => getKigaliToday())
 
   // Defer chart mount until after first layout pass so Recharts'
   // ResponsiveContainer can measure its parent correctly on first paint.
@@ -269,6 +260,13 @@ export default function Owner() {
     setLoans(l || [])
   }, [reportDay])
 
+  const reloadOverview = useCallback(async () => {
+    try {
+      const o = await api(`/api/shop/owner/overview?date=${reportDay}`)
+      setOverview(o)
+    } catch {}
+  }, [reportDay])
+
   useEffect(() => {
     if (!allowed) {
       return
@@ -278,34 +276,57 @@ export default function Owner() {
 
     if (!supabase) return
 
-    // Subscribe to all relevant tables to refresh core data in real-time
-    const channel = supabase
-      .channel('owner-all-sync')
+    const tenantId = getSession().tenantId
+
+    // ── Channel 1: Orders table (In Prep / Waiting counts) ──────────────
+    const ordersChannel = supabase
+      .channel(`owner-orders-${tenantId}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-        },
-        (payload) => {
-          // If the change belongs to this tenant, refresh
-          if (payload.new?.tenant_id === getSession().tenantId || payload.old?.tenant_id === getSession().tenantId) {
-            void reloadCore().catch(() => {})
-          }
+        { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${tenantId}` },
+        () => {
+          // Just refresh the overview (kitchen counts) — fast & lightweight
+          void reloadOverview().catch(() => {})
         }
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Owner Dashboard subscribed to real-time updates')
-        } else {
-          console.log('⚠️ Owner realtime status:', status)
-        }
+        if (status === 'SUBSCRIBED') console.log('✅ [Realtime] Orders channel live')
+        else console.log('⚠️ [Realtime] Orders channel status:', status)
       })
 
+    // ── Channel 2: Payments table (revenue/completed counts) ────────────
+    const paymentsChannel = supabase
+      .channel(`owner-payments-${tenantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payments', filter: `tenant_id=eq.${tenantId}` },
+        () => {
+          void reloadOverview().catch(() => {})
+        }
+      )
+      .subscribe()
+
+    // ── Channel 3: Menu/inventory/staff (full reload only when needed) ──
+    const coreChannel = supabase
+      .channel(`owner-core-${tenantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${tenantId}` },
+        () => void reloadCore().catch(() => {})
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
+        () => void reloadCore().catch(() => {})
+      )
+      .subscribe()
+
     return () => {
-      void supabase.removeChannel(channel)
+      void supabase.removeChannel(ordersChannel)
+      void supabase.removeChannel(paymentsChannel)
+      void supabase.removeChannel(coreChannel)
     }
-  }, [allowed, reloadCore])
+  }, [allowed, reloadCore, reloadOverview])
 
   useEffect(() => {
     if (!allowed) {
@@ -395,9 +416,9 @@ export default function Owner() {
         const byCategory = groupOrdersByCategory(orders)
         setDrilldown({ type, title: 'In Preparation', byCategory, count: orders.length })
       } else if (type === 'waiting') {
-        const orders = await api('/api/shop/orders/drafts')
+        const orders = await api('/api/shop/orders/ready')
         const byCategory = groupOrdersByCategory(orders)
-        setDrilldown({ type, title: 'Waiting Orders', byCategory, count: orders.length })
+        setDrilldown({ type, title: 'Ready for Payment', byCategory, count: orders.length })
       } else if (type === 'lowstock') {
         const low = ingredients.filter(ing => ing.stock_level <= ing.min_threshold)
         setDrilldown({ type, title: 'Low Stock Items', items: low })
@@ -654,7 +675,21 @@ export default function Owner() {
             <header className="am-header">
               <div className="am-title">
                 <h1>Admin Dashboard</h1>
-                <p>{reportDay === today ? "Today's overview" : 'Overview'} · {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
+                <p>
+                  {overview?.hasActiveShift
+                    ? 'Current shift overview'
+                    : reportDay === getKigaliToday()
+                      ? "Today's shifts"
+                      : 'Shift overview'}
+                  {' · '}
+                  {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}
+                  {overview?.shifts?.[0] && (
+                    <span style={{ display: 'block', fontSize: 12, color: '#6B7280', marginTop: 4, fontWeight: 500 }}>
+                      Shift opened {formatShiftRange(overview.shifts[0])}
+                      {overview.shifts.length > 1 ? ` (+${overview.shifts.length - 1} more)` : ''}
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div
@@ -664,15 +699,15 @@ export default function Owner() {
                 >
                   <HiOutlineCalendarDays />
                   <span>
-                    {reportDay === today
+                    {reportDay === getKigaliToday()
                       ? 'Today'
                       : new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Africa/Kigali' })}
                   </span>
                 </div>
-                {reportDay !== today && (
+                {reportDay !== getKigaliToday() && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setReportDay(today); }}
+                    onClick={(e) => { e.stopPropagation(); setReportDay(getKigaliToday()); }}
                     style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.3)', color: '#1D3557', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
                     Today
@@ -683,7 +718,7 @@ export default function Owner() {
                   type="date" 
                   value={reportDay} 
                   onChange={e => setReportDay(e.target.value)} 
-                  max={today}
+                  max={getKigaliToday()}
                   style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
                 />
               </div>
@@ -2596,7 +2631,7 @@ export default function Owner() {
               <header className="am-header">
                 <div className="am-title">
                   <h1>End of Day Report</h1>
-                  <p>Complete business summary for {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
+                  <p>Shift-based summary for shifts opened on {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
                 </div>
                 <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input

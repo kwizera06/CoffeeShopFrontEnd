@@ -1,19 +1,22 @@
 /* eslint-disable react-refresh/only-export-components -- context + hook module */
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { api } from '../api'
+import { api, getSession } from '../api'
+import { getCachedShopContext, setCachedShopContext } from '../utils/shopContextCache'
 
 const Ctx = createContext(null)
 
 export function ShopProvider({ children }) {
-  const [context, setContext] = useState(null)
+  const [context, setContext] = useState(() => getCachedShopContext(getSession().tenantId))
   const [shift, setShift] = useState(null)
 
   const reload = useCallback(async () => {
+    const tenantId = getSession().tenantId
     const [c, s] = await Promise.all([
       api('/api/shop/context'),
       api('/api/shop/shifts/active'),
     ])
     setContext(c)
+    if (c && tenantId) setCachedShopContext(tenantId, c)
     setShift(s)
   }, [])
 

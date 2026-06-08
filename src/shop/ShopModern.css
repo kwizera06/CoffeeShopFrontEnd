@@ -25,12 +25,25 @@
   height: 64px;
   background: var(--nav-bg);
   border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 0 rgba(29, 53, 87, 0.04);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
   z-index: 1000;
   flex-shrink: 0;
+  position: relative;
+}
+
+.modern-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #1D3557 0%, #38B6E8 40%, #E8751A 100%);
+  opacity: 0.85;
 }
 
 .modern-header-left {
@@ -163,12 +176,33 @@
   justify-content: space-between;
 }
 
+.am-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.am-sidebar-logo-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .am-sidebar-logo {
   margin: 0;
-  color: #1D3557;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+.brand-olitech {
+  color: #1D3557;
+}
+
+.brand-hub {
+  color: #E8751A;
 }
 
 .am-sidebar-close-btn {

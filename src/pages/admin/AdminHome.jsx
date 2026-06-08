@@ -32,13 +32,22 @@ export default function AdminHome() {
       nav('/login', { replace: true })
       return
     }
-    const initial = window.setTimeout(() => {
-      void load()
-    }, 0)
-    const id = setInterval(load, 20000)
+
+    void load()
+
+    if (!supabase) return
+    const channel1 = supabase.channel('admin-tenants')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tenants' }, () => { load().catch(() => {}) })
+      .subscribe()
+      
+    // Subscribe to orders to update the Lifetime Revenue dynamically
+    const channel2 = supabase.channel('admin-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => { load().catch(() => {}) })
+      .subscribe()
+
     return () => {
-      clearTimeout(initial)
-      clearInterval(id)
+      void supabase.removeChannel(channel1)
+      void supabase.removeChannel(channel2)
     }
   }, [nav, load])
 
