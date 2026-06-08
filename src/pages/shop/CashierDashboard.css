@@ -141,6 +141,16 @@
   background: #EDF2F9;
   border-color: var(--pos-accent);
 }
+.cashier-btn-admin-dash.primary {
+  background: #1D3557;
+  color: #FFFFFF;
+  border-color: #1D3557;
+  order: -1;
+}
+.cashier-btn-admin-dash.primary:hover {
+  background: #152a47;
+  border-color: #152a47;
+}
 
 .cashier-btn-open-shift {
   background: var(--pos-accent);

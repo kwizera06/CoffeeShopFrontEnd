@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../api'
+import { shouldShowAdminDashboard } from '../utils/adminAccess.js'
 import { supabase } from '../supabaseClient.js'
 import { ShopProvider, useShopContext } from './ShopContext'
 import ShiftManager from './ShiftManager'
@@ -28,7 +29,7 @@ function Shell() {
   const nav = useNavigate()
   const loc = useLocation()
   const { role, name, email } = getSession()
-  const { context, reload } = useShopContext()
+  const { context, reload, isShopAdmin } = useShopContext()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   
   useEffect(() => {
@@ -53,11 +54,25 @@ function Shell() {
     nav('/login', { replace: true })
   }
 
-  const showOwner = role === 'SHOP_ADMIN'
+  const showOwner = isShopAdmin || shouldShowAdminDashboard(getSession(), context)
   const initials = (name || email || '?')[0].toUpperCase()
 
-  if (loc.pathname === '/app/cashier') {
+  if (loc.pathname === '/app/cashier' && !showOwner) {
     return <Outlet />
+  }
+
+  if (loc.pathname === '/app/cashier' && showOwner) {
+    return (
+      <>
+        <div className="admin-pos-bridge">
+          <span className="admin-pos-bridge-label">POS Mode</span>
+          <button type="button" className="admin-pos-bridge-btn" onClick={() => nav('/app/admin?tab=overview')}>
+            ← Admin Dashboard
+          </button>
+        </div>
+        <Outlet />
+      </>
+    )
   }
 
   return (

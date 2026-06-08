@@ -407,3 +407,35 @@
   .modern-nav-tabs { display: none; }
   .modern-header-left { min-width: auto; }
 }
+
+.admin-pos-bridge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #1D3557;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 100;
+}
+
+.admin-pos-bridge-label {
+  opacity: 0.9;
+}
+
+.admin-pos-bridge-btn {
+  background: #FFFFFF;
+  color: #1D3557;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-pos-bridge-btn:hover {
+  background: #EDF2F9;
+}

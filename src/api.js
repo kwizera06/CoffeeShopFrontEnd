@@ -1,4 +1,5 @@
 import { clearCachedShopContext, getCachedShopContext, setCachedShopContext } from './utils/shopContextCache.js'
+import { clearIsOwnerFlag, parseJwtPayload, setIsOwnerFlag } from './utils/adminAccess.js'
 
 const AUTH = {
   token: 'olitech_auth_token',
@@ -13,16 +14,23 @@ export function getToken() {
 }
 
 export function getSession() {
+  const token = sessionStorage.getItem(AUTH.token)
+  const storedRole = sessionStorage.getItem(AUTH.role)
+  const jwtRole = parseJwtPayload(token)?.role
+  const role = jwtRole || storedRole
+  if (jwtRole && jwtRole !== storedRole) {
+    sessionStorage.setItem(AUTH.role, jwtRole)
+  }
   return {
-    token: sessionStorage.getItem(AUTH.token),
-    role: sessionStorage.getItem(AUTH.role),
+    token,
+    role,
     tenantId: sessionStorage.getItem(AUTH.tenantId),
     name: sessionStorage.getItem(AUTH.name),
     email: sessionStorage.getItem(AUTH.email),
   }
 }
 
-export function setSession({ token, role, tenantId, name, email }) {
+export function setSession({ token, role, tenantId, name, email, isOwner }) {
   const prevTenant = sessionStorage.getItem(AUTH.tenantId)
   if (prevTenant && tenantId && prevTenant !== tenantId) {
     clearCachedShopContext()
@@ -36,6 +44,11 @@ export function setSession({ token, role, tenantId, name, email }) {
   }
   sessionStorage.setItem(AUTH.name, name ?? '')
   sessionStorage.setItem(AUTH.email, email ?? '')
+  if (isOwner || role === 'SHOP_ADMIN') {
+    setIsOwnerFlag(true)
+  } else {
+    clearIsOwnerFlag()
+  }
 }
 
 export function clearSession() {
@@ -45,6 +58,7 @@ export function clearSession() {
   sessionStorage.removeItem(AUTH.name)
   sessionStorage.removeItem(AUTH.email)
   clearCachedShopContext()
+  clearIsOwnerFlag()
 }
 
 async function parseError(res) {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
+import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
 import { getKigaliToday, formatShiftRange } from '../../utils/kigaliDate.js'
 import {
@@ -45,9 +46,25 @@ import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/
 
 import './OwnerModern.css'
 
+function staffRoleLabel(role) {
+  if (role === 'SHOP_ADMIN') return 'Owner'
+  if (role === 'WAITER') return 'Waiter'
+  if (role === 'CASHIER') return 'Cashier'
+  if (role === 'CHEF') return 'Chef'
+  return role
+}
+
+function staffRoleStyle(role) {
+  if (role === 'SHOP_ADMIN') return { bg: 'rgba(230, 204, 178, 0.1)', color: '#1D3557', border: '#1D355744' }
+  if (role === 'WAITER') return { bg: 'rgba(76, 175, 80, 0.1)', color: '#2E7D32', border: '#4CAF5044' }
+  if (role === 'CASHIER') return { bg: 'rgba(33, 150, 243, 0.1)', color: '#2196F3', border: '#2196F344' }
+  return { bg: 'rgba(158, 158, 158, 0.1)', color: '#616161', border: '#9E9E9E44' }
+}
+
 export default function Owner() {
   const nav = useNavigate()
   const { role } = getSession()
+  const { isShopAdmin, context } = useShopContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
   const setTab = (t) => setSearchParams({ tab: t })
@@ -99,7 +116,7 @@ export default function Owner() {
     name: '',
     email: '',
     password: '',
-    role: 'CASHIER',
+    role: 'WAITER',
   })
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })
   
@@ -239,11 +256,18 @@ export default function Owner() {
   
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
+  const [staffAddType, setStaffAddType] = useState('WAITER')
 
   // Drill-down modal state: { type: 'revenue'|'cash'|'momo'|'pos'|'profit'|'completed'|'prep'|'waiting'|'lowstock', data?: any }
   const [drilldown, setDrilldown] = useState(null)
   
-  const allowed = role === 'SHOP_ADMIN' || role === 'CASHIER'
+  const allowed = isShopAdmin || role === 'SHOP_ADMIN' || context?.isOwner
+
+  useEffect(() => {
+    if (role && !allowed) {
+      nav('/app/cashier', { replace: true })
+    }
+  }, [role, allowed, nav])
 
   const reloadCore = useCallback(async () => {
     const [o, m, s, i, l] = await Promise.all([
@@ -362,16 +386,16 @@ export default function Owner() {
           const catMap = {}
           const metMap = { Cash: 0, MoMo: 0, POS: 0, Total: 0 }
           const staffMap = {}
+          const staffOrderSeen = {}
+          const serviceNames = new Set(
+            (staff || [])
+              .filter(s => s.role === 'WAITER' || s.role === 'CASHIER')
+              .map(s => s.name),
+          )
           
           d.forEach(row => {
             metMap[row.methodLabel] = (metMap[row.methodLabel] || 0) + Number(row.amount)
             metMap.Total += Number(row.amount)
-            
-            // Staff
-            const sName = row.waiterName || 'Unknown'
-            if (!staffMap[sName]) staffMap[sName] = { name: sName, amount: 0, count: 0 }
-            staffMap[sName].amount += Number(row.amount)
-            staffMap[sName].count += 1
 
             if (row.rawItems) {
               row.rawItems.forEach(item => {
@@ -379,13 +403,47 @@ export default function Owner() {
                 catMap[cat] = (catMap[cat] || 0) + (Number(item.price) * (item.qty || 1))
               })
             }
+
+            const sName = row.waiterName || 'Unknown'
+            if (serviceNames.size > 0 && !serviceNames.has(sName)) return
+
+            if (!staffMap[sName]) {
+              staffMap[sName] = { name: sName, amount: 0, count: 0, products: {} }
+            }
+            staffMap[sName].amount += Number(row.amount)
+
+            if (!staffOrderSeen[sName]) staffOrderSeen[sName] = new Set()
+            if (row.orderId && !staffOrderSeen[sName].has(row.orderId)) {
+              staffOrderSeen[sName].add(row.orderId)
+              staffMap[sName].count += 1
+              if (row.rawItems) {
+                row.rawItems.forEach(item => {
+                  const key = item.name || 'Unknown'
+                  const qty = Number(item.qty || 1)
+                  const lineAmount = qty * Number(item.price || 0)
+                  if (!staffMap[sName].products[key]) {
+                    staffMap[sName].products[key] = { name: key, qty: 0, amount: 0 }
+                  }
+                  staffMap[sName].products[key].qty += qty
+                  staffMap[sName].products[key].amount += lineAmount
+                })
+              }
+            }
           })
+
+          const staffPerformance = Object.values(staffMap)
+            .map(s => ({
+              ...s,
+              products: Object.values(s.products).sort((a, b) => b.amount - a.amount),
+            }))
+            .sort((a, b) => b.amount - a.amount)
+
           setCategorySales(catMap)
           setMethodSales(metMap)
-          setTopStaff(Object.values(staffMap).sort((a,b) => b.amount - a.amount).slice(0, 5))
+          setTopStaff(staffPerformance)
         })
         .catch((e) => setError(e.message))
-    }, [allowed, tab, reportDay, month.year, month.month])
+    }, [allowed, tab, reportDay, month.year, month.month, staff])
 
   // ──────────────────── Drill-Down Openers ────────────────────
   const openDrilldown = async (type) => {
@@ -629,13 +687,14 @@ export default function Owner() {
   async function saveStaff(e) {
     e.preventDefault()
     setError('')
+    const payload = staffForm.id ? staffForm : { ...staffForm, role: staffAddType }
     try {
       if (staffForm.id) {
-        await api(`/api/shop/staff/${staffForm.id}`, { method: 'PUT', body: JSON.stringify(staffForm) })
+        await api(`/api/shop/staff/${staffForm.id}`, { method: 'PUT', body: JSON.stringify(payload) })
       } else {
-        await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(staffForm) })
+        await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(payload) })
       }
-      setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })
+      setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -643,11 +702,12 @@ export default function Owner() {
   }
 
   async function editStaff(staffMember) {
+    setStaffAddType(staffMember.role === 'CASHIER' ? 'CASHIER' : 'WAITER')
     setStaffForm({
       id: staffMember.id,
       name: staffMember.name,
       email: staffMember.email,
-      password: '', // Don't show hashed password, leave blank for 'no change'
+      password: '',
       role: staffMember.role
     })
   }
@@ -668,7 +728,7 @@ export default function Owner() {
       <div className="am-dashboard-content owner-modern-page am-animate">
         {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
 
-      {tab === 'overview' && role === 'SHOP_ADMIN' ? (
+      {tab === 'overview' && allowed ? (
         overview ? (
           <>
             {/* Header */}
@@ -923,7 +983,7 @@ export default function Owner() {
 
                 <div className="am-table-card" style={{ marginTop: 0, cursor: 'pointer' }} onClick={() => setTab('staff')}>
                   <h3>Top Staff Today</h3>
-                  {topStaff.map((s, idx) => (
+                  {topStaff.slice(0, 5).map((s, idx) => (
                     <div key={idx} className="am-staff-row">
                       <div className="am-staff-avatar">{s.name[0]}</div>
                       <div className="am-staff-info">
@@ -951,7 +1011,7 @@ export default function Owner() {
         )
       ) : null}
 
-      {tab === 'menu' && role === 'SHOP_ADMIN' ? (
+      {tab === 'menu' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -1499,7 +1559,7 @@ export default function Owner() {
           </>
         ) : null}
 
-      {tab === 'staff' && role === 'SHOP_ADMIN' ? (
+      {tab === 'staff' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -1540,7 +1600,7 @@ export default function Owner() {
              <div className="am-metric-card">
                 <div className="am-metric-header">ROLES</div>
                 <div className="am-metric-value">{new Set(staff.map(s => s.role)).size}</div>
-                <div className="am-metric-trend am-trend-neu">owner · manager · cashier</div>
+                <div className="am-metric-trend am-trend-neu">owner · waiter · cashier</div>
              </div>
              <div className="am-metric-card">
                 <div className="am-metric-header">LAST ADDED</div>
@@ -1552,19 +1612,66 @@ export default function Owner() {
           <div className="am-main-grid am-grid-form-list">
             {/* Form Card */}
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
-               <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : '+ Add new staff member'}</h3>
+               <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : 'Register new staff'}</h3>
+
+               {!staffForm.id && (
+                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'WAITER' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('WAITER')
+                       setStaffForm(f => ({ ...f, role: 'WAITER' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'WAITER' ? '2px solid #4CAF50' : '1px solid #E5E7EB',
+                       background: staffAddType === 'WAITER' ? 'rgba(76,175,80,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#2E7D32', marginBottom: 6 }}>Waiter</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       Takes orders and serves tables. Shows in the waiter/cashier dropdown when posting orders.
+                     </div>
+                   </button>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'CASHIER' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('CASHIER')
+                       setStaffForm(f => ({ ...f, role: 'CASHIER' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'CASHIER' ? '2px solid #2196F3' : '1px solid #E5E7EB',
+                       background: staffAddType === 'CASHIER' ? 'rgba(33,150,243,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#2196F3', marginBottom: 6 }}>Cashier</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       POS and billing access. Opens/closes shifts. Uses the desktop cashier app.
+                     </div>
+                   </button>
+                 </div>
+               )}
+
                <form 
                  onSubmit={saveStaff}
                  className="stack" 
                  style={{ gap: 20 }}
                >
+                  {!staffForm.id && (
+                    <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F3F4F6', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : 'Waiter'}</span>
+                    </div>
+                  )}
                   <div className="grid-2" style={{ gap: 16 }}>
                     <label className="am-field">
                       <span>Full Name</span>
                       <input className="am-input" value={staffForm.name} onChange={e => setStaffForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Amina Kayitesi" />
                     </label>
                     <label className="am-field">
-                      <span>Email</span>
+                      <span>Email (login)</span>
                       <input className="am-input" type="email" value={staffForm.email} onChange={e => setStaffForm(f => ({...f, email: e.target.value}))} required placeholder="e.g. amina@mama.local" />
                     </label>
                   </div>
@@ -1573,19 +1680,37 @@ export default function Owner() {
                       <span>{staffForm.id ? 'New Password' : 'Temporary Password'}</span>
                       <input className="am-input" type="password" value={staffForm.password} onChange={e => setStaffForm(f => ({...f, password: e.target.value}))} required={!staffForm.id} placeholder="Set a password" />
                     </label>
-                    <label className="am-field">
-                      <span>Role</span>
-                      <select className="am-input" value={staffForm.role} onChange={e => setStaffForm(f => ({...f, role: e.target.value}))}>
-                         <option value="CASHIER">Shop staff (waiter + billing)</option>
-                         <option value="MANAGER">Manager</option>
-                         <option value="SHOP_ADMIN">Owner</option>
-                      </select>
-                    </label>
+                    {staffForm.id ? (
+                      <label className="am-field">
+                        <span>Role</span>
+                        <select className="am-input" value={staffForm.role} onChange={e => setStaffForm(f => ({...f, role: e.target.value}))}>
+                           <option value="WAITER">Waiter — orders & tables</option>
+                           <option value="CASHIER">Cashier — POS & billing</option>
+                           {staffForm.role === 'SHOP_ADMIN' && <option value="SHOP_ADMIN">Owner</option>}
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="am-field">
+                        <span>Access level</span>
+                        <input className="am-input" readOnly value={staffAddType === 'CASHIER' ? 'Cashier — POS, billing & shifts' : 'Waiter — orders & tables'} />
+                      </label>
+                    )}
                   </div>
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>{staffForm.id ? 'Update member' : 'Register staff'}</button>
-                    <button className="btn outline xl" type="button" onClick={() => setStaffForm({ id: '', name: '', email: '', password: '', role: 'CASHIER' })} style={{ borderRadius: 12 }}>Clear</button>
+                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>
+                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : 'Register Waiter')}
+                    </button>
+                    <button
+                      className="btn outline xl"
+                      type="button"
+                      onClick={() => {
+                        setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType })
+                      }}
+                      style={{ borderRadius: 12 }}
+                    >
+                      Clear
+                    </button>
                   </div>
                </form>
             </div>
@@ -1593,7 +1718,7 @@ export default function Owner() {
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
-                  {['ALL', 'OWNER', 'MANAGER', 'CASHIER'].map(f => (
+                  {['ALL', 'OWNER', 'WAITER', 'CASHIER'].map(f => (
                     <div 
                       key={f} 
                       className={`am-pill ${staffFilter === f ? 'active' : ''}`}
@@ -1601,9 +1726,9 @@ export default function Owner() {
                     >
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
                        {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#1D3557' }} />}
-                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#1D3557' }} />}
+                       {f === 'WAITER' && <HiOutlineUsers size={14} style={{ color: '#4CAF50' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
-                       {f}
+                       {f === 'OWNER' ? 'Owner' : f.charAt(0) + f.slice(1).toLowerCase()}
                     </div>
                   ))}
                </div>
@@ -1628,6 +1753,7 @@ export default function Owner() {
                           .map(staffMember => {
                              const initials = staffMember.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
                              const isOwner = staffMember.role === 'SHOP_ADMIN'
+                             const roleStyle = staffRoleStyle(staffMember.role)
                              const active = true; // Placeholder for real shift status
                              
                              return (
@@ -1645,11 +1771,11 @@ export default function Owner() {
                                   <td>
                                      <span style={{ 
                                        padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700,
-                                       background: isOwner ? 'rgba(230, 204, 178, 0.1)' : (staffMember.role === 'MANAGER' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)'),
-                                       color: isOwner ? '#1D3557' : (staffMember.role === 'MANAGER' ? '#1D3557' : '#2196F3'),
-                                       border: `1px solid ${isOwner ? '#1D355744' : (staffMember.role === 'MANAGER' ? '#1D355744' : '#2196F344')}`
+                                       background: roleStyle.bg,
+                                       color: roleStyle.color,
+                                       border: `1px solid ${roleStyle.border}`
                                      }}>
-                                       {isOwner ? 'Owner' : staffMember.role.charAt(0) + staffMember.role.slice(1).toLowerCase()}
+                                       {staffRoleLabel(staffMember.role)}
                                      </span>
                                   </td>
                                   <td>
@@ -1683,7 +1809,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'reports' && role === 'SHOP_ADMIN' ? (
+      {tab === 'reports' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -1980,7 +2106,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'inventory' && role === 'SHOP_ADMIN' ? (
+      {tab === 'inventory' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -2406,7 +2532,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'requested_order' && role === 'SHOP_ADMIN' ? (
+      {tab === 'requested_order' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -2557,7 +2683,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'eod' && role === 'SHOP_ADMIN' ? (
+      {tab === 'eod' && allowed ? (
         (() => {
           // Compute EOD aggregates from existing state
           const eodRevenue = overview?.todayRevenue || 0
@@ -2837,22 +2963,37 @@ export default function Owner() {
 
                 {/* ── Staff Performance ── */}
                 <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Staff Performance</h3>
-                  <div className="am-eod-table">
-                    <div className="am-eod-table-head">
-                      <span>Staff Member</span>
-                      <span>Orders</span>
-                      <span>Revenue</span>
-                    </div>
-                    {topStaff.length === 0 && <div className="am-eod-empty">No staff sales recorded</div>}
-                    {topStaff.map((s, idx) => (
-                      <div key={idx} className="am-eod-table-row">
-                        <span className="am-eod-cell-name">{s.name}</span>
-                        <span>{s.count}</span>
-                        <span style={{ color: '#1D3557' }}>{Number(s.amount).toLocaleString()} RWF</span>
+                  <h3 className="am-eod-section-title">Staff Performance <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>(waiters & cashiers)</span></h3>
+                  {topStaff.length === 0 && <div className="am-eod-empty">No waiter or cashier sales recorded for this date</div>}
+                  {topStaff.map((s, idx) => (
+                    <div key={idx} style={{ marginBottom: 20, border: '1px solid #E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{s.name}</div>
+                          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{s.count} order{s.count !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: '#1D3557' }}>{Number(s.amount).toLocaleString()} RWF</div>
                       </div>
-                    ))}
-                  </div>
+                      {s.products?.length > 0 ? (
+                        <div className="am-eod-table">
+                          <div className="am-eod-table-head">
+                            <span>Product</span>
+                            <span>Qty</span>
+                            <span>Amount</span>
+                          </div>
+                          {s.products.map((p, pIdx) => (
+                            <div key={pIdx} className="am-eod-table-row">
+                              <span className="am-eod-cell-name">{p.name}</span>
+                              <span>{p.qty}</span>
+                              <span style={{ color: '#1D3557' }}>{Number(p.amount).toLocaleString()} RWF</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="am-eod-empty" style={{ padding: 16 }}>No product details</div>
+                      )}
+                    </div>
+                  ))}
                 </section>
 
                 {/* ── Inventory Alerts ── */}
@@ -3053,7 +3194,7 @@ export default function Owner() {
         })()
       ) : null}
 
-      {tab === 'loans' && role === 'SHOP_ADMIN' ? (
+      {tab === 'loans' && allowed ? (
         <>
           <header className="am-header">
             <div className="am-title">

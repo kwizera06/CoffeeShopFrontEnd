@@ -29,8 +29,10 @@ export default function Login() {
         tenantId: res.tenantId,
         name: res.name,
         email: res.email,
+        isOwner: res.isOwner,
       })
-      navigateByRole(nav, res.role)
+      const landingRole = res.isOwner || res.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : res.role
+      navigateByRole(nav, landingRole)
     } catch (err) {
       setError(err.message || 'Login failed')
     } finally {
@@ -56,13 +58,15 @@ export default function Login() {
       }
       const me = await api('/api/auth/me', { headers: { Authorization: `Bearer ${tok}` } })
       setSession({
-        token: tok,
+        token: me.token || tok,
         role: me.role,
         tenantId: me.tenantId,
         name: me.name,
         email: me.email,
+        isOwner: me.isOwner,
       })
-      navigateByRole(nav, me.role)
+      const landingRole = me.isOwner || me.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : me.role
+      navigateByRole(nav, landingRole)
     } catch (err) {
       setError(err.message || 'Supabase sign-in failed')
     } finally {
@@ -186,7 +190,9 @@ function navigateByRole(nav, role) {
   if (role === 'PLATFORM_ADMIN') {
     nav('/admin', { replace: true })
   } else if (role === 'SHOP_ADMIN') {
-    nav('/app/admin', { replace: true })
+    nav('/app/admin?tab=overview', { replace: true })
+  } else if (role === 'WAITER') {
+    nav('/app/cashier', { replace: true })
   } else {
     nav('/app/cashier', { replace: true })
   }

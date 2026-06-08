@@ -18,6 +18,8 @@ export function setCachedShopContext(tenantId, context) {
     id: context.id,
     name: context.name,
     status: context.status,
+    ownerEmail: context.ownerEmail || '',
+    isOwner: Boolean(context.isOwner),
     tenantId,
   }))
 }

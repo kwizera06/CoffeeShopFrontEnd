@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession, clearSession } from '../../api'
+import { shouldShowAdminDashboard } from '../../utils/adminAccess.js'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
@@ -80,12 +81,21 @@ function formatShiftLabel(s) {
   return `${formatShiftTime(s.opened_at)} → ${closed} · ${opener}`;
 }
 
+function roleDisplayLabel(role) {
+  if (role === 'SHOP_ADMIN') return 'Owner'
+  if (role === 'CASHIER') return 'Cashier'
+  if (role === 'WAITER') return 'Waiter'
+  return role || 'Staff'
+}
+
 export default function CashierDashboard() {
   const nav = useNavigate()
-  const { role } = getSession()
-  const { context, shift, reload: reloadShift, setShift } = useShopContext()
+  const session = getSession()
+  const { role } = session
+  const { context, shift, reload: reloadShift, setShift, isShopAdmin } = useShopContext()
   const shopName = context?.name || ''
-  const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN'
+  const showAdmin = shouldShowAdminDashboard(session, context) || isShopAdmin
+  const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN' || showAdmin
 
   // Query Params
   const [searchParams, setSearchParams] = useSearchParams()
@@ -117,6 +127,11 @@ export default function CashierDashboard() {
   const [tableNumber, setTableNumber] = useState('1')
   const [selectedWaiter, setSelectedWaiter] = useState('')
   const [qtyById, setQtyById] = useState({})
+
+  const serviceStaff = useMemo(
+    () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER'),
+    [staff],
+  )
 
   // Dynamic Categories from available menu items
   const dynamicCategories = useMemo(() => {
@@ -591,7 +606,12 @@ export default function CashierDashboard() {
       <header className="cashier-header">
         <div className="cashier-header-brand">
           <img src={olitechLogo} alt="Olitech Hub" style={{ height: 56, width: 'auto', objectFit: 'contain', marginRight: 12 }} />
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#1D3557' }}>{shopName}</span>
+          <div>
+            <span style={{ fontWeight: 700, fontSize: 15, color: '#1D3557' }}>{shopName}</span>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+              Logged in as: <strong>{showAdmin ? 'Owner' : roleDisplayLabel(role)}</strong>
+            </div>
+          </div>
         </div>
         
         <div className="cashier-header-actions">
@@ -615,12 +635,12 @@ export default function CashierDashboard() {
             <HiOutlineArrowRightOnRectangle />
           </button>
 
-          {role === 'SHOP_ADMIN' && (
-             <button className="cashier-btn-admin-dash" onClick={() => nav('/app/admin')}>
+          {showAdmin && (
+             <button className="cashier-btn-admin-dash" onClick={() => nav('/app/admin?tab=overview')}>
                <HiOutlineChartBar /> <span>Admin Dashboard</span>
              </button>
            )}
-          
+
           {canManageShift && (shift ? (
             <button className="cashier-btn-close-shift" onClick={()=>setShowShiftModal('CLOSE')}><span>Close Shift</span></button>
           ) : (
@@ -668,8 +688,12 @@ export default function CashierDashboard() {
                   <input type="number" min="1" className="cashier-table-val" value={tableNumber} onChange={e=>setTableNumber(e.target.value)} />
                 </div>
                 <select className="cashier-waiter-sel" value={selectedWaiter} disabled={!!editId} onChange={(e) => setSelectedWaiter(e.target.value)}>
-                   <option value="">Waiter...</option>
-                   {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   <option value="">Waiter / Cashier...</option>
+                   {serviceStaff.map(s => (
+                     <option key={s.id} value={s.id}>
+                       {s.name} ({s.role === 'CASHIER' ? 'Cashier' : 'Waiter'})
+                     </option>
+                   ))}
                 </select>
               </div>
               <div className="cashier-categories">

@@ -11,7 +11,7 @@ import './screenshot-ui.css'
 
 function AppIndex() {
   const { role } = getSession()
-  if (role === 'SHOP_ADMIN') return <Navigate to="admin" replace />
+  if (role === 'SHOP_ADMIN') return <Navigate to="admin?tab=overview" replace />
   return <Navigate to="cashier" replace />
 }
 
