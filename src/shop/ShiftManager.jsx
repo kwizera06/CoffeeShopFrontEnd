@@ -4,7 +4,7 @@ import { useShopContext } from './ShopContext'
 
 export default function ShiftManager() {
     const { role } = getSession()
-    const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN'
+    const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN' || role === 'MANAGER'
     const { shift, reload, setShift } = useShopContext()
     const [busy, setBusy] = useState(false)
     const [showModal, setShowModal] = useState(false)

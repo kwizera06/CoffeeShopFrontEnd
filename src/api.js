@@ -46,7 +46,7 @@ export function setSession({ token, role, tenantId, name, email, isOwner }) {
   sessionStorage.setItem(AUTH.email, email ?? '')
   if (isOwner || role === 'SHOP_ADMIN') {
     setIsOwnerFlag(true)
-  } else {
+  } else if (role !== 'MANAGER') {
     clearIsOwnerFlag()
   }
 }

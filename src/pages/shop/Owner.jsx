@@ -45,21 +45,7 @@ import { IoCafeOutline } from 'react-icons/io5'
 import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/md'
 
 import './OwnerModern.css'
-
-function staffRoleLabel(role) {
-  if (role === 'SHOP_ADMIN') return 'Owner'
-  if (role === 'WAITER') return 'Waiter'
-  if (role === 'CASHIER') return 'Cashier'
-  if (role === 'CHEF') return 'Chef'
-  return role
-}
-
-function staffRoleStyle(role) {
-  if (role === 'SHOP_ADMIN') return { bg: 'rgba(230, 204, 178, 0.1)', color: '#1D3557', border: '#1D355744' }
-  if (role === 'WAITER') return { bg: 'rgba(76, 175, 80, 0.1)', color: '#2E7D32', border: '#4CAF5044' }
-  if (role === 'CASHIER') return { bg: 'rgba(33, 150, 243, 0.1)', color: '#2196F3', border: '#2196F344' }
-  return { bg: 'rgba(158, 158, 158, 0.1)', color: '#616161', border: '#9E9E9E44' }
-}
+import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole, staffRoleLabel, staffRoleStyle } from '../../utils/roles.js'
 
 export default function Owner() {
   const nav = useNavigate()
@@ -152,8 +138,18 @@ export default function Owner() {
     setActionMenu(null)
     setError('')
     try {
-      const data = await api(`/api/shop/owner/stock-history?itemId=${ing.id}&itemType=INGREDIENT`)
+      const data = await api(`/api/shop/owner/stock-history?itemId=${ing.id}&itemType=INGREDIENT&fromBeginning=true`)
       setIngredientStockHistory({ ...data, productName: ing.name, unit: ing.unit })
+    } catch (err) {
+      setError(err.message || 'Failed to load stock history')
+    }
+  }
+
+  async function openStockItemHistory(item) {
+    setError('')
+    try {
+      const data = await api(`/api/shop/owner/stock-history?itemId=${item.id}&itemType=${item.itemType}&fromBeginning=true`)
+      setStockHistory({ ...data, productName: item.name, unit: item.unit, itemType: item.itemType })
     } catch (err) {
       setError(err.message || 'Failed to load stock history')
     }
@@ -184,7 +180,7 @@ export default function Owner() {
           itemType = 'INGREDIENT'
         }
       }
-      const data = await api(`/api/shop/owner/stock-history?itemId=${itemId}&itemType=${itemType}`)
+      const data = await api(`/api/shop/owner/stock-history?itemId=${itemId}&itemType=${itemType}&fromBeginning=true`)
       setStockHistory({ ...data, productName: m.name, itemType })
     } catch (err) {
       setError(err.message)
@@ -257,17 +253,82 @@ export default function Owner() {
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
   const [staffAddType, setStaffAddType] = useState('WAITER')
+  const [showAllOrdersModal, setShowAllOrdersModal] = useState(false)
+  const [stockFilter, setStockFilter] = useState('ALL')
+  const [stockSearch, setStockSearch] = useState('')
+
+  const MENU_LOW_THRESHOLD = 10
+
+  function getItemStockStatus(item) {
+    if (item.itemType === 'INGREDIENT') {
+      if (item.stock <= 0) return 'CRITICAL'
+      if (item.stock < item.minThreshold) return 'LOW'
+      return 'HEALTHY'
+    }
+    if (item.stock <= 0) return 'CRITICAL'
+    if (item.stock <= MENU_LOW_THRESHOLD) return 'LOW'
+    return 'HEALTHY'
+  }
+
+  const stockItems = useMemo(() => {
+    const products = menu
+      .filter(m => !m.is_recipe)
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        itemType: 'MENU_ITEM',
+        category: m.category || 'Product',
+        unit: 'pcs',
+        stock: Number(m.stock_level ?? m.stockLevel ?? 0),
+        minThreshold: MENU_LOW_THRESHOLD,
+      }))
+    const ings = ingredients.map(ing => ({
+      id: ing.id,
+      name: ing.name,
+      itemType: 'INGREDIENT',
+      category: 'Ingredient',
+      unit: ing.unit,
+      stock: Number(ing.stock_level ?? 0),
+      minThreshold: Number(ing.min_threshold ?? 0),
+    }))
+    return [...products, ...ings].sort((a, b) => {
+      const order = { CRITICAL: 0, LOW: 1, HEALTHY: 2 }
+      const sa = getItemStockStatus(a)
+      const sb = getItemStockStatus(b)
+      if (order[sa] !== order[sb]) return order[sa] - order[sb]
+      return a.name.localeCompare(b.name)
+    })
+  }, [menu, ingredients])
+
+  const filteredStockItems = useMemo(() => {
+    return stockItems.filter(item => {
+      const status = getItemStockStatus(item)
+      if (stockFilter === 'LOW' && status !== 'LOW') return false
+      if (stockFilter === 'CRITICAL' && status !== 'CRITICAL') return false
+      if (stockFilter === 'HEALTHY' && status !== 'HEALTHY') return false
+      if (stockSearch && !item.name.toLowerCase().includes(stockSearch.toLowerCase())) return false
+      return true
+    })
+  }, [stockItems, stockFilter, stockSearch])
 
   // Drill-down modal state: { type: 'revenue'|'cash'|'momo'|'pos'|'profit'|'completed'|'prep'|'waiting'|'lowstock', data?: any }
   const [drilldown, setDrilldown] = useState(null)
   
-  const allowed = isShopAdmin || role === 'SHOP_ADMIN' || context?.isOwner
+  const ownerAccess = isShopAdmin || role === 'SHOP_ADMIN' || context?.isOwner
+  const allowed = ownerAccess || canAccessDashboard(role)
+  const canEdit = ownerAccess
 
   useEffect(() => {
     if (role && !allowed) {
       nav('/app/cashier', { replace: true })
     }
   }, [role, allowed, nav])
+
+  useEffect(() => {
+    if (role && allowed && !canAccessTab(role, tab)) {
+      setSearchParams({ tab: 'overview' })
+    }
+  }, [role, tab, allowed, setSearchParams])
 
   const reloadCore = useCallback(async () => {
     const [o, m, s, i, l] = await Promise.all([
@@ -389,7 +450,7 @@ export default function Owner() {
           const staffOrderSeen = {}
           const serviceNames = new Set(
             (staff || [])
-              .filter(s => s.role === 'WAITER' || s.role === 'CASHIER')
+              .filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER')
               .map(s => s.name),
           )
           
@@ -702,7 +763,11 @@ export default function Owner() {
   }
 
   async function editStaff(staffMember) {
-    setStaffAddType(staffMember.role === 'CASHIER' ? 'CASHIER' : 'WAITER')
+    setStaffAddType(
+      staffMember.role === 'CASHIER' ? 'CASHIER'
+      : staffMember.role === 'MANAGER' ? 'MANAGER'
+      : 'WAITER',
+    )
     setStaffForm({
       id: staffMember.id,
       name: staffMember.name,
@@ -728,13 +793,13 @@ export default function Owner() {
       <div className="am-dashboard-content owner-modern-page am-animate">
         {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
 
-      {tab === 'overview' && allowed ? (
+      {tab === 'overview' && canAccessTab(role, 'overview') ? (
         overview ? (
           <>
             {/* Header */}
             <header className="am-header">
               <div className="am-title">
-                <h1>Admin Dashboard</h1>
+                <h1>{getDashboardLabel(role)}</h1>
                 <p>
                   {overview?.hasActiveShift
                     ? 'Current shift overview'
@@ -843,7 +908,7 @@ export default function Owner() {
                 <div className="am-metric-trend am-trend-pos">↑ Net today</div>
               </div>
 
-              <div className="am-metric-card" onClick={() => setTab('inventory')}>
+              <div className="am-metric-card" onClick={() => setTab(isManagerRole(role) ? 'stock' : 'inventory')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon" style={{ background: 'rgba(33, 150, 243, 0.1)', color: '#2196F3' }}><HiOutlineArchiveBox /></div>
                   STOCK VALUE
@@ -925,7 +990,7 @@ export default function Owner() {
                 <div className="am-table-card">
                   <div className="am-chart-header">
                     <h3>Recent Orders</h3>
-                    <button className="btn ghost tiny" onClick={() => nav('/app/orders')}>All</button>
+                    <button className="btn ghost tiny" onClick={() => setShowAllOrdersModal(true)}>All</button>
                   </div>
                   <div className="am-order-list">
                     {dailyRows.slice(0, 5).map((row, idx) => (
@@ -1011,7 +1076,7 @@ export default function Owner() {
         )
       ) : null}
 
-      {tab === 'menu' && allowed ? (
+      {tab === 'menu' && ownerAccess ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -1559,7 +1624,7 @@ export default function Owner() {
           </>
         ) : null}
 
-      {tab === 'staff' && allowed ? (
+      {tab === 'staff' && ownerAccess ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -1600,7 +1665,7 @@ export default function Owner() {
              <div className="am-metric-card">
                 <div className="am-metric-header">ROLES</div>
                 <div className="am-metric-value">{new Set(staff.map(s => s.role)).size}</div>
-                <div className="am-metric-trend am-trend-neu">owner · waiter · cashier</div>
+                <div className="am-metric-trend am-trend-neu">owner · manager · waiter · cashier</div>
              </div>
              <div className="am-metric-card">
                 <div className="am-metric-header">LAST ADDED</div>
@@ -1615,7 +1680,7 @@ export default function Owner() {
                <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : 'Register new staff'}</h3>
 
                {!staffForm.id && (
-                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
                    <button
                      type="button"
                      className={`am-staff-type-card ${staffAddType === 'WAITER' ? 'active' : ''}`}
@@ -1652,6 +1717,24 @@ export default function Owner() {
                        POS and billing access. Opens/closes shifts. Uses the desktop cashier app.
                      </div>
                    </button>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'MANAGER' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('MANAGER')
+                       setStaffForm(f => ({ ...f, role: 'MANAGER' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'MANAGER' ? '2px solid #9C27B0' : '1px solid #E5E7EB',
+                       background: staffAddType === 'MANAGER' ? 'rgba(156,39,176,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#7B1FA2', marginBottom: 6 }}>Manager</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       Supervises daily ops. Reports, EOD, stock levels, loans. No menu, inventory edits, or staff changes.
+                     </div>
+                   </button>
                  </div>
                )}
 
@@ -1662,7 +1745,7 @@ export default function Owner() {
                >
                   {!staffForm.id && (
                     <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F3F4F6', fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : 'Waiter'}</span>
+                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : 'Waiter'}</span>
                     </div>
                   )}
                   <div className="grid-2" style={{ gap: 16 }}>
@@ -1686,20 +1769,25 @@ export default function Owner() {
                         <select className="am-input" value={staffForm.role} onChange={e => setStaffForm(f => ({...f, role: e.target.value}))}>
                            <option value="WAITER">Waiter — orders & tables</option>
                            <option value="CASHIER">Cashier — POS & billing</option>
+                           <option value="MANAGER">Manager — reports & supervision</option>
                            {staffForm.role === 'SHOP_ADMIN' && <option value="SHOP_ADMIN">Owner</option>}
                         </select>
                       </label>
                     ) : (
                       <label className="am-field">
                         <span>Access level</span>
-                        <input className="am-input" readOnly value={staffAddType === 'CASHIER' ? 'Cashier — POS, billing & shifts' : 'Waiter — orders & tables'} />
+                        <input className="am-input" readOnly value={
+                          staffAddType === 'CASHIER' ? 'Cashier — POS, billing & shifts'
+                          : staffAddType === 'MANAGER' ? 'Manager — reports, EOD & supervision'
+                          : 'Waiter — orders & tables'
+                        } />
                       </label>
                     )}
                   </div>
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>
-                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : 'Register Waiter')}
+                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : 'Register Waiter')}
                     </button>
                     <button
                       className="btn outline xl"
@@ -1718,7 +1806,7 @@ export default function Owner() {
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
-                  {['ALL', 'OWNER', 'WAITER', 'CASHIER'].map(f => (
+                  {['ALL', 'OWNER', 'MANAGER', 'WAITER', 'CASHIER'].map(f => (
                     <div 
                       key={f} 
                       className={`am-pill ${staffFilter === f ? 'active' : ''}`}
@@ -1726,9 +1814,10 @@ export default function Owner() {
                     >
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
                        {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#1D3557' }} />}
+                       {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#9C27B0' }} />}
                        {f === 'WAITER' && <HiOutlineUsers size={14} style={{ color: '#4CAF50' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
-                       {f === 'OWNER' ? 'Owner' : f.charAt(0) + f.slice(1).toLowerCase()}
+                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f.charAt(0) + f.slice(1).toLowerCase()}
                     </div>
                   ))}
                </div>
@@ -1809,7 +1898,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'reports' && allowed ? (
+      {tab === 'reports' && canAccessTab(role, 'reports') ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -2041,7 +2130,10 @@ export default function Owner() {
 
              {/* Daily Payments List */}
              <div className="am-shift-card">
-                <h3 className="am-card-title">Daily payments</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 className="am-card-title" style={{ margin: 0 }}>Daily payments</h3>
+                  <button className="btn ghost tiny" onClick={() => setShowAllOrdersModal(true)}>All</button>
+                </div>
                 <table className="am-modern-table">
                    <thead>
                       <tr>
@@ -2106,7 +2198,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'inventory' && allowed ? (
+      {tab === 'inventory' && canAccessTab(role, 'inventory') ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -2154,8 +2246,15 @@ export default function Owner() {
              </div>
           </div>
 
+          {!canEdit && (
+            <div style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 10, background: '#F3E5F5', color: '#6A1B9A', fontSize: 13, fontWeight: 600 }}>
+              View only — managers can monitor stock levels. Contact the owner to add or edit ingredients.
+            </div>
+          )}
+
           <div className="am-main-grid am-grid-form-list">
             {/* Form Column */}
+            {canEdit && (
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
                <h3 className="am-card-title">+ Add Ingredient</h3>
                <form 
@@ -2208,6 +2307,7 @@ export default function Owner() {
                   </div>
                </form>
             </div>
+            )}
 
             {/* List Column */}
             <div className="stack" style={{ gap: 24 }}>
@@ -2357,10 +2457,10 @@ export default function Owner() {
                <div className="am-animate" style={{ background: '#FFF', padding: 24, borderRadius: 20, width: '90%', maxWidth: 300, boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
                   <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: '#111827', textAlign: 'center' }}>Manage {actionMenu.name}</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                     <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setIngForm(actionMenu); setActionMenu(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️ Edit Item</button>
+                     {canEdit && <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setIngForm(actionMenu); setActionMenu(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️ Edit Item</button>}
                      <button className="btn xl" style={{ width: '100%', background: '#EDF2F9', color: '#1D3557', borderColor: '#B8CCE4' }} onClick={() => openIngredientHistory(actionMenu)}>📜 Stock History</button>
                      <button className="btn xl" style={{ width: '100%', background: '#E8F5E9', color: '#2E7D32', borderColor: '#A5D6A7' }} onClick={() => openLinkedProducts(actionMenu)}>🔗 Linked Products</button>
-                     <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteIngredient(actionMenu.id)}>🗑️ Delete Item</button>
+                     {canEdit && <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteIngredient(actionMenu.id)}>🗑️ Delete Item</button>}
                      <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setActionMenu(null)}>Cancel</button>
                   </div>
                </div>
@@ -2378,120 +2478,6 @@ export default function Owner() {
                      <button className="btn xl" style={{ width: '100%', background: '#EDF2F9', color: '#1D3557', borderColor: '#B8CCE4' }} onClick={() => openProductHistory(productActionMenu)}>📜 Stock History</button>
                      <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteProduct(productActionMenu.id)}>🗑️ Delete Product</button>
                      <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setProductActionMenu(null)}>Cancel</button>
-                  </div>
-               </div>
-             </div>,
-             document.body
-           )}
-
-           {/* Stock History Modal */}
-           {stockHistory && createPortal(
-             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setStockHistory(null)}>
-               <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>📜 Stock History — {stockHistory.productName}</h3>
-                     <button onClick={() => setStockHistory(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
-                  </div>
-                  <div style={{ padding: 20, overflowY: 'auto' }}>
-                     {/* Summary Cards */}
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-                        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Purchased</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>+{stockHistory.summary?.totalPurchased ?? 0}</div>
-                        </div>
-                        <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Sold</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>-{stockHistory.summary?.totalSold ?? 0}</div>
-                        </div>
-                        <div style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#1D3557', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Net Change</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#1D3557', marginTop: 4 }}>{(stockHistory.summary?.totalPurchased ?? 0) - (stockHistory.summary?.totalSold ?? 0)}</div>
-                        </div>
-                     </div>
-                     {/* Movement List */}
-                     {stockHistory.history?.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No stock movements recorded yet.</p>
-                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                           {stockHistory.history.map((mv, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                                 <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
-                                    background: mv.movement_type === 'SALE_DEDUCTION' ? '#FEE2E2' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#EDF2F9' : '#F0FDF4'),
-                                    color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#1D3557' : '#16A34A')
-                                 }}>
-                                    {mv.movement_type === 'SALE_DEDUCTION' ? '−' : '+'}
-                                 </div>
-                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mv.notes || mv.movement_type.replace(/_/g, ' ')}</div>
-                                    <div style={{ fontSize: 11, color: '#6B7280' }}>{new Date(mv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                                 </div>
-                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : '#16A34A' }}>
-                                       {mv.movement_type === 'SALE_DEDUCTION' ? '' : '+'}{mv.quantity}
-                                    </div>
-                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                  </div>
-               </div>
-             </div>,
-             document.body
-           )}
-
-           {/* Ingredient Stock History Modal */}
-           {ingredientStockHistory && createPortal(
-             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setIngredientStockHistory(null)}>
-               <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>📜 Stock History — {ingredientStockHistory.productName}</h3>
-                     <button onClick={() => setIngredientStockHistory(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
-                  </div>
-                  <div style={{ padding: 20, overflowY: 'auto' }}>
-                     {/* Summary Cards */}
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-                        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Purchased</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>+{ingredientStockHistory.summary?.totalPurchased ?? 0}</div>
-                        </div>
-                        <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Sold</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>-{ingredientStockHistory.summary?.totalSold ?? 0}</div>
-                        </div>
-                        <div style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                           <div style={{ fontSize: 11, color: '#1D3557', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Net Change</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, color: '#1D3557', marginTop: 4 }}>{(ingredientStockHistory.summary?.totalPurchased ?? 0) - (ingredientStockHistory.summary?.totalSold ?? 0)}</div>
-                        </div>
-                     </div>
-                     {/* Movement List */}
-                     {ingredientStockHistory.history?.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No stock movements recorded yet.</p>
-                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                           {ingredientStockHistory.history.map((mv, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                                 <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
-                                    background: mv.movement_type === 'SALE_DEDUCTION' ? '#FEE2E2' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#EDF2F9' : '#F0FDF4'),
-                                    color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#1D3557' : '#16A34A')
-                                 }}>
-                                    {mv.movement_type === 'SALE_DEDUCTION' ? '−' : '+'}
-                                 </div>
-                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mv.notes || mv.movement_type.replace(/_/g, ' ')}</div>
-                                    <div style={{ fontSize: 11, color: '#6B7280' }}>{new Date(mv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                                 </div>
-                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : '#16A34A' }}>
-                                       {mv.movement_type === 'SALE_DEDUCTION' ? '' : '+'}{mv.quantity}
-                                    </div>
-                                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
                   </div>
                </div>
              </div>,
@@ -2532,7 +2518,154 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'requested_order' && allowed ? (
+      {tab === 'stock' && canAccessTab(role, 'stock') ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Stock Levels</h1>
+              <p>All products & ingredients — tap any row to see full movement history</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+              <div className="am-report-sel-item">
+                <label>Search</label>
+                <div style={{ position: 'relative' }}>
+                  <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                  <input
+                    type="text"
+                    className="am-input"
+                    style={{ paddingLeft: 40, height: 40 }}
+                    placeholder="Search products or ingredients..."
+                    value={stockSearch}
+                    onChange={e => setStockSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+            <div className="am-metric-card">
+              <div className="am-metric-header">TOTAL ITEMS</div>
+              <div className="am-metric-value">{stockItems.length}</div>
+              <div className="am-metric-trend am-trend-neu">products + ingredients</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">HEALTHY</div>
+              <div className="am-metric-value">{stockItems.filter(i => getItemStockStatus(i) === 'HEALTHY').length}</div>
+              <div className="am-metric-trend am-trend-pos">Above minimum</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">LOW STOCK</div>
+              <div className="am-metric-value">{stockItems.filter(i => getItemStockStatus(i) === 'LOW').length}</div>
+              <div className="am-metric-trend am-trend-neg">Need restocking</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">CRITICAL</div>
+              <div className="am-metric-value">{stockItems.filter(i => getItemStockStatus(i) === 'CRITICAL').length}</div>
+              <div className="am-metric-trend am-trend-neg" style={{ color: '#FF5252' }}>Out or below zero</div>
+            </div>
+          </div>
+
+          <div className="am-report-control-bar" style={{ marginBottom: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {['ALL', 'CRITICAL', 'LOW', 'HEALTHY'].map(f => (
+              <button
+                key={f}
+                type="button"
+                className={`am-pill ${stockFilter === f ? 'active' : ''}`}
+                onClick={() => setStockFilter(f)}
+              >
+                {f === 'ALL' ? 'All Items' : f.charAt(0) + f.slice(1).toLowerCase()}
+                {f !== 'ALL' && (
+                  <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                    ({stockItems.filter(i => getItemStockStatus(i) === f).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="am-category-sales-card">
+            <table className="am-modern-table">
+              <thead>
+                <tr>
+                  <th>ITEM</th>
+                  <th>TYPE</th>
+                  <th>CATEGORY</th>
+                  <th>REMAINING</th>
+                  <th>MIN</th>
+                  <th>STATUS</th>
+                  <th style={{ textAlign: 'right' }}>HISTORY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStockItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#6B7280' }}>
+                      {stockFilter === 'ALL' ? 'No stock items found.' : `No ${stockFilter.toLowerCase()} stock items.`}
+                    </td>
+                  </tr>
+                ) : filteredStockItems.map(item => {
+                  const status = getItemStockStatus(item)
+                  return (
+                    <tr
+                      key={`${item.itemType}-${item.id}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => openStockItemHistory(item)}
+                    >
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{item.name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{item.unit}</div>
+                      </td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                          background: item.itemType === 'MENU_ITEM' ? 'rgba(33,150,243,0.1)' : 'rgba(76,175,80,0.1)',
+                          color: item.itemType === 'MENU_ITEM' ? '#2196F3' : '#2E7D32',
+                        }}>
+                          {item.itemType === 'MENU_ITEM' ? 'Product' : 'Ingredient'}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--admin-text-muted)', fontSize: 13 }}>{item.category}</td>
+                      <td>
+                        <div style={{
+                          fontWeight: 700,
+                          color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557',
+                        }}>
+                          {item.stock} {item.unit}
+                        </div>
+                      </td>
+                      <td style={{ color: 'var(--admin-text-muted)' }}>{item.minThreshold}</td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
+                          background: status === 'CRITICAL' ? 'rgba(255,82,82,0.1)' : status === 'LOW' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)',
+                          color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557',
+                        }}>
+                          {status}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn outline tiny"
+                          onClick={(e) => { e.stopPropagation(); openStockItemHistory(item) }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <p style={{ margin: '16px 0 0', fontSize: 12, color: '#6B7280' }}>
+              Click any row to see every stock movement from the beginning (oldest first).
+            </p>
+          </div>
+        </>
+      ) : null}
+
+      {tab === 'requested_order' && ownerAccess ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -2683,7 +2816,7 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'eod' && allowed ? (
+      {tab === 'eod' && canAccessTab(role, 'eod') ? (
         (() => {
           // Compute EOD aggregates from existing state
           const eodRevenue = overview?.todayRevenue || 0
@@ -3194,7 +3327,7 @@ export default function Owner() {
         })()
       ) : null}
 
-      {tab === 'loans' && allowed ? (
+      {tab === 'loans' && canAccessTab(role, 'loans') ? (
         <>
           <header className="am-header">
             <div className="am-title">
@@ -3412,6 +3545,123 @@ export default function Owner() {
       </div>
 
       {/* ──── Drill-Down Modal (outside scrollable container for mobile) ──── */}
+      {showAllOrdersModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setShowAllOrdersModal(false)}>
+          <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 900, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>All Orders — {new Date(reportDay).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>{dailyRows.length} payment{dailyRows.length !== 1 ? 's' : ''} recorded</p>
+              </div>
+              <button type="button" onClick={() => setShowAllOrdersModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+            </div>
+            <div style={{ padding: 20, overflowY: 'auto' }}>
+              {dailyRows.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#6B7280', padding: '32px 0' }}>No orders recorded for this date.</p>
+              ) : (
+                <table className="am-modern-table">
+                  <thead>
+                    <tr>
+                      <th>TIME</th>
+                      <th>ORDER</th>
+                      <th>ITEMS</th>
+                      <th>STAFF</th>
+                      <th>METHOD</th>
+                      <th style={{ textAlign: 'right' }}>AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyRows.map((r, idx) => (
+                      <tr key={r.orderId || idx}>
+                        <td style={{ fontSize: 12, color: 'var(--admin-text-muted)' }}>
+                          {r.at ? new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Kigali' }) : '—'}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>#{String(r.orderId || idx).slice(0, 8)}</td>
+                        <td style={{ fontSize: 13, maxWidth: 280 }}>{r.items || r.rawItems?.map(ri => `${ri.qty || 1}× ${ri.name}`).join(', ') || '—'}</td>
+                        <td style={{ fontSize: 13 }}>{r.waiterName || '—'}</td>
+                        <td>
+                          <span style={{
+                            padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
+                            background: r.methodLabel === 'Cash' ? 'rgba(76,175,80,0.1)' : (r.methodLabel === 'MoMo' ? 'rgba(255,152,0,0.1)' : 'rgba(33,150,243,0.1)'),
+                            color: r.methodLabel === 'Cash' ? '#1D3557' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3'),
+                          }}>
+                            {(r.methodLabel || '—').toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{Number(r.amount || 0).toLocaleString()} RWF</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {(stockHistory || ingredientStockHistory) && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => { setStockHistory(null); setIngredientStockHistory(null) }}>
+          {(() => {
+            const modal = stockHistory || ingredientStockHistory
+            return (
+              <div className="am-animate" style={{ background: '#FFF', borderRadius: 20, width: '100%', maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>Stock History — {modal.productName}</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>All movements from the beginning (oldest first)</p>
+                  </div>
+                  <button type="button" onClick={() => { setStockHistory(null); setIngredientStockHistory(null) }} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+                </div>
+                <div style={{ padding: 20, overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                    <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total In</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>+{modal.summary?.totalPurchased ?? 0}</div>
+                    </div>
+                    <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Total Out</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>-{modal.summary?.totalSold ?? 0}</div>
+                    </div>
+                    <div style={{ background: '#EDF2F9', border: '1px solid #B8CCE4', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, color: '#1D3557', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Net Change</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#1D3557', marginTop: 4 }}>{(modal.summary?.totalPurchased ?? 0) - (modal.summary?.totalSold ?? 0)}</div>
+                    </div>
+                  </div>
+                  {!modal.history?.length ? (
+                    <p style={{ textAlign: 'center', color: '#6B7280', padding: '24px 0' }}>No stock movements recorded yet.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {modal.history.map((mv, idx) => (
+                        <div key={mv.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                            background: mv.movement_type === 'SALE_DEDUCTION' ? '#FEE2E2' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#EDF2F9' : '#F0FDF4'),
+                            color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : (mv.movement_type === 'REQUISITION_ADDITION' ? '#1D3557' : '#16A34A'),
+                          }}>
+                            {mv.movement_type === 'SALE_DEDUCTION' ? '−' : '+'}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mv.notes || mv.movement_type.replace(/_/g, ' ')}</div>
+                            <div style={{ fontSize: 11, color: '#6B7280' }}>{new Date(mv.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: mv.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : '#16A34A' }}>
+                              {mv.movement_type === 'SALE_DEDUCTION' ? '' : '+'}{mv.quantity} {modal.unit || ''}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#9CA3AF' }}>{mv.previous_stock ?? '-'} → {mv.new_stock ?? '-'}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+        </div>,
+        document.body
+      )}
+
       {drilldown && (
         <div className="am-drilldown-overlay" onClick={() => setDrilldown(null)}>
           <div className="am-drilldown-modal" onClick={e => e.stopPropagation()}>

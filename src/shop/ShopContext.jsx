@@ -25,7 +25,10 @@ function applyMeToSession(me) {
 export function ShopProvider({ children }) {
   const [context, setContext] = useState(() => getCachedShopContext(getSession().tenantId))
   const [shift, setShift] = useState(null)
-  const [isShopAdmin, setIsShopAdmin] = useState(() => shouldShowAdminDashboard(getSession()))
+  const [isShopAdmin, setIsShopAdmin] = useState(() => {
+    const r = getSession().role
+    return shouldShowAdminDashboard(getSession()) || r === 'MANAGER'
+  })
 
   const reload = useCallback(async () => {
     const tenantId = getSession().tenantId
@@ -42,7 +45,7 @@ export function ShopProvider({ children }) {
     setContext(c)
     if (c && tenantId) setCachedShopContext(tenantId, c)
     setShift(s)
-    setIsShopAdmin(prev => prev || Boolean(c?.isOwner || getSession().role === 'SHOP_ADMIN'))
+    setIsShopAdmin(prev => prev || Boolean(c?.isOwner || getSession().role === 'SHOP_ADMIN' || getSession().role === 'MANAGER'))
   }, [])
 
   const value = useMemo(

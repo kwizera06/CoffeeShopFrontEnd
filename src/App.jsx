@@ -4,6 +4,8 @@ import AdminHome from './pages/admin/AdminHome.jsx'
 import ShopLayout from './shop/ShopLayout.jsx'
 import Supplies from './pages/shop/Supplies.jsx'
 import Owner from './pages/shop/Owner.jsx'
+import Orders from './pages/shop/Orders.jsx'
+import Billing from './pages/shop/Billing.jsx'
 import ChefDashboard from './pages/shop/ChefDashboard.jsx'
 import CashierDashboard from './pages/shop/CashierDashboard.jsx'
 import { getSession } from './api'
@@ -11,7 +13,7 @@ import './screenshot-ui.css'
 
 function AppIndex() {
   const { role } = getSession()
-  if (role === 'SHOP_ADMIN') return <Navigate to="admin?tab=overview" replace />
+  if (role === 'SHOP_ADMIN' || role === 'MANAGER') return <Navigate to="admin?tab=overview" replace />
   return <Navigate to="cashier" replace />
 }
 
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/app" element={<ShopLayout />}>
           <Route index element={<AppIndex />} />
           <Route path="cashier" element={<CashierDashboard />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="billing" element={<Billing />} />
           <Route path="supplies" element={<Supplies />} />
           <Route path="admin" element={<Owner />} />
           <Route path="chef" element={<ChefDashboard />} />

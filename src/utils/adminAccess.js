@@ -29,13 +29,13 @@ export function clearIsOwnerFlag() {
   sessionStorage.removeItem(AUTH_IS_OWNER)
 }
 
-/** True when this user should see Admin Dashboard on POS */
+/** True when this user should see Admin/Manager Dashboard on POS */
 export function shouldShowAdminDashboard(session, context) {
   if (!session?.token) return false
 
   const jwt = parseJwtPayload(session.token)
   const role = jwt?.role || session.role
-  if (role === 'SHOP_ADMIN') return true
+  if (role === 'SHOP_ADMIN' || role === 'MANAGER') return true
   if (getIsOwnerFlag()) return true
 
   const ctx = context || getCachedShopContext(session.tenantId)

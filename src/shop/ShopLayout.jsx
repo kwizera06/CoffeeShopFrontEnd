@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../api'
 import { shouldShowAdminDashboard } from '../utils/adminAccess.js'
+import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole } from '../utils/roles.js'
 import { supabase } from '../supabaseClient.js'
 import { ShopProvider, useShopContext } from './ShopContext'
 import ShiftManager from './ShiftManager'
@@ -24,6 +25,18 @@ import {
 } from 'react-icons/hi2'
 import olitechLogo from '../assets/Olitech Logo.png'
 import './ShopModern.css'
+
+const NAV_ITEMS = [
+  { tab: 'overview', label: 'Overview', icon: null },
+  { tab: 'menu', label: 'Menu', ownerOnly: true },
+  { tab: 'inventory', label: 'Inventory', ownerOnly: true },
+  { tab: 'stock', label: 'Stock Levels' },
+  { tab: 'loans', label: 'Loans' },
+  { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },
+  { tab: 'staff', label: 'Staff', ownerOnly: true },
+  { tab: 'reports', label: 'Reports' },
+  { tab: 'eod', label: 'EOD Report' },
+]
 
 function Shell() {
   const nav = useNavigate()
@@ -54,20 +67,26 @@ function Shell() {
     nav('/login', { replace: true })
   }
 
-  const showOwner = isShopAdmin || shouldShowAdminDashboard(getSession(), context)
+  const showDashboard = canAccessDashboard(role) || isShopAdmin || shouldShowAdminDashboard(getSession(), context)
+  const visibleNav = NAV_ITEMS.filter(item => {
+    if (item.ownerOnly) return isOwnerRole(role)
+    return canAccessTab(role, item.tab)
+  })
+  const dashboardLabel = getDashboardLabel(role)
+  const roleLabel = isOwnerRole(role) ? 'Shop Admin' : isManagerRole(role) ? 'Manager' : 'Shop Staff'
   const initials = (name || email || '?')[0].toUpperCase()
 
-  if (loc.pathname === '/app/cashier' && !showOwner) {
+  if (loc.pathname === '/app/cashier' && !showDashboard) {
     return <Outlet />
   }
 
-  if (loc.pathname === '/app/cashier' && showOwner) {
+  if (loc.pathname === '/app/cashier' && showDashboard) {
     return (
       <>
         <div className="admin-pos-bridge">
           <span className="admin-pos-bridge-label">POS Mode</span>
           <button type="button" className="admin-pos-bridge-btn" onClick={() => nav('/app/admin?tab=overview')}>
-            ← Admin Dashboard
+            ← {dashboardLabel}
           </button>
         </div>
         <Outlet />
@@ -77,22 +96,22 @@ function Shell() {
 
   return (
     <div className="shop-app-modern">
-      {/* Modern Top Header */}
       <header className="modern-header">
         <div className="modern-header-left">
           <div className="modern-logo"><img src={olitechLogo} alt="Olitech Hub" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>
           <div className="modern-shop-info">
             <h3>{context?.name || 'Olitech Hub'}</h3>
-            <p>{role === 'SHOP_ADMIN' ? 'Shop Admin' : 'Shop Staff'}</p>
+            <p>{roleLabel}</p>
           </div>
         </div>
 
-        {showOwner && (
+        {showDashboard && (
           <nav className="modern-nav-tabs">
-            <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `modern-tab ${isActive ? 'active' : ''}`}>Overview</NavLink>
-            <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `modern-tab ${isActive ? 'active' : ''}`}>Reports</NavLink>
-            <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `modern-tab ${isActive ? 'active' : ''}`}>Staff</NavLink>
-            <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `modern-tab ${isActive ? 'active' : ''}`}>Inventory</NavLink>
+            {visibleNav.slice(0, 4).map(item => (
+              <NavLink key={item.tab} to={`/app/admin?tab=${item.tab}`} className={() => `modern-tab ${loc.search.includes(`tab=${item.tab}`) ? 'active' : ''}`}>
+                {item.label}
+              </NavLink>
+            ))}
           </nav>
         )}
 
@@ -102,18 +121,14 @@ function Shell() {
             <HiOutlineBell />
             <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, background: '#FF5722', borderRadius: '50%' }}></span>
           </div>
-          <NavLink to="/app/cashier" className="pos-btn-modern">
-            POS
-          </NavLink>
+          <NavLink to="/app/cashier" className="pos-btn-modern">POS</NavLink>
           <div className="user-avatar-modern" title="Click to logout" onClick={logout} style={{ cursor: 'pointer' }}>{initials}</div>
         </div>
       </header>
 
       <div className="modern-body">
-        {/* Sidebar Overlay Backdrop */}
         <div className={`am-sidebar-backdrop ${sidebarOpen ? 'show' : ''}`} onClick={() => setSidebarOpen(false)}></div>
 
-        {/* Global Navigation Sidebar */}
         <aside className={`am-app-sidebar ${sidebarOpen ? 'open' : ''}`}>
            <div className="am-sidebar-header">
               <div className="am-sidebar-brand">
@@ -127,14 +142,16 @@ function Shell() {
            </div>
            
            <nav className="am-sidebar-nav">
-              <NavLink to="/app/admin?tab=overview" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=overview') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Overview</NavLink>
-              <NavLink to="/app/admin?tab=menu" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=menu') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Menu</NavLink>
-              <NavLink to="/app/admin?tab=inventory" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=inventory') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Inventory</NavLink>
-              <NavLink to="/app/admin?tab=loans" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=loans') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Loans</NavLink>
-              <NavLink to="/app/admin?tab=requested_order" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=requested_order') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Requisitions</NavLink>
-              <NavLink to="/app/admin?tab=staff" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=staff') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Staff</NavLink>
-              <NavLink to="/app/admin?tab=reports" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=reports') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>Reports</NavLink>
-              <NavLink to="/app/admin?tab=eod" className={({ isActive }) => `am-nav-link ${loc.search.includes('tab=eod') ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>EOD Report</NavLink>
+              {visibleNav.map(item => (
+                <NavLink
+                  key={item.tab}
+                  to={`/app/admin?tab=${item.tab}`}
+                  className={() => `am-nav-link ${loc.search.includes(`tab=${item.tab}`) ? 'active' : ''}`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
            </nav>
 
            <div style={{ flex: 1 }} />
@@ -151,31 +168,23 @@ function Shell() {
              <HiOutlineBars3 className="am-hamburger-btn" onClick={() => setSidebarOpen(true)} />
              <div className="am-mobile-logo-text">Olitech Hub</div>
           </div>
-          {role !== 'SHOP_ADMIN' && <ShiftManager />}
-          {/* Inject sidebar controller for children if needed */}
+          {role !== 'SHOP_ADMIN' && role !== 'MANAGER' && <ShiftManager />}
           <Outlet context={{ setSidebarOpen }} />
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      {showOwner && (
+      {showDashboard && (
         <nav className="am-bottom-nav">
-          <NavLink to="/app/admin?tab=overview" className={`am-bottom-nav-item ${loc.search.includes('tab=overview') || (!loc.search.includes('tab=')) ? 'active' : ''}`}>
-            <HiOutlineSquares2X2 />
-            <span>Overview</span>
-          </NavLink>
-          <NavLink to="/app/admin?tab=reports" className={`am-bottom-nav-item ${loc.search.includes('tab=reports') ? 'active' : ''}`}>
-            <HiOutlineChartBar />
-            <span>Reports</span>
-          </NavLink>
-          <NavLink to="/app/admin?tab=staff" className={`am-bottom-nav-item ${loc.search.includes('tab=staff') ? 'active' : ''}`}>
-            <HiOutlineUsers />
-            <span>Staff</span>
-          </NavLink>
-          <NavLink to="/app/admin?tab=inventory" className={`am-bottom-nav-item ${loc.search.includes('tab=inventory') ? 'active' : ''}`}>
-            <HiOutlineArchiveBox />
-            <span>Inventory</span>
-          </NavLink>
+          {visibleNav.slice(0, 4).map(item => (
+            <NavLink
+              key={item.tab}
+              to={`/app/admin?tab=${item.tab}`}
+              className={`am-bottom-nav-item ${loc.search.includes(`tab=${item.tab}`) || (item.tab === 'overview' && !loc.search.includes('tab=')) ? 'active' : ''}`}
+            >
+              <HiOutlineSquares2X2 />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
           <button className="am-bottom-nav-item" onClick={() => setSidebarOpen(true)}>
             <HiOutlineBars3 />
             <span>More</span>

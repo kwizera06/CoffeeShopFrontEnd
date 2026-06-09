@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession, clearSession } from '../../api'
 import { shouldShowAdminDashboard } from '../../utils/adminAccess.js'
+import { getDashboardLabel } from '../../utils/roles.js'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
@@ -83,6 +84,7 @@ function formatShiftLabel(s) {
 
 function roleDisplayLabel(role) {
   if (role === 'SHOP_ADMIN') return 'Owner'
+  if (role === 'MANAGER') return 'Manager'
   if (role === 'CASHIER') return 'Cashier'
   if (role === 'WAITER') return 'Waiter'
   return role || 'Staff'
@@ -95,7 +97,7 @@ export default function CashierDashboard() {
   const { context, shift, reload: reloadShift, setShift, isShopAdmin } = useShopContext()
   const shopName = context?.name || ''
   const showAdmin = shouldShowAdminDashboard(session, context) || isShopAdmin
-  const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN' || showAdmin
+  const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN' || role === 'MANAGER' || showAdmin
 
   // Query Params
   const [searchParams, setSearchParams] = useSearchParams()
@@ -129,7 +131,7 @@ export default function CashierDashboard() {
   const [qtyById, setQtyById] = useState({})
 
   const serviceStaff = useMemo(
-    () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER'),
+    () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
     [staff],
   )
 
@@ -609,7 +611,7 @@ export default function CashierDashboard() {
           <div>
             <span style={{ fontWeight: 700, fontSize: 15, color: '#1D3557' }}>{shopName}</span>
             <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-              Logged in as: <strong>{showAdmin ? 'Owner' : roleDisplayLabel(role)}</strong>
+              Logged in as: <strong>{showAdmin ? roleDisplayLabel(role === 'MANAGER' ? 'MANAGER' : 'SHOP_ADMIN') : roleDisplayLabel(role)}</strong>
             </div>
           </div>
         </div>
@@ -637,7 +639,7 @@ export default function CashierDashboard() {
 
           {showAdmin && (
              <button className="cashier-btn-admin-dash" onClick={() => nav('/app/admin?tab=overview')}>
-               <HiOutlineChartBar /> <span>Admin Dashboard</span>
+               <HiOutlineChartBar /> <span>{getDashboardLabel(role)}</span>
              </button>
            )}
 

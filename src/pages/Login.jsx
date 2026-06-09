@@ -31,7 +31,7 @@ export default function Login() {
         email: res.email,
         isOwner: res.isOwner,
       })
-      const landingRole = res.isOwner || res.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : res.role
+      const landingRole = res.isOwner || res.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : res.role === 'MANAGER' ? 'MANAGER' : res.role
       navigateByRole(nav, landingRole)
     } catch (err) {
       setError(err.message || 'Login failed')
@@ -65,7 +65,7 @@ export default function Login() {
         email: me.email,
         isOwner: me.isOwner,
       })
-      const landingRole = me.isOwner || me.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : me.role
+      const landingRole = me.isOwner || me.role === 'SHOP_ADMIN' ? 'SHOP_ADMIN' : me.role === 'MANAGER' ? 'MANAGER' : me.role
       navigateByRole(nav, landingRole)
     } catch (err) {
       setError(err.message || 'Supabase sign-in failed')
@@ -189,7 +189,7 @@ export default function Login() {
 function navigateByRole(nav, role) {
   if (role === 'PLATFORM_ADMIN') {
     nav('/admin', { replace: true })
-  } else if (role === 'SHOP_ADMIN') {
+  } else if (role === 'SHOP_ADMIN' || role === 'MANAGER') {
     nav('/app/admin?tab=overview', { replace: true })
   } else if (role === 'WAITER') {
     nav('/app/cashier', { replace: true })
