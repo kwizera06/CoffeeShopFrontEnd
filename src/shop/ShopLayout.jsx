@@ -27,7 +27,7 @@ import olitechLogo from '../assets/Olitech Logo.png'
 import './ShopModern.css'
 
 const NAV_ITEMS = [
-  { tab: 'overview', label: 'Overview', icon: null },
+  { tab: 'overview', label: 'Overview' },
   { tab: 'menu', label: 'Menu', ownerOnly: true },
   { tab: 'inventory', label: 'Inventory', ownerOnly: true },
   { tab: 'bakery', label: 'Bakery', ownerOnly: true },
@@ -35,7 +35,6 @@ const NAV_ITEMS = [
   { tab: 'loans', label: 'Loans' },
   { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },
   { tab: 'staff', label: 'Staff', ownerOnly: true },
-  { tab: 'reports', label: 'Reports' },
   { tab: 'eod', label: 'EOD Report' },
 ]
 

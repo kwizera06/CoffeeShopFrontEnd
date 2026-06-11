@@ -21,6 +21,8 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { 
   HiOutlineCalendarDays,
   HiOutlineCurrencyDollar,
@@ -70,8 +72,10 @@ export default function Owner() {
     name: '', 
     price: '', 
     category: 'Hot Coffee', 
+    category_group: '',
     available: true, 
     productRecipe: [],
+    variantOutputs: [], // [{ name: '', price: 0, standard_yield: 0 }]
     isRecipe: false,
     stockLevel: '',
     buyingPrice: ''
@@ -110,12 +114,14 @@ export default function Owner() {
     recipe_id: '',
     batch_size: 1, 
     ingredientsUsed: [], 
+    outputs: [],
     notes: '',
-    actual_yield: 1,
+    actual_yield: 0,
     wastage_notes: ''
   })
   const [productionLoading, setProductionLoading] = useState(false)
   const [bakerySubTab, setBakerySubTab] = useState('PRODUCTION')
+  const [bakerySummary, setBakerySummary] = useState(null)
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('ALL')
   
   const [actionMenu, setActionMenu] = useState(null)
@@ -343,18 +349,20 @@ export default function Owner() {
   }, [role, tab, allowed, setSearchParams])
 
   const reloadCore = useCallback(async () => {
-    const [o, m, s, i, l] = await Promise.all([
+    const [o, m, s, i, l, b] = await Promise.all([
       api(`/api/shop/owner/overview?date=${reportDay}`),
       api('/api/shop/menu'),
       api('/api/shop/staff'),
       api('/api/shop/owner/inventory'),
       api('/api/shop/loans'),
+      api(`/api/shop/owner/reports/bakery?date=${reportDay}`),
     ])
     setOverview(o)
     setMenu(m)
     setStaff(s)
     setIngredients(i)
     setLoans(l || [])
+    setBakerySummary(b)
   }, [reportDay])
 
   const reloadOverview = useCallback(async () => {
@@ -414,6 +422,16 @@ export default function Owner() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
+        () => void reloadCore().catch(() => {})
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'productions', filter: `tenant_id=eq.${tenantId}` },
+        () => void reloadCore().catch(() => {})
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'production_outputs', filter: `tenant_id=eq.${tenantId}` },
         () => void reloadCore().catch(() => {})
       )
       .subscribe()
@@ -553,6 +571,9 @@ export default function Owner() {
       } else if (type === 'lowstock') {
         const low = ingredients.filter(ing => ing.stock_level <= ing.min_threshold)
         setDrilldown({ type, title: 'Low Stock Items', items: low })
+      } else if (type === 'bakeryToday') {
+        const stats = await api(`/api/shop/owner/reports/bakery?date=${reportDay}`)
+        setDrilldown({ type, title: 'Bakery Production Summary', stats })
       }
     } catch (e) {
       setError(e.message)
@@ -959,7 +980,7 @@ export default function Owner() {
                  </div>
               </div>
 
-              <div className="am-mini-status" onClick={() => setTab('bakery')}>
+              <div className="am-mini-status" onClick={() => openDrilldown('bakeryToday')}>
                  <div className="am-status-icon" style={{ background: 'rgba(233, 30, 99, 0.1)', color: '#E91E63' }}><MdOutlineLocalFireDepartment /></div>
                  <div className="am-status-info">
                    <h4>Bakery</h4>
@@ -1944,305 +1965,6 @@ export default function Owner() {
         </>
       ) : null}
 
-      {tab === 'reports' && canAccessTab(role, 'reports') ? (
-        <>
-          <header className="am-header">
-            <div className="am-title">
-              <h1>Daily Sales Reports</h1>
-              <p>Detailed breakdown of shop performance</p>
-            </div>
-            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
-               <div className="am-report-sel-item">
-                  <label>Selected Date</label>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      type="date" 
-                      className="am-input" 
-                      style={{ height: 40 }}
-                      value={reportDay}
-                      onChange={e => setReportDay(e.target.value)}
-                    />
-                  </div>
-               </div>
-            </div>
-          </header>
-
-          <section className="am-animate" style={{ padding: '0' }}>
-            {/* Monthly and Shift summaries */}
-            <div className="am-reports-grid" style={{ marginBottom: 32 }}>
-               <div className="am-report-sel-item" style={{ background: 'var(--admin-card-bg)', padding: '16px', borderRadius: '12px' }}>
-                  <label>Monthly Report</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                     <HiOutlineCalendarDays style={{ color: '#1D3557' }} />
-                     <span>{month.year} - {new Date(0, month.month - 1).toLocaleString('default', { month: 'long' })}</span>
-                     <div style={{ display: 'flex', gap: 4 }}>
-                        <input 
-                           type="number" 
-                           value={month.year} 
-                           onChange={e => setMonth(m => ({ ...m, year: e.target.value }))}
-                           style={{ width: 60, background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', borderRadius: 4, padding: '2px 4px' }}
-                        />
-                        <select 
-                           value={month.month} 
-                           onChange={e => setMonth(m => ({ ...m, month: e.target.value }))}
-                           style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', color: '#111827', borderRadius: 4, padding: '2px 4px' }}
-                        >
-                           {Array.from({ length: 12 }, (_, i) => (
-                             <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>
-                           ))}
-                        </select>
-                     </div>
-                  </div>
-               </div>
-            </div>
-
-          {/* Top Metrics Grid */}
-          <div className="am-reports-grid">
-            <div className="am-metric-card">
-              <div className="am-metric-header">TOTAL REVENUE</div>
-              <div className="am-metric-value">{(overview?.todayRevenue || 0).toLocaleString()} RWF</div>
-              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> 12% vs yesterday</div>
-            </div>
-            <div className="am-metric-card">
-              <div className="am-metric-header">ORDERS TODAY</div>
-              <div className="am-metric-value">{overview?.todayPaidOrdersCount || 0}</div>
-              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> +8 vs daily avg</div>
-            </div>
-            <div className="am-metric-card">
-              <div className="am-metric-header">MONTHLY REVENUE</div>
-              <div className="am-metric-value">{(monthlyRows.reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(1)}M RWF</div>
-              <div className="am-metric-trend am-trend-pos"><HiOutlineArrowTrendingUp /> 6% vs last month</div>
-            </div>
-            <div className="am-metric-card">
-              <div className="am-metric-header">AVG ORDER VALUE</div>
-              <div className="am-metric-value">{(overview?.avgOrderValue || 0).toLocaleString()} RWF</div>
-              <div className="am-metric-trend am-trend-neg">↓ 2% vs yesterday</div>
-            </div>
-          </div>
-
-          <div className="grid-2" style={{ gap: 24, alignItems: 'start', marginBottom: 24 }}>
-            {/* Sales by Category with Progress Bars */}
-            <div className="am-category-sales-card">
-               <div className="am-cat-header">
-                  <h3>Sales by category</h3>
-               </div>
-               
-               {Object.keys(overview?.categoryDetails || {}).length === 0 && (
-                 <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
-                   No sales data found for this date.
-                 </div>
-               )}
-               
-               {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
-                 const colors = ['#1D3557', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
-                 const catColor = colors[idx % colors.length];
-                 const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
-                 
-                 return (
-                   <div key={cat} className="am-cat-row">
-                      <div className="am-cat-main-info">
-                        <div className="am-cat-name">
-                          <div className="am-cat-dot" style={{ backgroundColor: catColor }}></div>
-                          {cat}
-                        </div>
-                        <div className="am-cat-total-val">
-                          {details.total.toLocaleString()} RWF
-                          <span className="am-cat-pct">{catPercent}%</span>
-                        </div>
-                      </div>
-                      
-                      <div className="am-prod-list">
-                         {Object.entries(details.products).sort((a,b) => b[1].rev - a[1].rev).slice(0, 5).map(([name, prod], pIdx) => (
-                           <div key={name} className="am-prod-row">
-                              <div className="am-prod-name">{name}</div>
-                              <div className="am-prod-stats">
-                                <div className="am-prod-qty">{prod.qty} sold</div>
-                                <div className="am-prod-bar-bg">
-                                   <div 
-                                     className="am-prod-bar-fill" 
-                                     style={{ 
-                                       width: `${Math.min(100, (prod.rev / details.total) * 100)}%`,
-                                       backgroundColor: catColor,
-                                       opacity: 1 - (pIdx * 0.15)
-                                     }}
-                                   ></div>
-                                </div>
-                              </div>
-                              <div style={{ textAlign: 'right', fontWeight: 600 }}>{prod.rev.toLocaleString()} RWF</div>
-                           </div>
-                         ))}
-                      </div>
-                   </div>
-                 )
-               })}
-               
-               <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 16, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                  <span>Total</span>
-                  <span>{(overview?.todayRevenue || 0).toLocaleString()} RWF</span>
-               </div>
-            </div>
-
-            <div className="stack" style={{ gap: 24 }}>
-              {/* Shift Summary */}
-              <div className="am-shift-card">
-                 <h3 className="am-card-title">Shift summary</h3>
-                 <table className="am-modern-table">
-                    <thead>
-                       <tr>
-                          <th>SHIFT</th>
-                          <th>EXPECTED</th>
-                          <th>GIVEN</th>
-                          <th>BALANCE</th>
-                       </tr>
-                    </thead>
-                    <tbody>
-                       {shifts.map((s, idx) => {
-                         const exp = (s.total_cash_sales || 0) + (s.total_momo_sales || 0);
-                         const giv = (s.actual_cash_on_hand || 0) + (s.actual_momo_on_hand || 0);
-                         const bal = giv - exp;
-                         return (
-                           <tr key={idx}>
-                              <td style={{ fontWeight: 600 }}>{s.opened_by?.name?.split(' ')[0] || 'Staff'}</td>
-                              <td>{exp.toLocaleString()}</td>
-                              <td>{giv.toLocaleString()}</td>
-                              <td>
-                                 <span className={`am-balance-tag ${bal >= 0 ? 'am-balance-pos' : 'am-balance-neg'}`}>
-                                    {bal === 0 ? '0' : (bal > 0 ? `+${bal.toLocaleString()}` : bal.toLocaleString())}
-                                 </span>
-                              </td>
-                           </tr>
-                         )
-                       })}
-                       <tr style={{ borderTop: '2px solid #E5E7EB' }}>
-                          <td style={{ fontWeight: 800 }}>Total</td>
-                          <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.total_cash_sales || 0) + (c.total_momo_sales || 0)), 0).toLocaleString()}</td>
-                          <td style={{ fontWeight: 800 }}>{shifts.reduce((a,c) => a + ((c.actual_cash_on_hand || 0) + (c.actual_momo_on_hand || 0)), 0).toLocaleString()}</td>
-                          <td style={{ fontWeight: 800 }}>
-                             {(shifts.reduce((a,c) => a + ((c.actual_cash_on_hand || 0) + (c.actual_momo_on_hand || 0)), 0) - shifts.reduce((a,c) => a + ((c.total_cash_sales || 0) + (c.total_momo_sales || 0)), 0)).toLocaleString()}
-                          </td>
-                       </tr>
-                    </tbody>
-                 </table>
-              </div>
-
-              {/* Hourly Sales Volume Card */}
-              <div className="am-shift-card">
-                 <h3 className="am-card-title">Hourly sales volume</h3>
-                 <div style={{ width: '100%', height: 200, minWidth: 0 }}>
-                    {chartsReady && charts.hourly?.length > 0 && (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={charts.hourly}>
-                          <XAxis dataKey="hour" fontSize={10} tick={{ fill: '#6B7280' }} axisLine={false} tickLine={false} />
-                          <Tooltip
-                            contentStyle={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 12, color: '#111827' }}
-                            cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                          />
-                          <Bar dataKey="total" fill="#1D3557" radius={[2, 2, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid-2" style={{ gap: 24, alignItems: 'start' }}>
-             {/* Top Selling Products List */}
-             <div className="am-shift-card">
-                <h3 className="am-card-title">Top selling products</h3>
-                <table className="am-modern-table">
-                   <thead>
-                      <tr>
-                         <th>#</th>
-                         <th>PRODUCT</th>
-                         <th>QTY</th>
-                         <th style={{ textAlign: 'right' }}>REVENUE</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      {charts.topProducts?.map((p, idx) => (
-                        <tr key={idx}>
-                           <td>{idx + 1}</td>
-                           <td style={{ fontWeight: 600 }}>{p.name}</td>
-                           <td style={{ color: 'var(--admin-text-muted)' }}>{p.value}</td>
-                           <td style={{ textAlign: 'right', fontWeight: 700 }}>
-                             {(dailyRows.filter(r => r.rawItems?.some(ri => ri.name === p.name)).reduce((a,c) => a + Number(c.amount), 0)).toLocaleString()} RWF
-                           </td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-
-             {/* Daily Payments List */}
-             <div className="am-shift-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 className="am-card-title" style={{ margin: 0 }}>Daily payments</h3>
-                  <button className="btn ghost tiny" onClick={() => setShowAllOrdersModal(true)}>All</button>
-                </div>
-                <table className="am-modern-table">
-                   <thead>
-                      <tr>
-                         <th>TIME</th>
-                         <th>ORDER</th>
-                         <th>PRODUCTS</th>
-                         <th>METHOD</th>
-                         <th style={{ textAlign: 'right' }}>AMOUNT</th>
-                      </tr>
-                   </thead>
-                   <tbody>
-                      {dailyRows.slice(0, 5).map((r, idx) => (
-                        <tr key={idx}>
-                           <td style={{ fontSize: '12px', color: 'var(--admin-text-muted)' }}>{new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Kigali' })}</td>
-                           <td style={{ fontWeight: 600 }}>#{String(r.orderId).slice(0, 4)}</td>
-                           <td style={{ fontSize: '13px' }}>
-                             {r.rawItems?.slice(0, 2).map((ri, i) => `${ri.name}${i < 1 && r.rawItems.length > 1 ? ', ' : ''}`)}
-                             {r.rawItems?.length > 2 && ' ...'}
-                           </td>
-                           <td>
-                              <span style={{ 
-                                padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800,
-                                background: r.methodLabel === 'Cash' ? 'rgba(76,175,80,0.1)' : (r.methodLabel === 'MoMo' ? 'rgba(255,152,0,0.1)' : 'rgba(33,150,243,0.1)'),
-                                color: r.methodLabel === 'Cash' ? '#1D3557' : (r.methodLabel === 'MoMo' ? '#FF9800' : '#2196F3')
-                              }}>
-                                {r.methodLabel.toUpperCase()}
-                              </span>
-                           </td>
-                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{Number(r.amount).toLocaleString()} RWF</td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-          </div>
-          
-          {/* Monthly Payments Recap */}
-          <div className="am-method-summary-grid">
-             <div className="am-method-card">
-                <div className="am-method-label">CASH</div>
-                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'Cash').reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(2)}M RWF</div>
-                <div className="am-method-detail">
-                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'Cash').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
-                </div>
-             </div>
-             <div className="am-method-card">
-                <div className="am-method-label">MOMO</div>
-                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'MoMo').reduce((a,c) => a + Number(c.amount), 0) / 1000000).toFixed(2)}M RWF</div>
-                <div className="am-method-detail">
-                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'MoMo').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
-                </div>
-             </div>
-             <div className="am-method-card">
-                <div className="am-method-label">CARD / POS</div>
-                <div className="am-method-val">{(monthlyRows.filter(r => r.methodLabel === 'POS').reduce((a,c) => a + Number(c.amount), 0) / 1000).toFixed(0)}K RWF</div>
-                <div className="am-method-detail">
-                   {Math.round((monthlyRows.filter(r => r.methodLabel === 'POS').reduce((a,c) => a + Number(c.amount), 0) / Math.max(1, monthlyRows.reduce((a,c) => a + Number(c.amount), 0))) * 100)}% of total
-                </div>
-             </div>
-          </div>
-          </section>
-        </>
-      ) : null}
 
       {tab === 'inventory' && canAccessTab(role, 'inventory') ? (
         <>
@@ -2952,25 +2674,236 @@ export default function Owner() {
           const activeLoansCount = loans.filter(l => l.status !== 'PAID').length
           const totalOwed = loans.reduce((acc, l) => acc + (parseFloat(l.amount) - (l.loan_payments || []).reduce((a,p) => a + parseFloat(p.amount), 0)), 0)
 
-          return (
-            <>
-              <header className="am-header">
-                <div className="am-title">
-                  <h1>End of Day Report</h1>
-                  <p>Shift-based summary for shifts opened on {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
-                </div>
-                <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="date"
-                    className="am-input"
-                    style={{ height: 40 }}
-                    value={reportDay}
-                    onChange={e => setReportDay(e.target.value)}
-                  />
-                </div>
-              </header>
+  const [isExporting, setIsExporting] = useState(false)
+
+  const generatePDF = async (mode) => {
+    setIsExporting(true)
+    try {
+      let data, title, dateRange
+      if (mode === 'daily') {
+        data = { dailyRows, overview, bakerySummary, shifts, reportDay }
+        title = `Daily Report - ${reportDay}`
+        dateRange = reportDay
+      } else if (mode === 'weekly') {
+        const weekly = await api(`/api/shop/owner/reports/weekly?date=${reportDay}`)
+        data = { ...weekly, bakerySummary } 
+        title = `Weekly Report`
+        dateRange = `${weekly.startDate} to ${weekly.endDate}`
+      } else {
+        const monthly = await api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`)
+        data = { monthly, month }
+        title = `Monthly Report - ${month.month}/${month.year}`
+        dateRange = `${month.month}/${month.year}`
+      }
+
+      const doc = new jsPDF()
+      const primaryColor = [29, 53, 87] // #1D3557
+      
+      // Header
+      doc.setFillColor(...primaryColor)
+      doc.rect(0, 0, 210, 40, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(22)
+      doc.text('OLITECH COFFEE SHOP', 105, 18, { align: 'center' })
+      doc.setFontSize(14)
+      doc.text(title.toUpperCase(), 105, 30, { align: 'center' })
+      
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(10)
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 10, 50)
+      doc.text(`Period: ${dateRange}`, 10, 56)
+
+      if (mode === 'daily') {
+        // Summary Table
+        autoTable(doc, {
+          startY: 65,
+          head: [['Metric', 'Value']],
+          body: [
+            ['Total Revenue', `${(overview?.todayRevenue || 0).toLocaleString()} RWF`],
+            ['Cash Sales', `${(overview?.todayCashSales || 0).toLocaleString()} RWF`],
+            ['MoMo Sales', `${(overview?.todayMomoSales || 0).toLocaleString()} RWF`],
+            ['Total Orders', overview?.todayPaidOrdersCount || 0],
+            ['Average Order', `${(overview?.avgOrderValue || 0).toLocaleString()} RWF`],
+            ['Bakery Profit', `${(bakerySummary?.totalProfit || 0).toLocaleString()} RWF`]
+          ],
+          theme: 'striped',
+          headStyles: { fillColor: primaryColor }
+        })
+
+        // Detailed Sales
+        if (dailyRows?.length > 0) {
+          doc.addPage()
+          doc.setFontSize(14)
+          doc.text('DETAILED SALES LOG', 10, 20)
+          autoTable(doc, {
+            startY: 25,
+            head: [['Time', 'Order #', 'Method', 'Amount']],
+            body: dailyRows.map(r => [
+              new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+              `#${String(r.orderId).slice(0,4)}`,
+              r.methodLabel,
+              `${Number(r.amount).toLocaleString()} RWF`
+            ]),
+            headStyles: { fillColor: primaryColor }
+          })
+        }
+      } else if (mode === 'weekly') {
+          autoTable(doc, {
+            startY: 65,
+            head: [['Date', 'Revenue']],
+            body: data.dailyBreakdown.map(d => [d.date, `${d.revenue.toLocaleString()} RWF`]),
+            foot: [['TOTAL', `${data.totalRevenue.toLocaleString()} RWF`]],
+            headStyles: { fillColor: primaryColor }
+          })
+      } else if (mode === 'monthly') {
+          autoTable(doc, {
+            startY: 65,
+            head: [['Date', 'Order #', 'Amount']],
+            body: data.monthly.map(r => [
+              new Date(r.at).toLocaleDateString(),
+              `#${String(r.orderId).slice(0,4)}`,
+              `${Number(r.amount).toLocaleString()} RWF`
+            ]),
+            headStyles: { fillColor: primaryColor }
+          })
+      }
+
+      doc.save(`Olitech_${mode}_Report_${reportDay}.pdf`)
+    } catch (err) {
+      alert('Failed to generate PDF: ' + err.message)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const [dateRange, setDateRange] = useState('daily')
+
+  return (
+    <>
+      <header className="am-header">
+        <div className="am-title">
+          <h1>End of Day Report</h1>
+          <p>Shift-based summary for shifts opened on {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
+        </div>
+        <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', padding: 4, borderRadius: 8 }}>
+             {['daily', 'weekly', 'monthly'].map(m => (
+               <button 
+                key={m}
+                onClick={() => generatePDF(m)}
+                disabled={isExporting}
+                className="btn ghost tiny"
+                style={{ 
+                  textTransform: 'capitalize',
+                  background: isExporting ? '#E2E8F0' : 'transparent',
+                  color: '#475569',
+                  fontWeight: 700
+                }}
+               >
+                 {isExporting ? '...' : (m + ' PDF')}
+               </button>
+             ))}
+          </div>
+          <input
+            type="date"
+            className="am-input"
+            style={{ height: 40 }}
+            value={reportDay}
+            onChange={e => setReportDay(e.target.value)}
+          />
+        </div>
+      </header>
 
               <div className="am-eod-report">
+                {/* ── Monthly & Top Metrics (Merged from Reports) ── */}
+                <section className="am-eod-section" style={{ background: '#F8FAFC', padding: 20, borderRadius: 16, border: '1px solid #E2E8F0', marginBottom: 24 }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                      <h3 style={{ margin: 0, fontSize: 16, color: '#475569' }}>Monthly Performance</h3>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input 
+                           type="number" 
+                           value={month.year} 
+                           onChange={e => setMonth(m => ({ ...m, year: e.target.value }))}
+                           style={{ width: 70, border: '1px solid #CBD5E1', borderRadius: 8, padding: '4px 8px' }}
+                        />
+                        <select 
+                           value={month.month} 
+                           onChange={e => setMonth(m => ({ ...m, month: e.target.value }))}
+                           style={{ border: '1px solid #CBD5E1', borderRadius: 8, padding: '4px 8px' }}
+                        >
+                           {Array.from({ length: 12 }, (_, i) => (
+                             <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
+                           ))}
+                        </select>
+                      </div>
+                   </div>
+                   <div className="am-eod-grid-4">
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Month Revenue</span>
+                        <span className="am-eod-stat-value">{(monthlyRows.reduce((a,c) => a + Number(c.amount), 0)).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Daily Avg (Month)</span>
+                        <span className="am-eod-stat-value">{Math.round(monthlyRows.reduce((a,c) => a + Number(c.amount), 0) / 30).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Avg Order (Today)</span>
+                        <span className="am-eod-stat-value">{(overview?.avgOrderValue || 0).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Orders (Today)</span>
+                        <span className="am-eod-stat-value">{overview?.todayPaidOrdersCount || 0}</span>
+                      </div>
+                   </div>
+                </section>
+
+                {/* ── Bakery Production Today ── */}
+                {bakerySummary && bakerySummary.productions?.length > 0 && (
+                  <section className="am-eod-section" style={{ borderLeft: '4px solid #E91E63' }}>
+                    <h3 className="am-eod-section-title" style={{ color: '#E91E63' }}>Bakery Production Today</h3>
+                    <div className="am-eod-grid-4" style={{ marginBottom: 20 }}>
+                       <div className="am-eod-stat">
+                         <span className="am-eod-stat-label">Items Produced</span>
+                         <span className="am-eod-stat-value">{bakerySummary.totalQty}</span>
+                       </div>
+                       <div className="am-eod-stat">
+                         <span className="am-eod-stat-label">Production Cost</span>
+                         <span className="am-eod-stat-value">{bakerySummary.totalCost.toLocaleString()} RWF</span>
+                       </div>
+                       <div className="am-eod-stat">
+                         <span className="am-eod-stat-label">Est. Revenue</span>
+                         <span className="am-eod-stat-value">{bakerySummary.totalRevenue.toLocaleString()} RWF</span>
+                       </div>
+                       <div className="am-eod-stat">
+                         <span className="am-eod-stat-label">Est. Profit</span>
+                         <span className="am-eod-stat-value" style={{ color: '#2E7D32' }}>{bakerySummary.totalProfit.toLocaleString()} RWF</span>
+                       </div>
+                    </div>
+                    
+                    <div className="am-eod-table">
+                       <div className="am-eod-table-head" style={{ background: '#FCE4EC' }}>
+                         <span>Master Recipe</span>
+                         <span>Produced Products</span>
+                         <span>Cost</span>
+                         <span>Profit</span>
+                       </div>
+                       {bakerySummary.productions.map(p => (
+                         <div key={p.id} className="am-eod-table-row">
+                           <span className="am-eod-cell-name">
+                             {p.recipeName}
+                             <span className="am-eod-cell-cat">{p.yield} total pcs</span>
+                           </span>
+                           <span style={{ fontSize: 11, maxWidth: 200 }}>
+                              {p.outputs.map(o => `${o.qty}x ${o.name}`).join(', ')}
+                           </span>
+                           <span style={{ color: '#E57373' }}>{p.cost.toLocaleString()}</span>
+                           <span style={{ color: '#2E7D32', fontWeight: 700 }}>{p.profit.toLocaleString()}</span>
+                         </div>
+                       ))}
+                    </div>
+                  </section>
+                )}
+
                 {/* ── Revenue Summary ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Revenue Summary</h3>
@@ -3046,27 +2979,88 @@ export default function Owner() {
                   </div>
                 </section>
 
-                {/* ── Category Breakdown ── */}
+                {/* ── Category Breakdown (Rich version from Reports) ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Sales by Category</h3>
-                  <div className="am-eod-table">
-                    <div className="am-eod-table-head">
-                      <span>Category</span>
-                      <span>Qty</span>
-                      <span>Revenue</span>
-                      <span>Cost</span>
-                      <span>Profit</span>
-                    </div>
-                    {sortedCategories.length === 0 && <div className="am-eod-empty">No sales data for this date</div>}
-                    {sortedCategories.map(([cat, data]) => (
-                      <div key={cat} className="am-eod-table-row">
-                        <span className="am-eod-cell-name">{cat}</span>
-                        <span>{data.qty}</span>
-                        <span style={{ color: '#1D3557' }}>{Number(data.revenue).toLocaleString()}</span>
-                        <span style={{ color: '#E57373' }}>{Number(data.cost).toLocaleString()}</span>
-                        <span style={{ color: data.revenue - data.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(data.revenue - data.cost).toLocaleString()}</span>
+                  <div className="am-category-sales-card" style={{ border: '1px solid #E5E7EB', borderRadius: 16 }}>
+                    {Object.keys(overview?.categoryDetails || {}).length === 0 && (
+                      <div style={{ padding: '40px 0', textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic' }}>
+                        No sales data found for this date.
                       </div>
-                    ))}
+                    )}
+                    
+                    {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
+                      const colors = ['#1D3557', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
+                      const catColor = colors[idx % colors.length];
+                      const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
+                      
+                      return (
+                        <div key={cat} className="am-cat-row" style={{ padding: '20px', borderBottom: '1px solid #F3F4F6' }}>
+                           <div className="am-cat-main-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                             <div className="am-cat-name" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: 15 }}>
+                               <div className="am-cat-dot" style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: catColor }}></div>
+                               {cat}
+                             </div>
+                             <div className="am-cat-total-val" style={{ fontWeight: 800, color: '#1D3557' }}>
+                               {details.total.toLocaleString()} RWF
+                               <span className="am-cat-pct" style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: 6 }}>{catPercent}%</span>
+                             </div>
+                           </div>
+                           
+                           <div className="am-prod-list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {Object.entries(details.products).sort((a,b) => b[1].rev - a[1].rev).slice(0, 5).map(([name, prod], pIdx) => (
+                                <div key={name} className="am-prod-row" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 16, alignItems: 'center' }}>
+                                   <div className="am-prod-name" style={{ fontSize: 13, color: '#4B5563' }}>{name}</div>
+                                   <div className="am-prod-stats" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                     <div className="am-prod-qty" style={{ fontSize: 11, color: '#9CA3AF', width: 50 }}>{prod.qty} sold</div>
+                                     <div className="am-prod-bar-bg" style={{ width: 100, height: 4, background: '#F3F4F6', borderRadius: 2, overflow: 'hidden' }}>
+                                        <div 
+                                          className="am-prod-bar-fill" 
+                                          style={{ 
+                                            width: `${Math.min(100, (prod.rev / details.total) * 100)}%`,
+                                            height: '100%',
+                                            backgroundColor: catColor,
+                                            opacity: 1 - (pIdx * 0.15)
+                                          }}
+                                        ></div>
+                                     </div>
+                                   </div>
+                                   <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13, color: '#1F2937', width: 100 }}>{prod.rev.toLocaleString()} RWF</div>
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+
+                {/* ── Shift Summary ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Shift Summary</h3>
+                  <div className="am-eod-table" style={{ border: '1px solid #E5E7EB', borderRadius: 16 }}>
+                    <div className="am-eod-table-head" style={{ background: '#F8FAFC' }}>
+                      <span>Staff</span>
+                      <span>Expected Cash</span>
+                      <span>Actual Cash</span>
+                      <span>Difference</span>
+                    </div>
+                    {shifts.length === 0 && <div className="am-eod-empty">No closed shifts for this date</div>}
+                    {shifts.map((s, idx) => {
+                      const exp = (s.total_cash_sales || 0);
+                      const giv = (s.actual_cash_on_hand || 0);
+                      const bal = giv - exp;
+                      return (
+                        <div key={idx} className="am-eod-table-row">
+                          <span className="am-eod-cell-name">{s.staff_name || 'Staff'} <span className="am-eod-cell-cat">{formatShiftRange(s)}</span></span>
+                          <span style={{ fontWeight: 600 }}>{exp.toLocaleString()}</span>
+                          <span>{giv.toLocaleString()}</span>
+                          <span style={{ color: bal >= 0 ? '#2E7D32' : '#D32F2F', fontWeight: 800 }}>
+                             {bal > 0 ? `+${bal.toLocaleString()}` : bal.toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -3418,49 +3412,129 @@ export default function Owner() {
 
           {bakerySubTab === 'PRODUCTS' && (
             <div className="am-main-grid am-grid-form-list">
+              {/* Summary Header for Products */}
+              <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 8 }}>
+                <div className="am-category-sales-card" style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ background: '#E0F2FE', color: '#0369A1', padding: 12, borderRadius: 12 }}>
+                    <HiOutlineBanknotes size={24} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 12, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Financial Value</p>
+                    <h2 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '4px 0 0 0' }}>
+                      {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery')
+                           .reduce((acc, m) => acc + (Number(m.price || 0) * Number(m.stock_level || 0)), 0)
+                           .toLocaleString()} RWF
+                    </h2>
+                    <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Expected revenue from current bakery stock</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Add Bakery Product Form */}
               <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
-                 <h3 className="am-card-title">+ New Bakery Item</h3>
-                 <p style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Set your standard recipe (e.g. recipe for 81 donuts)</p>
+                 <h3 className="am-card-title">+ New Multi-Product Recipe</h3>
+                 <p style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Set your standard recipe and the products it produces (e.g. donuts of different sizes)</p>
                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    try {
-                      const item = await api('/api/shop/menu', { 
-                        method: 'POST', 
-                        body: JSON.stringify({...menuForm, category: 'Bakery', is_recipe: true}) 
-                      });
-                      
-                      if (menuForm.productRecipe && menuForm.productRecipe.length > 0) {
-                        for (const r of menuForm.productRecipe) {
-                          await api('/api/shop/owner/recipes', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              menu_item_id: item.id,
-                              ingredient_id: r.ingredient_id,
-                              quantity_required: r.quantity_required
-                            })
-                          });
+                     e.preventDefault();
+                     try {
+                        const mainItemName = menuForm.name;
+                        // 1. Create the Main Recipe Item
+                        const item = await api('/api/shop/menu', { 
+                          method: 'POST', 
+                          body: JSON.stringify({
+                            ...menuForm, 
+                            price: Number(menuForm.price || 0),
+                            recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+                            category: 'Bakery', 
+                            is_recipe: true, 
+                            is_bakery: true, 
+                            category_group: mainItemName
+                          }) 
+                        });
+                       
+                        // 2. Create Variants
+                        if (menuForm.variantOutputs && menuForm.variantOutputs.length > 0) {
+                          for (const v of menuForm.variantOutputs) {
+                            await api('/api/shop/menu', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                name: v.name,
+                                price: Number(v.price || 0),
+                                category: 'Bakery',
+                                category_group: mainItemName,
+                                available: true,
+                                is_bakery: true,
+                                recipe_reference_yield: Number(v.standard_yield || 0)
+                              })
+                            });
+                          }
                         }
-                      }
 
-                      setMenuForm({ id: '', name: '', price: '', category: 'Bakery', available: true, productRecipe: [], is_recipe: true, recipe_reference_yield: 81 });
-                      await reloadCore();
-                      alert(`🌟 ${item.name} created!`);
-                    } catch(err) { alert(err.message) }
-                 }} className="stack" style={{ gap: 16 }}>
-                    <label className="am-field">
-                      <span>Item Name</span>
-                      <input className="am-input" value={menuForm.name} onChange={e => setMenuForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Chocolate Donut" />
-                    </label>
+                        // 3. Save Ingredients
+                        if (menuForm.productRecipe && menuForm.productRecipe.length > 0) {
+                          for (const r of menuForm.productRecipe) {
+                            await api('/api/shop/owner/recipes', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                menu_item_id: item.id,
+                                ingredient_id: r.ingredient_id,
+                                quantity_required: Number(r.quantity_required || 0)
+                              })
+                            });
+                          }
+                        }
+
+                        setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
+                        await reloadCore();
+                        alert(`🌟 Recipe "${mainItemName}" and its variants created!`);
+                     } catch(err) { alert(err.message) }
+                  }} className="stack" style={{ gap: 16 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                        <label className="am-field">
-                         <span>Price (RWF)</span>
-                         <input className="am-input" type="number" value={menuForm.price} onChange={e => setMenuForm(f => ({...f, price: e.target.value}))} required placeholder="200" />
+                         <span>Recipe / Batch Name</span>
+                         <input className="am-input" value={menuForm.name} onChange={e => setMenuForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Daily Donut Batch" />
                        </label>
                        <label className="am-field">
-                         <span>Standard Yield</span>
+                         <span>Base Standard Yield</span>
                          <input className="am-input" type="number" value={menuForm.recipe_reference_yield || 81} onChange={e => setMenuForm(f => ({...f, recipe_reference_yield: Number(e.target.value)}))} required />
                        </label>
+                    </div>
+
+                    {/* Produceable Products Section */}
+                    <div style={{ padding: '12px', background: '#F0F9FF', borderRadius: 8, border: '1px solid #BAE6FD' }}>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0369A1' }}>Items Produced with this Recipe</span>
+                          <button type="button" className="btn tiny primary" onClick={() => setMenuForm(f => ({...f, variantOutputs: [...(f.variantOutputs || []), { name: '', price: '', standard_yield: '' }]}))}>+ Add Item</button>
+                       </div>
+                       <p style={{ fontSize: 10, color: '#0C4A6E', marginBottom: 8 }}>Define the actual products users can buy from this batch</p>
+                       
+                       <div className="stack" style={{ gap: 8 }}>
+                          {menuForm.variantOutputs?.map((v, idx) => (
+                             <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <input className="am-input tiny" style={{ flex: 2 }} placeholder="Product Name (e.g. Large Donut)" value={v.name} onChange={e => {
+                                   const next = [...menuForm.variantOutputs];
+                                   next[idx].name = e.target.value;
+                                   setMenuForm(f => ({...f, variantOutputs: next}));
+                                }} />
+                                <input className="am-input tiny" style={{ flex: 1 }} type="number" placeholder="Price" value={v.price} onChange={e => {
+                                   const next = [...menuForm.variantOutputs];
+                                   next[idx].price = e.target.value;
+                                   setMenuForm(f => ({...f, variantOutputs: next}));
+                                }} />
+                                <input className="am-input tiny" style={{ flex: 1 }} type="number" placeholder="Std Yield" value={v.standard_yield} onChange={e => {
+                                   const next = [...menuForm.variantOutputs];
+                                   next[idx].standard_yield = e.target.value;
+                                   setMenuForm(f => ({...f, variantOutputs: next}));
+                                }} />
+                                <button type="button" className="btn tiny danger" onClick={() => setMenuForm(f => ({...f, variantOutputs: f.variantOutputs.filter((_, i) => i !== idx)}))}>✕</button>
+                             </div>
+                          ))}
+                          {(!menuForm.variantOutputs || menuForm.variantOutputs.length === 0) && (
+                            <div style={{ textAlign: 'center', fontSize: 11, color: '#64748B', padding: '8px 0', fontStyle: 'italic' }}>
+                               No specific items added. Will produce the main batch item by default.
+                            </div>
+                          )}
+                       </div>
                     </div>
 
                     <div style={{ padding: '12px', background: '#F8FAFC', borderRadius: 8, border: '1px dashed #CBD5E1' }}>
@@ -3520,38 +3594,48 @@ export default function Owner() {
                        <th>PRICE</th>
                        <th>RECIPE</th>
                        <th>STOCK</th>
+                       <th style={{ textAlign: 'right' }}>VALUE (RWF)</th>
                        <th></th>
                      </tr>
                    </thead>
                    <tbody>
-                     {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery').map(m => (
-                       <tr key={m.id}>
-                         <td style={{ fontWeight: 600 }}>{m.name}</td>
-                         <td>{Number(m.price).toLocaleString()}</td>
-                         <td style={{ verticalAlign: 'middle' }}>
-                           {m.is_recipe ? (
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                               <span style={{ fontSize: 9, background: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>MADE IN-HOUSE</span>
-                               <button className="btn tiny primary" onClick={() => { setTab('menu'); setMenuForm(m); }} style={{ padding: '4px 10px', fontSize: 11 }}>Manage Recipe</button>
-                             </div>
-                           ) : (
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                               <span style={{ fontSize: 9, background: '#F3F4F6', color: '#4B5563', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>RESALE ITEM</span>
-                               <button className="btn tiny success" onClick={async () => {
-                                 try {
-                                   await api(`/api/shop/menu/${m.id}`, { method: 'PUT', body: JSON.stringify({ is_recipe: true }) });
-                                   await reloadCore();
-                                 } catch(err) { alert(err.message) }
-                               }} style={{ padding: '4px 10px', fontSize: 11 }}>Enable Production</button>
-                             </div>
-                           )}
-                         </td>
-                         <td style={{ fontWeight: 700, color: m.stock_level < 10 ? '#FF5252' : '#1D3557' }}>
-                           {m.stock_level} pcs
-                         </td>
-                         <td></td>
-                       </tr>
-                     ))}
+                     {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery').map(m => {
+                       const stockVal = Number(m.price || 0) * Number(m.stock_level || 0);
+                       return (
+                        <tr key={m.id}>
+                          <td style={{ fontWeight: 600 }}>
+                            {m.name}
+                            {m.category_group && <div style={{ fontSize: 9, color: '#64748B', fontWeight: 400 }}>Group: {m.category_group}</div>}
+                          </td>
+                          <td>{Number(m.price).toLocaleString()}</td>
+                          <td style={{ verticalAlign: 'middle' }}>
+                            {m.is_recipe ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 9, background: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>MADE IN-HOUSE</span>
+                                <button className="btn tiny primary" onClick={() => { setTab('menu'); setMenuForm(m); }} style={{ padding: '4px 10px', fontSize: 11 }}>Manage Recipe</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 9, background: '#F3F4F6', color: '#4B5563', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>RESALE ITEM</span>
+                                <button className="btn tiny success" onClick={async () => {
+                                  try {
+                                    await api(`/api/shop/menu/${m.id}`, { method: 'PUT', body: JSON.stringify({ is_recipe: true }) });
+                                    await reloadCore();
+                                  } catch(err) { alert(err.message) }
+                                }} style={{ padding: '4px 10px', fontSize: 11 }}>Enable Production</button>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 700, color: m.stock_level < 10 ? '#FF5252' : '#1D3557' }}>
+                            {m.stock_level} pcs
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 800, color: '#10B981' }}>
+                            {stockVal.toLocaleString()}
+                          </td>
+                          <td></td>
+                        </tr>
+                       )
+                     })}
                    </tbody>
                  </table>
               </div>
@@ -3569,42 +3653,47 @@ export default function Owner() {
                       <select 
                         className="am-input" 
                         value={productionForm.menu_item_id} 
-                        onChange={async (e) => {
-                          const mid = e.target.value;
-                          if (!mid) {
-                            setProductionForm(f => ({ ...f, menu_item_id: '', recipe_id: '', ingredientsUsed: [] }));
-                            return;
-                          }
-                           const targetItem = menu.find(m => m.id === mid);
-                           // Fetch the active recipe (which includes standard_yield)
-                           const recipeData = await api(`/api/shop/owner/recipes/${mid}`);
-                           
-                           // Handle both cases: old schema (array of items) or new schema (object with standard_yield and recipe_items)
-                           const recipeItems = Array.isArray(recipeData) ? recipeData : (recipeData?.recipe_items || []);
-                           const stdYield = recipeData?.standard_yield || targetItem?.recipe_reference_yield || 1;
-                           
-                           setProductionForm(f => ({
-                             ...f,
-                             menu_item_id: mid,
-                             recipe_id: recipeData?.id || '',
-                             batch_size: stdYield,
-                             actual_yield: stdYield,
-                             ingredientsUsed: recipeItems.map(r => {
-                               const baseQty = r.quantity_required || 0;
-                               return {
-                                 ingredient_id: r.ingredient_id,
-                                 component_menu_item_id: r.component_menu_item_id,
-                                 name: r.ingredients?.name || r.component_menu_item?.name || 'Unknown',
-                                 unit: r.ingredients?.unit || 'unit',
-                                 quantity_used: baseQty, // Start with standard amount
-                                 unit_cost: r.ingredients?.buying_price || r.component_menu_item?.price || 0,
-                                 base_recipe_qty: baseQty,
-                                 reference_yield: stdYield
-                               };
-                             }),
-                             wastage_notes: ''
-                           }));
-                        }}
+                            onChange={async (e) => {
+                              const mid = e.target.value;
+                              if (!mid) {
+                                setProductionForm(f => ({ ...f, menu_item_id: '', recipe_id: '', ingredientsUsed: [], outputs: [] }));
+                                return;
+                              }
+                               const targetItem = menu.find(m => m.id === mid);
+                               const recipeData = await api(`/api/shop/owner/recipes/${mid}`);
+                               const mi = mid ? menu.find(m => m.id === mid) : null;
+                               const recipeItems = Array.isArray(recipeData) ? recipeData : (recipeData?.recipe_items || []);
+                               const stdYield = recipeData?.standard_yield || targetItem?.recipe_reference_yield || 1;
+                               
+                               // Auto-populate related output products in the same group!
+                               const variants = menu.filter(m => m.category_group === targetItem.name && m.id !== targetItem.id);
+                               const defaultOutputs = variants.length > 0 
+                                 ? variants.map(v => ({ menuItemId: v.id, quantity: v.recipe_reference_yield || 0, unitPrice: v.price }))
+                                 : [{ menuItemId: targetItem.id, quantity: stdYield, unitPrice: targetItem.price }];
+
+                               setProductionForm(f => ({
+                                 ...f,
+                                 menu_item_id: mid,
+                                 recipe_id: recipeData?.id || '',
+                                 batch_size: 1, 
+                                 actual_yield: stdYield,
+                                 outputs: defaultOutputs,
+                                 ingredientsUsed: recipeItems.map(r => {
+                                   const baseQty = r.quantity_required || 0;
+                                   return {
+                                     ingredient_id: r.ingredient_id,
+                                     component_menu_item_id: r.component_menu_item_id,
+                                     name: r.ingredients?.name || r.component_menu_item?.name || 'Unknown',
+                                     unit: r.ingredients?.unit || 'unit',
+                                     quantity_used: baseQty,
+                                     unit_cost: r.ingredients?.buying_price || r.component_menu_item?.price || 0,
+                                     base_recipe_qty: baseQty,
+                                     reference_yield: stdYield
+                                   };
+                                 }),
+                                 wastage_notes: ''
+                               }));
+                            }}
                       >
                         <option value="">-- Select Bakery Item --</option>
                         {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery').map(m => (
@@ -3635,18 +3724,83 @@ export default function Owner() {
                       />
                     </label>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                      <label className="am-field" style={{ background: '#F0F4FF', padding: 12, borderRadius: 12, border: '1px solid #D1DBFF' }}>
-                        <span style={{ color: '#1D3557', fontWeight: 700 }}>Actual Yield Produced</span>
-                        <p style={{ fontSize: 10, marginBottom: 8 }}>Final count produced</p>
-                        <input 
-                          className="am-input" 
-                          type="number" 
-                          value={productionForm.actual_yield} 
-                          onChange={e => setProductionForm(f => ({...f, actual_yield: Number(e.target.value)}))} 
-                          style={{ fontSize: 20, fontWeight: 800, textAlign: 'center' }}
-                        />
-                      </label>
+                    <div className="am-field" style={{ background: '#F8FAFC', padding: 16, borderRadius: 16, border: '1px solid #E2E8F0', gridColumn: 'span 2' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <span style={{ color: '#1D3557', fontWeight: 800, fontSize: 16 }}>Produced Products (Yield)</span>
+                        <button 
+                          className="btn primary tiny"
+                          onClick={() => setProductionForm(f => ({
+                            ...f,
+                            outputs: [...f.outputs, { menuItemId: '', quantity: 1, unitPrice: 0 }]
+                          }))}
+                        >+ Add Product</button>
+                      </div>
+                      
+                      <div className="stack" style={{ gap: 8 }}>
+                        {productionForm.outputs.map((out, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 40px', gap: 8, alignItems: 'center', background: '#fff', padding: 8, borderRadius: 12, border: '1px solid #EDF2F7' }}>
+                            <select 
+                              className="am-input tiny"
+                              value={out.menuItemId}
+                              onChange={e => {
+                                const mid = e.target.value;
+                                const item = menu.find(m => m.id === mid);
+                                setProductionForm(f => {
+                                  const next = [...f.outputs];
+                                  next[idx] = { ...next[idx], menuItemId: mid, unitPrice: item?.price || 0 };
+                                  return { ...f, outputs: next };
+                                });
+                              }}
+                            >
+                              <option value="">-- Product --</option>
+                              {(() => {
+                                const mainItem = menu.find(m => m.id === productionForm.menu_item_id);
+                                const bakeryItems = menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery');
+                                
+                                // Smart Filter: Priority to group members or similar names
+                                const filtered = bakeryItems.filter(m => {
+                                  if (!mainItem) return true;
+                                  const belongsToGroup = mainItem.category_group && m.category_group === mainItem.category_group;
+                                  const matchesName = m.name.toLowerCase().includes(mainItem.name.toLowerCase().split(' ')[0]);
+                                  return belongsToGroup || matchesName;
+                                });
+
+                                const list = filtered.length > 0 ? filtered : bakeryItems;
+
+                                return list.map(m => (
+                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                ));
+                              })()}
+                            </select>
+                            <input 
+                              type="number" 
+                              className="am-input tiny" 
+                              placeholder="Qty"
+                              value={out.quantity}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                setProductionForm(f => {
+                                  const next = [...f.outputs];
+                                  next[idx] = { ...next[idx], quantity: val };
+                                  return { ...f, outputs: next };
+                                });
+                              }}
+                            />
+                            <button 
+                              className="btn danger tiny"
+                              onClick={() => setProductionForm(f => ({
+                                ...f,
+                                outputs: f.outputs.filter((_, i) => i !== idx)
+                              }))}
+                              style={{ padding: '4px 8px' }}
+                            >✕</button>
+                          </div>
+                        ))}
+                        {productionForm.outputs.length === 0 && (
+                          <div style={{ textAlign: 'center', fontSize: 12, color: '#666', padding: '12px 0' }}>Click "Add Product" to record what you produced</div>
+                        )}
+                      </div>
+                    </div>
 
                       <label className="am-field">
                         <span>General Notes</span>
@@ -3671,8 +3825,7 @@ export default function Owner() {
                       />
                     </label>
                  </div>
-              </div>
-
+              
               {/* Step 2: Recipe Adjustment & Predictor */}
               <div className="am-category-sales-card">
                  <h3 className="am-card-title">2. Ingredients & Prediction</h3>
@@ -3742,25 +3895,20 @@ export default function Owner() {
                          </div>
                          <div style={{ background: '#F0FDF4', padding: 12, borderRadius: 12, border: '1px solid #DCFCE7' }}>
                             <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Estimated Revenue</div>
-                            {(() => {
-                               const price = menu.find(m => m.id === productionForm.menu_item_id)?.price || 0;
-                               const totalRevenue = productionForm.actual_yield * price;
-                               return (
-                                 <>
+                             {(() => {
+                                const totalRevenue = (productionForm.outputs || []).reduce((acc, out) => acc + (out.quantity * out.unitPrice), 0);
+                                return (
                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#16A34A' }}>
                                       {Math.round(totalRevenue).toLocaleString()} RWF
                                    </div>
-                                   <div style={{ fontSize: 10, color: '#16A34A' }}>({price.toLocaleString()} per piece)</div>
-                                 </>
-                               )
-                            })()}
+                                )
+                             })()}
                          </div>
                          <div style={{ background: '#F1F8E9', padding: 12, borderRadius: 12, border: '1px solid #DCEDC8' }}>
                             <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Actual Profit</div>
                             {(() => {
                                const cost = (productionForm.ingredientsUsed || []).reduce((acc, ing) => acc + (ing.quantity_used * ing.unit_cost), 0);
-                               const price = menu.find(m => m.id === productionForm.menu_item_id)?.price || 0;
-                               const rev = productionForm.actual_yield * price;
+                               const rev = (productionForm.outputs || []).reduce((acc, out) => acc + (out.quantity * out.unitPrice), 0);
                                const profit = rev - cost;
                                return (
                                  <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? '#1D3557' : '#D32F2F' }}>
@@ -3774,8 +3922,9 @@ export default function Owner() {
                             {(() => {
                                 const menuItem = menu.find(m => m.id === productionForm.menu_item_id);
                                 const refYield = menuItem?.recipe_reference_yield || 1;
+                                const totalProduced = (productionForm.outputs || []).reduce((acc, out) => acc + Number(out.quantity), 0);
                                 const expectedYield = (productionForm.batch_size || 1) * refYield;
-                                const efficiency = (productionForm.actual_yield / (expectedYield || 1)) * 100;
+                                const efficiency = (totalProduced / (expectedYield || 1)) * 100;
                                 return (
                                   <div style={{ fontSize: 18, fontWeight: 800, color: efficiency >= 100 ? '#16A34A' : (efficiency >= 90 ? '#EAB308' : '#D32F2F') }}>
                                      {efficiency.toFixed(1)}%
@@ -3804,15 +3953,16 @@ export default function Owner() {
                                 menuItemId: productionForm.menu_item_id,
                                 recipeId: productionForm.recipe_id,
                                 batchSize: productionForm.batch_size,
-                                actualYield: productionForm.actual_yield,
                                 ingredientsUsed: productionForm.ingredientsUsed,
+                                outputs: productionForm.outputs,
                                 wastageNotes: productionForm.wastage_notes,
                                 notes: productionForm.notes
                               }) 
                             });
-                            setProductionForm({ menu_item_id: '', recipe_id: '', batch_size: 1, ingredientsUsed: [], notes: '', actual_yield: 1, wastage_notes: '' });
+                            const totalProduced = (productionForm.outputs || []).reduce((acc, out) => acc + Number(out.quantity), 0);
+                            setProductionForm({ menu_item_id: '', recipe_id: '', batch_size: 1, ingredientsUsed: [], outputs: [], notes: '', actual_yield: 0, wastage_notes: '' });
                             await reloadCore();
-                            alert(`🌟 Production successful! ${productionForm.actual_yield} units added.`);
+                            alert(`🌟 Production successful! ${totalProduced} units added to stock.`);
                           } catch(err) { alert(err.message) }
                           finally { setProductionLoading(false) }
                         }}
@@ -4236,18 +4386,39 @@ export default function Owner() {
               </div>
             )}
 
-            {drilldown.type === 'lowstock' && drilldown.items && (
+            {drilldown.type === 'bakeryToday' && drilldown.stats && (
               <div className="am-drilldown-list">
-                {drilldown.items.length === 0 && <p className="muted" style={{ textAlign: 'center', padding: 32 }}>All stock levels are healthy</p>}
-                {drilldown.items.map((ing, idx) => (
-                  <div key={idx} className="am-drilldown-row">
-                    <div className="am-drilldown-row-info">
-                      <span className="am-drilldown-name">{ing.name}</span>
-                      <span className="am-drilldown-cat">{ing.unit}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20, padding: '0 16px' }}>
+                   <div style={{ background: '#FCE4EC', padding: 16, borderRadius: 12 }}>
+                      <div style={{ fontSize: 11, color: '#E91E63', fontWeight: 700 }}>TOTAL COST</div>
+                      <div style={{ fontSize: 20, fontWeight: 800 }}>{drilldown.stats.totalCost.toLocaleString()}</div>
+                   </div>
+                   <div style={{ background: '#E8F5E9', padding: 16, borderRadius: 12 }}>
+                      <div style={{ fontSize: 11, color: '#2E7D32', fontWeight: 700 }}>TOTAL PROFIT</div>
+                      <div style={{ fontSize: 20, fontWeight: 800 }}>{drilldown.stats.totalProfit.toLocaleString()}</div>
+                   </div>
+                </div>
+                {drilldown.stats.productions.length === 0 && <p className="muted" style={{ textAlign: 'center', padding: 32 }}>No bakery production recorded today</p>}
+                {drilldown.stats.productions.map((p, idx) => (
+                  <div key={idx} style={{ marginBottom: 16, padding: '0 16px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                       <span>{p.recipeName}</span>
+                       <span style={{ color: '#666', fontSize: 12 }}>{p.yield} pcs</span>
                     </div>
-                    <div className="am-drilldown-row-nums">
-                      <span className="am-drilldown-qty" style={{ color: '#FF5722' }}>{ing.stock_level} left</span>
-                      <span className="am-drilldown-amount" style={{ color: '#999' }}>min: {ing.min_threshold}</span>
+                    {p.outputs.map((o, oIdx) => (
+                      <div key={oIdx} className="am-drilldown-row" style={{ paddingLeft: 12, borderLeft: '2px solid #E91E63' }}>
+                        <div className="am-drilldown-row-info">
+                          <span className="am-drilldown-name">{o.name}</span>
+                          <span className="am-drilldown-cat">{o.price} RWF each</span>
+                        </div>
+                        <div className="am-drilldown-row-nums">
+                          <span className="am-drilldown-qty">{o.qty}x</span>
+                          <span className="am-drilldown-amount">{o.revenue.toLocaleString()} RWF</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: 8, textAlign: 'right', fontSize: 12, color: '#BDBDBD' }}>
+                       Cost: {p.cost.toLocaleString()} RWF | Profit: {p.profit.toLocaleString()} RWF
                     </div>
                   </div>
                 ))}
