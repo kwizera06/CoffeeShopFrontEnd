@@ -104,7 +104,19 @@ export default function Owner() {
     password: '',
     role: 'WAITER',
   })
-  const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })
+  const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })
+  const [productionForm, setProductionForm] = useState({ 
+    menu_item_id: '', 
+    recipe_id: '',
+    batch_size: 1, 
+    ingredientsUsed: [], 
+    notes: '',
+    actual_yield: 1,
+    wastage_notes: ''
+  })
+  const [productionLoading, setProductionLoading] = useState(false)
+  const [bakerySubTab, setBakerySubTab] = useState('PRODUCTION')
+  const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('ALL')
   
   const [actionMenu, setActionMenu] = useState(null)
   const [productActionMenu, setProductActionMenu] = useState(null)
@@ -650,6 +662,7 @@ export default function Owner() {
       category_group: CATEGORY_MAP[menuForm.category] || 'DRINK',
       available: menuForm.available,
       is_recipe: menuForm.isRecipe,
+      recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
       stock_level: Number(menuForm.stockLevel || 0),
       buying_price: Number(menuForm.buyingPrice || 0),
       recipe: menuForm.isRecipe ? menuForm.productRecipe : []
@@ -662,7 +675,8 @@ export default function Owner() {
       }
       setMenuForm({ 
         id: '', name: '', price: '', category: 'Hot Coffee', 
-        available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' 
+        available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '',
+        recipe_reference_yield: 1
       })
       setSelectedRecipeItem(null)
       setShowMenuForm(false)
@@ -739,6 +753,7 @@ export default function Owner() {
         return null;
       }).filter(Boolean),
       isRecipe: mi.is_recipe || currentRecipe.length > 0,
+      recipe_reference_yield: mi.recipe_reference_yield || 1,
       stockLevel: autoStock,
       buyingPrice: autoBuyingPrice
     })
@@ -941,6 +956,14 @@ export default function Owner() {
                  <div className="am-status-info">
                    <h4>{overview?.waitingOrdersCount ?? 0}</h4>
                    <p>Waiting</p>
+                 </div>
+              </div>
+
+              <div className="am-mini-status" onClick={() => setTab('bakery')}>
+                 <div className="am-status-icon" style={{ background: 'rgba(233, 30, 99, 0.1)', color: '#E91E63' }}><MdOutlineLocalFireDepartment /></div>
+                 <div className="am-status-info">
+                   <h4>Bakery</h4>
+                   <p>Manage & Produce</p>
                  </div>
               </div>
 
@@ -1162,6 +1185,20 @@ export default function Owner() {
                 </select>
               </label>
 
+              {menuForm.isRecipe && (
+                <label className="am-field">
+                  <span>Standard Yield (Batch Size)</span>
+                  <p style={{ fontSize: 10, color: '#666' }}>Units produced by this recipe (e.g. 90)</p>
+                  <input
+                    className="am-input"
+                    type="number"
+                    value={menuForm.recipe_reference_yield || 1}
+                    onChange={(e) => setMenuForm((f) => ({ ...f, recipe_reference_yield: Number(e.target.value) }))}
+                    required
+                  />
+                </label>
+              )}
+
               {(!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) ? (
                  <div className="span-2 am-form-grid-inner" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                    <label className="am-field">
@@ -1293,7 +1330,7 @@ export default function Owner() {
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
               <button type="button" className="btn ghost" onClick={() => {
-                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '' })
+                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '', recipe_reference_yield: 1 })
                 setSelectedRecipeItem(null)
                 setShowMenuForm(false)
               }}>
@@ -1853,6 +1890,15 @@ export default function Owner() {
                                         <div>
                                            <div style={{ fontWeight: 700 }}>{staffMember.name}</div>
                                            <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>Since {new Date(staffMember.created_at || Date.now()).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'Africa/Kigali' })}</div>
+                                           <span style={{ 
+                                             fontSize: 14, 
+                                             fontWeight: 800, 
+                                             color: '#0F172A' 
+                                           }}>
+                                             {Math.floor((Math.min(...(menuForm.productRecipe || []).map(r => 
+                                               r.quantity_required > 0 ? (r.stock_level / r.quantity_required) : Infinity
+                                             )) || 0) * (menuForm.recipe_reference_yield || 81)).toLocaleString()} <small style={{ fontSize: 10 }}>pcs</small>
+                                           </span>
                                         </div>
                                      </div>
                                   </td>
@@ -2289,10 +2335,19 @@ export default function Owner() {
                       <input className="am-input" type="number" value={ingForm.min_threshold} onChange={e => setIngForm(f => ({...f, min_threshold: Number(e.target.value)}))} />
                     </label>
                   </div>
-                  <label className="am-field">
-                    <span>Unit Price (RWF)</span>
-                    <input className="am-input" type="number" value={ingForm.buying_price} onChange={e => setIngForm(f => ({...f, buying_price: Number(e.target.value)}))} />
-                  </label>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Unit Price (RWF)</span>
+                      <input className="am-input" type="number" value={ingForm.buying_price} onChange={e => setIngForm(f => ({...f, buying_price: Number(e.target.value)}))} />
+                    </label>
+                    <label className="am-field">
+                      <span>Category</span>
+                      <select className="am-input" value={ingForm.category} onChange={e => setIngForm(f => ({...f, category: e.target.value}))}>
+                        <option value="General">General</option>
+                        <option value="Bakery">Bakery</option>
+                      </select>
+                    </label>
+                  </div>
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>{ingForm.id ? 'Update' : 'Add Ingredient'}</button>
@@ -2324,6 +2379,18 @@ export default function Owner() {
                   </div>
                </div>
 
+               <div className="am-filter-pills" style={{ margin: 0 }}>
+                  {['ALL', 'General', 'Bakery'].map(f => (
+                    <div 
+                      key={f} 
+                      className={`am-pill ${inventoryCategoryFilter === f ? 'active' : ''}`}
+                      onClick={() => setInventoryCategoryFilter(f)}
+                    >
+                       {f}
+                    </div>
+                  ))}
+               </div>
+
                {/* Critical Stock Group */}
                {ingredients.filter(i => i.stock_level < i.min_threshold).length > 0 && (
                  <div className="am-category-sales-card">
@@ -2341,7 +2408,7 @@ export default function Owner() {
                        </thead>
                        <tbody>
                           {ingredients
-                            .filter(i => i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                            .filter(i => (inventoryCategoryFilter === 'ALL' || i.category === inventoryCategoryFilter) && i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
                             .slice((criticalPage - 1) * 6, criticalPage * 6)
                             .map(ing => (
                               <tr key={ing.id} style={{ userSelect: 'none', WebkitUserSelect: 'none', cursor: 'pointer' }} onPointerDown={() => handlePointerDown(ing)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onContextMenu={e => e.preventDefault()}>
@@ -2385,7 +2452,7 @@ export default function Owner() {
                        <span className="muted text-sm">Page {criticalPage}</span>
                        <div style={{ display: 'flex', gap: 8 }}>
                           <button className="btn outline tiny" disabled={criticalPage === 1} onClick={() => setCriticalPage(p => p - 1)}>Prev</button>
-                          <button className="btn outline tiny" disabled={criticalPage * 6 >= ingredients.filter(i => i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setCriticalPage(p => p + 1)}>Next</button>
+                          <button className="btn outline tiny" disabled={criticalPage * 6 >= ingredients.filter(i => (inventoryCategoryFilter === 'ALL' || i.category === inventoryCategoryFilter) && i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setCriticalPage(p => p + 1)}>Next</button>
                        </div>
                     </div>
                  </div>
@@ -3326,6 +3393,445 @@ export default function Owner() {
           )
         })()
       ) : null}
+
+      {tab === 'bakery' && (
+        <div className="bakery-hub">
+          <header className="am-header">
+<div className="am-title">
+               <h1>Bakery Management Hub</h1>
+               <p>Manage bakery items and record daily production batches</p>
+            </div>
+            {/* Sub-navigation for Bakery */}
+            <div className="am-filter-pills" style={{ margin: 0, background: 'rgba(0,0,0,0.05)', padding: '4px 8px' }}>
+              {['PRODUCTION', 'PRODUCTS'].map(sub => (
+                <div 
+                  key={sub} 
+                  className={`am-pill ${bakerySubTab === sub ? 'active' : ''}`}
+                  onClick={() => setBakerySubTab(sub)}
+                  style={{ fontSize: 11, padding: '6px 16px' }}
+                >
+                  {sub}
+                </div>
+              ))}
+            </div>
+          </header>
+
+          {bakerySubTab === 'PRODUCTS' && (
+            <div className="am-main-grid am-grid-form-list">
+              {/* Add Bakery Product Form */}
+              <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
+                 <h3 className="am-card-title">+ New Bakery Item</h3>
+                 <p style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Set your standard recipe (e.g. recipe for 81 donuts)</p>
+                 <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    try {
+                      const item = await api('/api/shop/menu', { 
+                        method: 'POST', 
+                        body: JSON.stringify({...menuForm, category: 'Bakery', is_recipe: true}) 
+                      });
+                      
+                      if (menuForm.productRecipe && menuForm.productRecipe.length > 0) {
+                        for (const r of menuForm.productRecipe) {
+                          await api('/api/shop/owner/recipes', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              menu_item_id: item.id,
+                              ingredient_id: r.ingredient_id,
+                              quantity_required: r.quantity_required
+                            })
+                          });
+                        }
+                      }
+
+                      setMenuForm({ id: '', name: '', price: '', category: 'Bakery', available: true, productRecipe: [], is_recipe: true, recipe_reference_yield: 81 });
+                      await reloadCore();
+                      alert(`🌟 ${item.name} created!`);
+                    } catch(err) { alert(err.message) }
+                 }} className="stack" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Item Name</span>
+                      <input className="am-input" value={menuForm.name} onChange={e => setMenuForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Chocolate Donut" />
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                       <label className="am-field">
+                         <span>Price (RWF)</span>
+                         <input className="am-input" type="number" value={menuForm.price} onChange={e => setMenuForm(f => ({...f, price: e.target.value}))} required placeholder="200" />
+                       </label>
+                       <label className="am-field">
+                         <span>Standard Yield</span>
+                         <input className="am-input" type="number" value={menuForm.recipe_reference_yield || 81} onChange={e => setMenuForm(f => ({...f, recipe_reference_yield: Number(e.target.value)}))} required />
+                       </label>
+                    </div>
+
+                    <div style={{ padding: '12px', background: '#F8FAFC', borderRadius: 8, border: '1px dashed #CBD5E1' }}>
+                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>Standard Amounts (for {menuForm.recipe_reference_yield || 81} units)</span>
+                       <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+                          <select 
+                            className="am-input" 
+                            style={{ fontSize: 12 }}
+                            onChange={(e) => {
+                              const ing = ingredients.find(i => i.id === e.target.value);
+                              if (ing && !menuForm.productRecipe?.find(r => r.ingredient_id === ing.id)) {
+                                setMenuForm(f => ({
+                                  ...f, 
+                                  productRecipe: [...(f.productRecipe || []), { 
+                                    ingredient_id: ing.id, 
+                                    name: ing.name, 
+                                    quantity_required: 0
+                                  }]
+                                }));
+                              }
+                            }}
+                          >
+                            <option value="">+ Add Ingredient</option>
+                            {ingredients.map(i => <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>)}
+                          </select>
+
+                          {menuForm.productRecipe?.map((r, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, flex: 1 }}>{r.name}</span>
+                              <input 
+                                type="number" 
+                                className="am-input" 
+                                style={{ width: 80, padding: '4px' }} 
+                                value={r.quantity_required}
+                                onChange={e => {
+                                  const newRecipe = [...menuForm.productRecipe];
+                                  newRecipe[idx].quantity_required = Number(e.target.value);
+                                  setMenuForm(f => ({...f, productRecipe: newRecipe}));
+                                }}
+                              />
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+
+                    <button className="btn success xl w-full" type="submit">Create Item & Set Standard</button>
+                 </form>
+              </div>
+
+              {/* Bakery Catalog List */}
+              <div className="am-category-sales-card">
+                 <h3 className="am-card-title">Bakery Catalog</h3>
+                 <table className="am-modern-table">
+                   <thead>
+                     <tr>
+                       <th>ITEM</th>
+                       <th>PRICE</th>
+                       <th>RECIPE</th>
+                       <th>STOCK</th>
+                       <th></th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery').map(m => (
+                       <tr key={m.id}>
+                         <td style={{ fontWeight: 600 }}>{m.name}</td>
+                         <td>{Number(m.price).toLocaleString()}</td>
+                         <td style={{ verticalAlign: 'middle' }}>
+                           {m.is_recipe ? (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                               <span style={{ fontSize: 9, background: '#D1FAE5', color: '#065F46', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>MADE IN-HOUSE</span>
+                               <button className="btn tiny primary" onClick={() => { setTab('menu'); setMenuForm(m); }} style={{ padding: '4px 10px', fontSize: 11 }}>Manage Recipe</button>
+                             </div>
+                           ) : (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                               <span style={{ fontSize: 9, background: '#F3F4F6', color: '#4B5563', padding: '2px 6px', borderRadius: 4, width: 'fit-content', fontWeight: 800 }}>RESALE ITEM</span>
+                               <button className="btn tiny success" onClick={async () => {
+                                 try {
+                                   await api(`/api/shop/menu/${m.id}`, { method: 'PUT', body: JSON.stringify({ is_recipe: true }) });
+                                   await reloadCore();
+                                 } catch(err) { alert(err.message) }
+                               }} style={{ padding: '4px 10px', fontSize: 11 }}>Enable Production</button>
+                             </div>
+                           )}
+                         </td>
+                         <td style={{ fontWeight: 700, color: m.stock_level < 10 ? '#FF5252' : '#1D3557' }}>
+                           {m.stock_level} pcs
+                         </td>
+                         <td></td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+              </div>
+            </div>
+          )}
+
+          {bakerySubTab === 'PRODUCTION' && (
+            <div className="am-main-grid" style={{ gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
+              {/* Step 1: Selection */}
+              <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
+                 <h3 className="am-card-title">1. What are we baking?</h3>
+                 <div className="stack" style={{ gap: 20 }}>
+                    <label className="am-field">
+                      <span>Select Item</span>
+                      <select 
+                        className="am-input" 
+                        value={productionForm.menu_item_id} 
+                        onChange={async (e) => {
+                          const mid = e.target.value;
+                          if (!mid) {
+                            setProductionForm(f => ({ ...f, menu_item_id: '', recipe_id: '', ingredientsUsed: [] }));
+                            return;
+                          }
+                           const targetItem = menu.find(m => m.id === mid);
+                           // Fetch the active recipe (which includes standard_yield)
+                           const recipeData = await api(`/api/shop/owner/recipes/${mid}`);
+                           
+                           // Handle both cases: old schema (array of items) or new schema (object with standard_yield and recipe_items)
+                           const recipeItems = Array.isArray(recipeData) ? recipeData : (recipeData?.recipe_items || []);
+                           const stdYield = recipeData?.standard_yield || targetItem?.recipe_reference_yield || 1;
+                           
+                           setProductionForm(f => ({
+                             ...f,
+                             menu_item_id: mid,
+                             recipe_id: recipeData?.id || '',
+                             batch_size: stdYield,
+                             actual_yield: stdYield,
+                             ingredientsUsed: recipeItems.map(r => {
+                               const baseQty = r.quantity_required || 0;
+                               return {
+                                 ingredient_id: r.ingredient_id,
+                                 component_menu_item_id: r.component_menu_item_id,
+                                 name: r.ingredients?.name || r.component_menu_item?.name || 'Unknown',
+                                 unit: r.ingredients?.unit || 'unit',
+                                 quantity_used: baseQty, // Start with standard amount
+                                 unit_cost: r.ingredients?.buying_price || r.component_menu_item?.price || 0,
+                                 base_recipe_qty: baseQty,
+                                 reference_yield: stdYield
+                               };
+                             }),
+                             wastage_notes: ''
+                           }));
+                        }}
+                      >
+                        <option value="">-- Select Bakery Item --</option>
+                        {menu.filter(m => m.category === 'Bakery & Desserts' || m.category === 'Bakery').map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="am-field">
+                      <span>Target Yield (Scale Recipe)</span>
+                      <p style={{ fontSize: 10, color: '#666', marginBottom: 4 }}>Scales base ingredient amounts proportionally</p>
+                      <input 
+                        className="am-input" 
+                        type="number" 
+                        value={productionForm.batch_size} 
+                        onChange={e => {
+                          const newSize = Number(e.target.value);
+                          setProductionForm(f => ({
+                            ...f,
+                            batch_size: newSize,
+                            ingredientsUsed: f.ingredientsUsed.map(ing => ({
+                              ...ing,
+                              quantity_used: ing.base_recipe_qty * (newSize / (ing.reference_yield || 1))
+                            })),
+                            actual_yield: newSize
+                          }));
+                        }} 
+                      />
+                    </label>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <label className="am-field" style={{ background: '#F0F4FF', padding: 12, borderRadius: 12, border: '1px solid #D1DBFF' }}>
+                        <span style={{ color: '#1D3557', fontWeight: 700 }}>Actual Yield Produced</span>
+                        <p style={{ fontSize: 10, marginBottom: 8 }}>Final count produced</p>
+                        <input 
+                          className="am-input" 
+                          type="number" 
+                          value={productionForm.actual_yield} 
+                          onChange={e => setProductionForm(f => ({...f, actual_yield: Number(e.target.value)}))} 
+                          style={{ fontSize: 20, fontWeight: 800, textAlign: 'center' }}
+                        />
+                      </label>
+
+                      <label className="am-field">
+                        <span>General Notes</span>
+                        <textarea 
+                          className="am-input" 
+                          rows="2"
+                          value={productionForm.notes} 
+                          onChange={e => setProductionForm(f => ({...f, notes: e.target.value}))}
+                          placeholder="Event notes..."
+                        />
+                      </label>
+                    </div>
+
+                    <label className="am-field" style={{ background: '#FFF0F0', padding: 12, borderRadius: 12, border: '1px solid #FFD1D1' }}>
+                      <span style={{ color: '#D32F2F', fontWeight: 700 }}>Wastage / Loss Notes</span>
+                      <p style={{ fontSize: 10, marginBottom: 8, color: '#666' }}>Mention if any product was damaged or lost</p>
+                      <input 
+                        className="am-input" 
+                        value={productionForm.wastage_notes} 
+                        onChange={e => setProductionForm(f => ({...f, wastage_notes: e.target.value}))}
+                        placeholder="e.g. 5 burnt, 2 dropped"
+                      />
+                    </label>
+                 </div>
+              </div>
+
+              {/* Step 2: Recipe Adjustment & Predictor */}
+              <div className="am-category-sales-card">
+                 <h3 className="am-card-title">2. Ingredients & Prediction</h3>
+                 
+                 {productionForm.menu_item_id ? (
+                   <div className="stack" style={{ gap: 24 }}>
+                      <div style={{ maxHeight: 350, overflowY: 'auto' }}>
+                        <table className="am-modern-table" style={{ fontSize: 13 }}>
+                          <thead>
+                            <tr>
+                              <th>INGREDIENT</th>
+                              <th>STOCKED</th>
+                              <th>QTY TO USE</th>
+                              <th style={{ textAlign: 'right' }}>COST (RWF)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(productionForm.ingredientsUsed || []).map((ing, idx) => {
+                              const ingredient = ingredients.find(i => i.id === ing.ingredient_id);
+                              const isLow = ingredient && ingredient.stock_level < ing.quantity_used;
+                              const lineCost = (ing.quantity_used || 0) * (ing.unit_cost || 0);
+                              
+                              return (
+                                <tr key={idx} style={{ background: isLow ? '#FFF5F5' : 'transparent' }}>
+                                  <td>
+                                    <div style={{ fontWeight: 600, color: isLow ? '#D32F2F' : 'inherit' }}>{ing.name}</div>
+                                    {isLow && <div style={{ fontSize: 9, color: '#D32F2F', fontWeight: 700 }}>⚠️ INSUFFICIENT STOCK</div>}
+                                  </td>
+                                  <td>
+                                    <div style={{ fontSize: 11, color: '#666' }}>{ingredient?.stock_level || 0} {ing.unit}</div>
+                                  </td>
+                                  <td style={{ width: 140 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <input 
+                                        className={`am-input tiny ${isLow ? 'warn' : ''}`} 
+                                        type="number" 
+                                        value={ing.quantity_used} 
+                                        onChange={e => {
+                                          const val = Number(e.target.value);
+                                          setProductionForm(f => {
+                                            const next = [...f.ingredientsUsed];
+                                            next[idx] = { ...next[idx], quantity_used: val };
+                                            return { ...f, ingredientsUsed: next };
+                                          });
+                                        }}
+                                      />
+                                      <span style={{ fontSize: 11 }}>{ing.unit}</span>
+                                    </div>
+                                  </td>
+                                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                                     {Math.round(lineCost).toLocaleString()}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Summary Predictor Section */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                         <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                            <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Total Production Cost</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: '#1D3557' }}>
+                               {Math.round((productionForm.ingredientsUsed || []).reduce((acc, ing) => acc + (ing.quantity_used * ing.unit_cost), 0)).toLocaleString()} RWF
+                            </div>
+                         </div>
+                         <div style={{ background: '#F0FDF4', padding: 12, borderRadius: 12, border: '1px solid #DCFCE7' }}>
+                            <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Estimated Revenue</div>
+                            {(() => {
+                               const price = menu.find(m => m.id === productionForm.menu_item_id)?.price || 0;
+                               const totalRevenue = productionForm.actual_yield * price;
+                               return (
+                                 <>
+                                   <div style={{ fontSize: 18, fontWeight: 800, color: '#16A34A' }}>
+                                      {Math.round(totalRevenue).toLocaleString()} RWF
+                                   </div>
+                                   <div style={{ fontSize: 10, color: '#16A34A' }}>({price.toLocaleString()} per piece)</div>
+                                 </>
+                               )
+                            })()}
+                         </div>
+                         <div style={{ background: '#F1F8E9', padding: 12, borderRadius: 12, border: '1px solid #DCEDC8' }}>
+                            <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Actual Profit</div>
+                            {(() => {
+                               const cost = (productionForm.ingredientsUsed || []).reduce((acc, ing) => acc + (ing.quantity_used * ing.unit_cost), 0);
+                               const price = menu.find(m => m.id === productionForm.menu_item_id)?.price || 0;
+                               const rev = productionForm.actual_yield * price;
+                               const profit = rev - cost;
+                               return (
+                                 <div style={{ fontSize: 18, fontWeight: 800, color: profit >= 0 ? '#1D3557' : '#D32F2F' }}>
+                                    {Math.round(profit).toLocaleString()} RWF
+                                 </div>
+                               )
+                            })()}
+                         </div>
+                         <div style={{ background: '#FFF8E1', padding: 12, borderRadius: 12, border: '1px solid #FFECB3' }}>
+                            <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Efficiency</div>
+                            {(() => {
+                                const menuItem = menu.find(m => m.id === productionForm.menu_item_id);
+                                const refYield = menuItem?.recipe_reference_yield || 1;
+                                const expectedYield = (productionForm.batch_size || 1) * refYield;
+                                const efficiency = (productionForm.actual_yield / (expectedYield || 1)) * 100;
+                                return (
+                                  <div style={{ fontSize: 18, fontWeight: 800, color: efficiency >= 100 ? '#16A34A' : (efficiency >= 90 ? '#EAB308' : '#D32F2F') }}>
+                                     {efficiency.toFixed(1)}%
+                                  </div>
+                                )
+                             })()}
+                         </div>
+                      </div>
+
+                      <button 
+                        className={`btn success xl w-full ${productionLoading ? 'loading' : ''}`} 
+                        disabled={productionLoading || !productionForm.menu_item_id}
+                        onClick={async () => {
+                          const hasLow = (productionForm.ingredientsUsed || []).some(ing => {
+                            const ingredient = ingredients.find(i => i.id === ing.ingredient_id);
+                            return ingredient && ingredient.stock_level < ing.quantity_used;
+                          });
+                          
+                          if (hasLow && !window.confirm('Some ingredients are low in stock. Proceed anyway?')) return;
+                          
+                          try {
+                            setProductionLoading(true);
+                            await api('/api/shop/owner/production', { 
+                              method: 'POST', 
+                              body: JSON.stringify({
+                                menuItemId: productionForm.menu_item_id,
+                                recipeId: productionForm.recipe_id,
+                                batchSize: productionForm.batch_size,
+                                actualYield: productionForm.actual_yield,
+                                ingredientsUsed: productionForm.ingredientsUsed,
+                                wastageNotes: productionForm.wastage_notes,
+                                notes: productionForm.notes
+                              }) 
+                            });
+                            setProductionForm({ menu_item_id: '', recipe_id: '', batch_size: 1, ingredientsUsed: [], notes: '', actual_yield: 1, wastage_notes: '' });
+                            await reloadCore();
+                            alert(`🌟 Production successful! ${productionForm.actual_yield} units added.`);
+                          } catch(err) { alert(err.message) }
+                          finally { setProductionLoading(false) }
+                        }}
+                        style={{ borderRadius: 12, height: 60, fontSize: 18, fontWeight: 800 }}
+                      >
+                        🚀 Complete Production Run
+                      </button>
+                   </div>
+                 ) : (
+                   <div style={{ padding: '60px 0', textAlign: 'center', opacity: 0.4 }}>
+                      <p>Select an item on the left to begin production</p>
+                   </div>
+                 )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
 
       {tab === 'loans' && canAccessTab(role, 'loans') ? (
         <>

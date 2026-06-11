@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { tab: 'overview', label: 'Overview', icon: null },
   { tab: 'menu', label: 'Menu', ownerOnly: true },
   { tab: 'inventory', label: 'Inventory', ownerOnly: true },
+  { tab: 'bakery', label: 'Bakery', ownerOnly: true },
   { tab: 'stock', label: 'Stock Levels' },
   { tab: 'loans', label: 'Loans' },
   { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },

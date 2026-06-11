@@ -225,10 +225,11 @@ export function printReceipt({ shopName, order, paymentMethod }) {
 
   const waiter = order?.waiterName || 'Staff';
 
-  const momoPayBlock = !is80mm ? `
+  const isKenomu = shopName && shopName.toLowerCase().includes('kenomu');
+  const momoPayBlock = (!is80mm && isKenomu) ? `
     <div style="text-align: center; margin: 12px 0 6px 0; font-size: 9.5pt; border: 1.5px dashed #000; padding: 6px; border-radius: 4px; font-weight: bold; line-height: 1.4;">
-       MOMO PAY CODE: 096751<br/>
-       Name: SHUGA LTD
+       MOMO: 0793035603<br/>
+       Name: UMUBYEYI CLAIRE
     </div>
   ` : '';
 

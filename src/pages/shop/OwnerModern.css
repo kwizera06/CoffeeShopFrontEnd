@@ -340,6 +340,25 @@
   margin-top: 16px;
 }
 
+.btn.success {
+  background: #10B981 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+}
+
+.btn.success:hover {
+  background: #059669 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn.success:disabled {
+  background: #D1D5DB !important;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .am-staff-avatar {
   width: 40px;
   height: 40px;
