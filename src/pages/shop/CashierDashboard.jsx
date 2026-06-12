@@ -8,6 +8,7 @@ import { useShopContext } from '../../shop/ShopContext'
 import { supabase } from '../../supabaseClient'
 import olitechLogo from '../../assets/Olitech Logo.png'
 import { getKigaliToday } from '../../utils/kigaliDate.js'
+import socket, { connectSocket } from '../../socket'
 import './CashierDashboard.css'
 import {
   HiOutlineMagnifyingGlass,
@@ -317,32 +318,33 @@ export default function CashierDashboard() {
     void loadBilling()
   }, [loadMenu, loadBilling])
 
-  // Real-time subscriptions
+  // Real-time subscriptions (Socket.io)
   useEffect(() => {
-    if (!supabase) return
-    const channel1 = supabase.channel('cashier-menu')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { loadMenu().catch(()=>{}) })
-      .subscribe()
-      
-    const channel2 = supabase.channel('cashier-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { loadBilling().catch(()=>{}) })
-      .subscribe()
+    const tenantId = getSession().tenantId;
+    if (!tenantId) return;
 
-    const channel3 = supabase.channel('cashier-shifts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { reloadShift().catch(()=>{}) })
-      .subscribe()
+    connectSocket(tenantId);
 
-    const channel4 = supabase.channel('cashier-loans')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `tenant_id=eq.${getSession().tenantId}` }, () => { loadLoans('UNPAID').catch(()=>{}) })
-      .subscribe()
+    const onMenuUpdate = () => { loadMenu().catch(()=>{}) };
+    const onStockUpdate = () => { loadMenu().catch(()=>{}) };
+    const onStaffUpdate = () => { loadMenu().catch(()=>{}) };
+    const onEodUpdate = () => { reloadShift().catch(()=>{}) };
+    const onOrderUpdate = () => { loadBilling().catch(()=>{}) };
+
+    socket.on('menuUpdate', onMenuUpdate);
+    socket.on('stockUpdate', onStockUpdate);
+    socket.on('staffUpdate', onStaffUpdate);
+    socket.on('eodUpdate', onEodUpdate);
+    socket.on('orderUpdate', onOrderUpdate);
 
     return () => {
-      void supabase.removeChannel(channel1)
-      void supabase.removeChannel(channel2)
-      void supabase.removeChannel(channel3)
-      void supabase.removeChannel(channel4)
-    }
-  }, [loadMenu, loadBilling, reloadShift, loadLoans])
+      socket.off('menuUpdate', onMenuUpdate);
+      socket.off('stockUpdate', onStockUpdate);
+      socket.off('staffUpdate', onStaffUpdate);
+      socket.off('eodUpdate', onEodUpdate);
+      socket.off('orderUpdate', onOrderUpdate);
+    };
+  }, [loadMenu, loadBilling, reloadShift])
 
   // Load Order to edit (and switch to tab if needed)
   useEffect(() => {
@@ -544,7 +546,13 @@ export default function CashierDashboard() {
         body: JSON.stringify(payload)
       })
 
-      printReceipt({ shopName, order: paid, paymentMethod: printPayMethod })
+      printReceipt({ 
+        shopName, 
+        order: paid, 
+        paymentMethod: printPayMethod,
+        momoName: context?.momoName,
+        momoNumber: context?.momoNumber
+      })
       await loadBilling()
       
       // Cleanup states
@@ -1234,25 +1242,6 @@ export default function CashierDashboard() {
                   <div>
                     <label style={{fontSize: 12, fontWeight: 700, color:'#8C9993'}}>Notes</label>
                     <textarea className="cashier-search" style={{width: '100%', marginTop: 4, padding:8}} value={shiftForm.notes} onChange={e=>setShiftForm(f=>({...f, notes:e.target.value}))}/>
-                  </div>
-
-                  <div style={{ background: '#F9FAFB', padding: 12, borderRadius: 12, marginTop: 8, border: '1px solid #E5E7EB', fontSize: 13 }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ color: '#6B7280' }}>Shift Sales (Cash):</span>
-                        <span style={{ fontWeight: 700 }}>{(shift.current_cash_sales - (shift.current_loan_repayments || 0)).toLocaleString()} RWF</span>
-                     </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ color: '#6B7280' }}>Loan Repayments:</span>
-                        <span style={{ fontWeight: 700, color: '#10B981' }}>+{(shift.current_loan_repayments || 0).toLocaleString()} RWF</span>
-                     </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, borderTop: '1px solid #E5E7EB', paddingTop: 4 }}>
-                        <span style={{ color: '#111827', fontWeight: 700 }}>Total Cash in Drawer:</span>
-                        <span style={{ fontWeight: 800, color: '#1D3557' }}>{(Number(shift.initial_cash) + shift.current_cash_sales).toLocaleString()} RWF</span>
-                     </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, color: '#F59E0B' }}>
-                        <span>Loans Taken (Today):</span>
-                        <span style={{ fontWeight: 700 }}>{(shift.current_loan_sales || 0).toLocaleString()} RWF</span>
-                     </div>
                   </div>
                 </div>
              )}

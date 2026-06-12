@@ -155,7 +155,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   printHtmlInIframe(html, paperWidth);
 }
 
-export function printReceipt({ shopName, order, paymentMethod }) {
+export function printReceipt({ shopName, order, paymentMethod, momoName, momoNumber }) {
   const is80mm = shopName && (
     shopName.toLowerCase().includes('inganji') || 
     shopName.toLowerCase().includes('steak') || 
@@ -225,11 +225,10 @@ export function printReceipt({ shopName, order, paymentMethod }) {
 
   const waiter = order?.waiterName || 'Staff';
 
-  const isKenomu = shopName && shopName.toLowerCase().includes('kenomu');
-  const momoPayBlock = (!is80mm && isKenomu) ? `
+  const momoPayBlock = (momoName || momoNumber) ? `
     <div style="text-align: center; margin: 12px 0 6px 0; font-size: 9.5pt; border: 1.5px dashed #000; padding: 6px; border-radius: 4px; font-weight: bold; line-height: 1.4;">
-       MOMO: 0793035603<br/>
-       Name: UMUBYEYI CLAIRE
+       ${momoNumber ? `MOMO: ${esc(momoNumber)}<br/>` : ''}
+       ${momoName ? `Name: ${esc(momoName)}` : ''}
     </div>
   ` : '';
 

@@ -14,7 +14,10 @@ export default function AdminHome() {
     ownerName: '',
     ownerEmail: '',
     ownerPassword: '',
+    momoName: '',
+    momoNumber: '',
   })
+  const [editId, setEditId] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -51,19 +54,49 @@ export default function AdminHome() {
     }
   }, [nav, load])
 
-  async function createShop(e) {
+  async function saveShop(e) {
     e.preventDefault()
     setError('')
     setBusy(true)
     try {
-      await api('/api/admin/tenants', { method: 'POST', body: JSON.stringify(form) })
-      setForm({ shopName: '', ownerName: '', ownerEmail: '', ownerPassword: '' })
+      if (editId) {
+        await api(`/api/admin/tenants/${editId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            shopName: form.shopName,
+            momoName: form.momoName,
+            momoNumber: form.momoNumber,
+          }),
+        })
+        setEditId(null)
+      } else {
+        await api('/api/admin/tenants', { method: 'POST', body: JSON.stringify(form) })
+      }
+      setForm({ shopName: '', ownerName: '', ownerEmail: '', ownerPassword: '', momoName: '', momoNumber: '' })
       await load()
     } catch (err) {
       setError(err.message)
     } finally {
       setBusy(false)
     }
+  }
+
+  function enterEditMode(t) {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setEditId(t.id)
+    setForm({
+      shopName: t.shopName,
+      ownerName: t.ownerName || '', // Not editable but keep form consistent
+      ownerEmail: t.ownerEmail || '', 
+      ownerPassword: '', // Not editable
+      momoName: t.momoName || '',
+      momoNumber: t.momoNumber || '',
+    })
+  }
+
+  function cancelEdit() {
+    setEditId(null)
+    setForm({ shopName: '', ownerName: '', ownerEmail: '', ownerPassword: '', momoName: '', momoNumber: '' })
   }
 
   async function setTenantStatus(id, status) {
@@ -132,9 +165,13 @@ export default function AdminHome() {
       ) : null}
 
       <section className="panel">
-        <h2>Create coffee shop</h2>
-        <p className="muted">Creates the tenant and a shop admin user you can sign in with.</p>
-        <form onSubmit={createShop} className="grid-form">
+        <h2>{editId ? 'Edit coffee shop' : 'Create coffee shop'}</h2>
+        <p className="muted">
+          {editId 
+            ? 'Updating shop name or MoMo details. Owner credentials cannot be changed here.' 
+            : 'Creates the tenant and a shop admin user you can sign in with.'}
+        </p>
+        <form onSubmit={saveShop} className="grid-form">
           <label className="field">
             <span>Shop name</span>
             <input
@@ -151,28 +188,52 @@ export default function AdminHome() {
               required
             />
           </label>
-          <label className="field">
+          <label className="field" style={{ opacity: editId ? 0.5 : 1 }}>
             <span>Owner email</span>
             <input
               type="email"
               value={form.ownerEmail}
-              onChange={(e) => setForm((f) => ({ ...f, ownerEmail: e.target.value }))}
+              onChange={(e) => !editId && setForm((f) => ({ ...f, ownerEmail: e.target.value }))}
               required
+              disabled={!!editId}
             />
           </label>
-          <label className="field">
+          <label className="field" style={{ opacity: editId ? 0.5 : 1 }}>
             <span>Owner password</span>
             <input
               type="password"
               value={form.ownerPassword}
-              onChange={(e) => setForm((f) => ({ ...f, ownerPassword: e.target.value }))}
-              required
+              onChange={(e) => !editId && setForm((f) => ({ ...f, ownerPassword: e.target.value }))}
+              required={!editId}
+              disabled={!!editId}
+              placeholder={editId ? '(Stored)' : ''}
             />
           </label>
-          <div className="span-2">
+          <label className="field">
+            <span>MoMo name</span>
+            <input
+              placeholder="e.g. Olitech Hub"
+              value={form.momoName}
+              onChange={(e) => setForm((f) => ({ ...f, momoName: e.target.value }))}
+            />
+          </label>
+          <label className="field">
+            <span>MoMo number / Code</span>
+            <input
+              placeholder="e.g. 0788..."
+              value={form.momoNumber}
+              onChange={(e) => setForm((f) => ({ ...f, momoNumber: e.target.value }))}
+            />
+          </label>
+          <div className="span-2" style={{ display: 'flex', gap: '10px' }}>
             <button className="btn primary xl" type="submit" disabled={busy}>
-              Create shop
+              {editId ? 'Update shop' : 'Create shop'}
             </button>
+            {editId && (
+              <button className="btn ghost xl" type="button" onClick={cancelEdit}>
+                Cancel
+              </button>
+            )}
           </div>
         </form>
       </section>
@@ -184,6 +245,7 @@ export default function AdminHome() {
           <div className="row head">
             <div>Name</div>
             <div>Owner email</div>
+            <div>MoMo details</div>
             <div>Status</div>
             <div></div>
           </div>
@@ -191,8 +253,21 @@ export default function AdminHome() {
             <div key={t.id} className="row">
               <div>{t.name}</div>
               <div>{t.ownerEmail}</div>
+              <div style={{ fontSize: '12px' }}>
+                {t.momoName || t.momoNumber ? (
+                  <>
+                    <div style={{ fontWeight: 'bold' }}>{t.momoName || '—'}</div>
+                    <div>{t.momoNumber || '—'}</div>
+                  </>
+                ) : (
+                  <span className="muted">Not set</span>
+                )}
+              </div>
               <div>{t.status}</div>
               <div className="row-actions">
+                <button type="button" className="btn primary" onClick={() => enterEditMode(t)}>
+                  Edit
+                </button>
                 {t.status === 'ACTIVE' ? (
                   <button type="button" className="btn warn" onClick={() => setTenantStatus(t.id, 'SUSPENDED')}>
                     Suspend
