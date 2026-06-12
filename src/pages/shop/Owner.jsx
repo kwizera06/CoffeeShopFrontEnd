@@ -46,6 +46,7 @@ import {
 import { IoCafeOutline } from 'react-icons/io5'
 import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/md'
 
+import socket, { connectSocket, disconnectSocket } from '../../socket'
 import './OwnerModern.css'
 import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole, staffRoleLabel, staffRoleStyle } from '../../utils/roles.js'
 
@@ -59,6 +60,8 @@ export default function Owner() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [eodProductPage, setEodProductPage] = useState(1)
+  const [isExporting, setIsExporting] = useState(false)
+  const [dateRange, setDateRange] = useState('daily')
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
@@ -443,6 +446,108 @@ export default function Owner() {
     }
   }, [allowed, reloadCore, reloadOverview])
 
+  const reloadEOD = useCallback(async () => {
+    if (!allowed || (tab !== 'reports' && tab !== 'overview' && tab !== 'eod')) {
+      return
+    }
+    try {
+      const [d, moon, c, s] = await Promise.all([
+        api(`/api/shop/owner/reports/daily?date=${reportDay}`),
+        api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
+        api(`/api/shop/owner/reports/charts?date=${reportDay}`),
+        api(`/api/shop/shifts?date=${reportDay}`),
+      ])
+      
+      setDailyRows(d)
+      setMonthlyRows(moon)
+      setCharts(c)
+      setShifts(s)
+      
+      // Calculate Category & Method Sales from Daily
+      const catMap = {}
+      const metMap = { Cash: 0, MoMo: 0, POS: 0, Total: 0 }
+      const staffMap = {}
+      const staffOrderSeen = {}
+      const serviceNames = new Set(
+        (staff || [])
+          .filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER')
+          .map(s => s.name),
+      )
+      
+      d.forEach(row => {
+        metMap[row.methodLabel] = (metMap[row.methodLabel] || 0) + Number(row.amount)
+        metMap.Total += Number(row.amount)
+
+        if (row.rawItems) {
+          row.rawItems.forEach(item => {
+            const cat = item.category || 'Uncategorized'
+            catMap[cat] = (catMap[cat] || 0) + (Number(item.price) * (item.qty || 1))
+          })
+        }
+
+        const sName = row.waiterName || 'Unknown'
+        if (serviceNames.size > 0 && !serviceNames.has(sName)) return
+
+        if (!staffMap[sName]) {
+          staffMap[sName] = { name: sName, amount: 0, count: 0, products: {} }
+        }
+        staffMap[sName].amount += Number(row.amount)
+
+        if (!staffOrderSeen[sName]) staffOrderSeen[sName] = new Set()
+        if (row.orderId && !staffOrderSeen[sName].has(row.orderId)) {
+          staffOrderSeen[sName].add(row.orderId)
+          staffMap[sName].count += 1
+          if (row.rawItems) {
+            row.rawItems.forEach(item => {
+              const key = item.name || 'Unknown'
+              const qty = Number(item.qty || 1)
+              const lineAmount = qty * Number(item.price || 0)
+              if (!staffMap[sName].products[key]) {
+                staffMap[sName].products[key] = { name: key, qty: 0, amount: 0 }
+              }
+              staffMap[sName].products[key].qty += qty
+              staffMap[sName].products[key].amount += lineAmount
+            })
+          }
+        }
+      })
+
+      const staffPerformance = Object.values(staffMap)
+        .map(s => ({
+          ...s,
+          products: Object.values(s.products).sort((a, b) => b.amount - a.amount),
+        }))
+        .sort((a, b) => b.amount - a.amount)
+
+      setCategorySales(catMap)
+      setMethodSales(metMap)
+      setTopStaff(staffPerformance)
+    } catch(e) {
+      setError(e.message)
+    }
+  }, [allowed, tab, reportDay, month.year, month.month, staff])
+
+  useEffect(() => {
+    if (!allowed) return
+
+    const tenantId = getSession().tenantId
+    connectSocket(tenantId)
+
+    const handleEodUpdate = (payload) => {
+      console.log('📡 [WebSocket] EOD Update received:', payload)
+      // Refresh both core overview and EOD report data
+      void reloadCore().catch(() => {})
+      void reloadEOD().catch(() => {})
+    }
+
+    socket.on('eodUpdate', handleEodUpdate)
+
+    return () => {
+      socket.off('eodUpdate', handleEodUpdate)
+      disconnectSocket()
+    }
+  }, [allowed, reloadCore, reloadEOD])
+
   useEffect(() => {
     if (!allowed) {
       return
@@ -455,86 +560,8 @@ export default function Owner() {
   }, [allowed, selectedRecipeItem])
 
   useEffect(() => {
-    if (!allowed) {
-      return
-    }
-    if (tab !== 'reports' && tab !== 'overview' && tab !== 'eod') {
-      return
-    }
-      Promise.all([
-        api(`/api/shop/owner/reports/daily?date=${reportDay}`),
-        api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
-        api(`/api/shop/owner/reports/charts?date=${reportDay}`),
-        api(`/api/shop/shifts?date=${reportDay}`),
-      ])
-        .then(([d, moon, c, s]) => {
-          setDailyRows(d)
-          setMonthlyRows(moon)
-          setCharts(c)
-          setShifts(s)
-          
-          // Calculate Category & Method Sales from Daily
-          const catMap = {}
-          const metMap = { Cash: 0, MoMo: 0, POS: 0, Total: 0 }
-          const staffMap = {}
-          const staffOrderSeen = {}
-          const serviceNames = new Set(
-            (staff || [])
-              .filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER')
-              .map(s => s.name),
-          )
-          
-          d.forEach(row => {
-            metMap[row.methodLabel] = (metMap[row.methodLabel] || 0) + Number(row.amount)
-            metMap.Total += Number(row.amount)
-
-            if (row.rawItems) {
-              row.rawItems.forEach(item => {
-                const cat = item.category || 'Uncategorized'
-                catMap[cat] = (catMap[cat] || 0) + (Number(item.price) * (item.qty || 1))
-              })
-            }
-
-            const sName = row.waiterName || 'Unknown'
-            if (serviceNames.size > 0 && !serviceNames.has(sName)) return
-
-            if (!staffMap[sName]) {
-              staffMap[sName] = { name: sName, amount: 0, count: 0, products: {} }
-            }
-            staffMap[sName].amount += Number(row.amount)
-
-            if (!staffOrderSeen[sName]) staffOrderSeen[sName] = new Set()
-            if (row.orderId && !staffOrderSeen[sName].has(row.orderId)) {
-              staffOrderSeen[sName].add(row.orderId)
-              staffMap[sName].count += 1
-              if (row.rawItems) {
-                row.rawItems.forEach(item => {
-                  const key = item.name || 'Unknown'
-                  const qty = Number(item.qty || 1)
-                  const lineAmount = qty * Number(item.price || 0)
-                  if (!staffMap[sName].products[key]) {
-                    staffMap[sName].products[key] = { name: key, qty: 0, amount: 0 }
-                  }
-                  staffMap[sName].products[key].qty += qty
-                  staffMap[sName].products[key].amount += lineAmount
-                })
-              }
-            }
-          })
-
-          const staffPerformance = Object.values(staffMap)
-            .map(s => ({
-              ...s,
-              products: Object.values(s.products).sort((a, b) => b.amount - a.amount),
-            }))
-            .sort((a, b) => b.amount - a.amount)
-
-          setCategorySales(catMap)
-          setMethodSales(metMap)
-          setTopStaff(staffPerformance)
-        })
-        .catch((e) => setError(e.message))
-    }, [allowed, tab, reportDay, month.year, month.month, staff])
+    void reloadEOD()
+  }, [reloadEOD])
 
   // ──────────────────── Drill-Down Openers ────────────────────
   const openDrilldown = async (type) => {
@@ -2607,6 +2634,15 @@ export default function Owner() {
 
       {tab === 'eod' && canAccessTab(role, 'eod') ? (
         (() => {
+          if (!overview || !dailyRows) {
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 20 }}>
+                <div className="loading-spinner"></div>
+                <span>Brewing your report...</span>
+              </div>
+            )
+          }
+
           // Compute EOD aggregates from existing state
           const eodRevenue = overview?.todayRevenue || 0
           const eodCash = overview?.todayCashSales || 0
@@ -2615,6 +2651,9 @@ export default function Owner() {
           const eodProfit = overview?.todayProfit || 0
           const eodOrders = overview?.todayPaidOrdersCount || 0
           const eodCost = eodRevenue - eodProfit
+
+          const activeLoansCount = loans.filter(l => l.status !== 'PAID').length
+          const totalOwed = loans.reduce((acc, l) => acc + (Number(l.amount) - Number(l.amount_paid || 0)), 0)
 
           // Product breakdown from dailyRows
           const productMap = {}
@@ -2670,13 +2709,7 @@ export default function Owner() {
           // Low stock
           const lowStockItems = ingredients.filter(i => i.stock_level < i.min_threshold)
 
-          // Active loans today
-          const activeLoansCount = loans.filter(l => l.status !== 'PAID').length
-          const totalOwed = loans.reduce((acc, l) => acc + (parseFloat(l.amount) - (l.loan_payments || []).reduce((a,p) => a + parseFloat(p.amount), 0)), 0)
-
-  const [isExporting, setIsExporting] = useState(false)
-
-  const generatePDF = async (mode) => {
+          const generatePDF = async (mode) => {
     setIsExporting(true)
     try {
       let data, title, dateRange
@@ -2687,96 +2720,207 @@ export default function Owner() {
       } else if (mode === 'weekly') {
         const weekly = await api(`/api/shop/owner/reports/weekly?date=${reportDay}`)
         data = { ...weekly, bakerySummary } 
-        title = `Weekly Report`
+        title = `Weekly Financial Report`
         dateRange = `${weekly.startDate} to ${weekly.endDate}`
       } else {
         const monthly = await api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`)
         data = { monthly, month }
-        title = `Monthly Report - ${month.month}/${month.year}`
-        dateRange = `${month.month}/${month.year}`
+        title = `Monthly Performance Review`
+        dateRange = `${month.month} / ${month.year}`
       }
 
       const doc = new jsPDF()
       const primaryColor = [29, 53, 87] // #1D3557
+      const accentColor = [33, 150, 243] // #2196F3
       
-      // Header
+      // Helper: Format Currency
+      const f = (val) => `${Number(val || 0).toLocaleString()} RWF`
+
+      // ──────────────────────────────────────────────────────────
+      // PAGE 1: COVER & SUMMARY
+      // ──────────────────────────────────────────────────────────
       doc.setFillColor(...primaryColor)
-      doc.rect(0, 0, 210, 40, 'F')
+      doc.rect(0, 0, 210, 45, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(22)
-      doc.text('OLITECH COFFEE SHOP', 105, 18, { align: 'center' })
+      doc.setFontSize(24)
+      doc.setFont('helvetica', 'bold')
+      doc.text('OLITECH COFFEE SHOP', 105, 20, { align: 'center' })
       doc.setFontSize(14)
-      doc.text(title.toUpperCase(), 105, 30, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.text(title.toUpperCase(), 105, 32, { align: 'center' })
       
-      doc.setTextColor(0, 0, 0)
-      doc.setFontSize(10)
-      doc.text(`Generated on: ${new Date().toLocaleString()}`, 10, 50)
-      doc.text(`Period: ${dateRange}`, 10, 56)
+      doc.setTextColor(100, 100, 100)
+      doc.setFontSize(9)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 10, 52)
+      doc.text(`Period: ${dateRange}`, 10, 57)
+
+      // Summary Metrics
+      let revenue = 0, profit = 0, count = 0, cost = 0
+      if (mode === 'daily') {
+        revenue = overview?.todayRevenue || 0
+        profit = overview?.todayProfit || 0
+        count = overview?.todayPaidOrdersCount || 0
+      } else if (mode === 'weekly') {
+        revenue = data.totalRevenue || 0
+        count = data.orderCount || 0
+        // Profit estimation for weekly
+        data.payments?.forEach(p => {
+          p.items?.forEach(i => {
+            profit += (Number(i.price) - Number(i.menu_items?.buying_price || 0)) * (i.quantity || 1)
+          })
+        })
+      } else if (mode === 'monthly') {
+        data.monthly?.forEach(p => {
+          revenue += Number(p.amount)
+          count++
+          p.rawItems?.forEach(i => {
+            profit += (Number(i.price) - Number(i.buying_price || 0)) * (i.qty || 1)
+          })
+        })
+      }
+      cost = revenue - profit
+
+      autoTable(doc, {
+        startY: 65,
+        head: [['EXECUTIVE SUMMARY', 'VALUE']],
+        body: [
+          ['Total Gross Revenue', f(revenue)],
+          ['Estimated COGS (Cost)', f(cost)],
+          ['Net Profit Margin', f(profit)],
+          ['Total Transaction Count', count],
+          ['Average Order Value', f(count > 0 ? revenue / count : 0)]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: primaryColor, fontSize: 11, halign: 'center' },
+        styles: { fontSize: 10, cellPadding: 5 }
+      })
+
+      // Bakery & Special Sections
+      let lastY = doc.lastAutoTable.finalY + 15
+      
+      if (mode === 'daily' && bakerySummary?.productions?.length > 0) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('BAKERY PRODUCTION SUMMARY', 10, lastY)
+        autoTable(doc, {
+          startY: lastY + 5,
+          head: [['Recipe', 'Yield', 'Cost', 'Est. Profit']],
+          body: bakerySummary.productions.map(p => [
+            p.recipeName,
+            `${p.yield} pcs`,
+            f(p.cost),
+            f(p.profit)
+          ]),
+          headStyles: { fillColor: [233, 30, 99] } // Bakery Pink
+        })
+        lastY = doc.lastAutoTable.finalY + 15
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // PAGE 2: ANALYTICS (Category & Products)
+      // ──────────────────────────────────────────────────────────
+      doc.addPage()
+      doc.setTextColor(...primaryColor)
+      doc.setFontSize(14)
+      doc.text('DEPARTMENTAL ANALYSIS', 10, 20)
+
+      // Aggregating Category Sales
+      const catMap = {}
+      const prodMap = {}
+      
+      const processItems = (items) => {
+        items.forEach(i => {
+          const cat = i.category || i.menu_items?.category || 'General'
+          const name = i.name || i.item_name
+          const qty = Number(i.qty || i.quantity || 1)
+          const rev = Number(i.price) * qty
+          
+          if (!catMap[cat]) catMap[cat] = { rev: 0, qty: 0 }
+          catMap[cat].rev += rev
+          catMap[cat].qty += qty
+
+          if (!prodMap[name]) prodMap[name] = { name, rev: 0, qty: 0, cat }
+          prodMap[name].rev += rev
+          prodMap[name].qty += qty
+        })
+      }
 
       if (mode === 'daily') {
-        // Summary Table
+        dailyRows.forEach(r => processItems(r.rawItems || []))
+      } else if (mode === 'weekly') {
+        data.payments?.forEach(p => processItems(p.items || []))
+      } else if (mode === 'monthly') {
+        data.monthly?.forEach(p => processItems(p.rawItems || []))
+      }
+
+      autoTable(doc, {
+        startY: 25,
+        head: [['Category', 'Units Sold', 'Revenue', '% of Total']],
+        body: Object.entries(catMap).sort((a,b) => b[1].rev - a[1].rev).map(([cat, d]) => [
+          cat,
+          d.qty,
+          f(d.rev),
+          `${Math.round((d.rev / revenue) * 100)}%`
+        ]),
+        headStyles: { fillColor: accentColor }
+      })
+
+      doc.setFontSize(14)
+      doc.text('TOP PERFORMING PRODUCTS', 10, doc.lastAutoTable.finalY + 15)
+      
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 20,
+        head: [['Rank', 'Product Name', 'Category', 'Qty', 'Revenue']],
+        body: Object.values(prodMap).sort((a,b) => b.rev - a.rev).slice(0, 15).map((p, i) => [
+          `#${i+1}`,
+          p.name,
+          p.cat,
+          p.qty,
+          f(p.rev)
+        ]),
+        headStyles: { fillColor: primaryColor }
+      })
+
+      // ──────────────────────────────────────────────────────────
+      // PAGE 3: TRANSACTION LOG (Condensed)
+      // ──────────────────────────────────────────────────────────
+      if (mode === 'daily' || mode === 'weekly') {
+        doc.addPage()
+        doc.setFontSize(14)
+        doc.text('DETAILED TRANSACTION LOG', 10, 20)
+        
+        const logData = mode === 'daily' ? dailyRows : data.payments
         autoTable(doc, {
-          startY: 65,
-          head: [['Metric', 'Value']],
-          body: [
-            ['Total Revenue', `${(overview?.todayRevenue || 0).toLocaleString()} RWF`],
-            ['Cash Sales', `${(overview?.todayCashSales || 0).toLocaleString()} RWF`],
-            ['MoMo Sales', `${(overview?.todayMomoSales || 0).toLocaleString()} RWF`],
-            ['Total Orders', overview?.todayPaidOrdersCount || 0],
-            ['Average Order', `${(overview?.avgOrderValue || 0).toLocaleString()} RWF`],
-            ['Bakery Profit', `${(bakerySummary?.totalProfit || 0).toLocaleString()} RWF`]
-          ],
-          theme: 'striped',
+          startY: 25,
+          head: [['Time/Date', 'Order Ref', 'Method', 'Total']],
+          body: logData.slice(0, 50).map(r => [
+            new Date(r.at || r.paid_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
+            `#${String(r.orderId || r.order_id).slice(-4).toUpperCase()}`,
+            r.methodLabel || r.method,
+            f(r.amount)
+          ]),
+          foot: logData.length > 50 ? [[{ content: `... and ${logData.length - 50} more transactions`, colSpan: 4, styles: { halign: 'center', fontStyle: 'italic' } }]] : [],
           headStyles: { fillColor: primaryColor }
         })
+      }
 
-        // Detailed Sales
-        if (dailyRows?.length > 0) {
-          doc.addPage()
-          doc.setFontSize(14)
-          doc.text('DETAILED SALES LOG', 10, 20)
-          autoTable(doc, {
-            startY: 25,
-            head: [['Time', 'Order #', 'Method', 'Amount']],
-            body: dailyRows.map(r => [
-              new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-              `#${String(r.orderId).slice(0,4)}`,
-              r.methodLabel,
-              `${Number(r.amount).toLocaleString()} RWF`
-            ]),
-            headStyles: { fillColor: primaryColor }
-          })
-        }
-      } else if (mode === 'weekly') {
-          autoTable(doc, {
-            startY: 65,
-            head: [['Date', 'Revenue']],
-            body: data.dailyBreakdown.map(d => [d.date, `${d.revenue.toLocaleString()} RWF`]),
-            foot: [['TOTAL', `${data.totalRevenue.toLocaleString()} RWF`]],
-            headStyles: { fillColor: primaryColor }
-          })
-      } else if (mode === 'monthly') {
-          autoTable(doc, {
-            startY: 65,
-            head: [['Date', 'Order #', 'Amount']],
-            body: data.monthly.map(r => [
-              new Date(r.at).toLocaleDateString(),
-              `#${String(r.orderId).slice(0,4)}`,
-              `${Number(r.amount).toLocaleString()} RWF`
-            ]),
-            headStyles: { fillColor: primaryColor }
-          })
+      // Footer on all pages
+      const pageCount = doc.internal.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.setTextColor(150)
+        doc.text(`Olitech Coffee Shop Management System | Confidential Financial Document | Page ${i} of ${pageCount}`, 105, 285, { align: 'center' })
       }
 
       doc.save(`Olitech_${mode}_Report_${reportDay}.pdf`)
     } catch (err) {
+      console.error(err)
       alert('Failed to generate PDF: ' + err.message)
     } finally {
       setIsExporting(false)
     }
   }
-
-  const [dateRange, setDateRange] = useState('daily')
 
   return (
     <>
