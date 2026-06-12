@@ -2929,8 +2929,8 @@ export default function Owner() {
           <h1>End of Day Report</h1>
           <p>Shift-based summary for shifts opened on {new Date(reportDay).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Kigali' })}</p>
         </div>
-        <div className="am-date-picker" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 4, background: '#F1F5F9', padding: 4, borderRadius: 8 }}>
+        <div className="am-date-picker">
+          <div style={{ display: 'flex', gap: 4, background: '#F8FAFC', padding: 6, borderRadius: 12, border: '1px solid #E2E8F0', overflowX: 'auto' }}>
              {['daily', 'weekly', 'monthly'].map(m => (
                <button 
                 key={m}
@@ -2941,20 +2941,30 @@ export default function Owner() {
                   textTransform: 'capitalize',
                   background: isExporting ? '#E2E8F0' : 'transparent',
                   color: '#475569',
-                  fontWeight: 700
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap'
                 }}
                >
                  {isExporting ? '...' : (m + ' PDF')}
                </button>
              ))}
           </div>
-          <input
-            type="date"
-            className="am-input"
-            style={{ height: 40 }}
-            value={reportDay}
-            onChange={e => setReportDay(e.target.value)}
-          />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type="date"
+              className="am-input"
+              style={{ 
+                height: 48, 
+                paddingLeft: 44,
+                minWidth: 160,
+                fontSize: 14,
+                fontWeight: 600
+              }}
+              value={reportDay}
+              onChange={e => setReportDay(e.target.value)}
+            />
+            <span style={{ position: 'absolute', left: 16, color: '#64748B', pointerEvents: 'none' }}>📅</span>
+          </div>
         </div>
       </header>
 

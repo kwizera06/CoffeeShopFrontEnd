@@ -24,6 +24,15 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 32px;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .am-header {
+    flex-direction: column;
+    align-items: stretch; /* Stretch to allow children to use full width if needed */
+    margin-bottom: 24px;
+  }
 }
 
 .am-title h1 {
@@ -41,20 +50,17 @@
 }
 
 .am-date-picker {
-  background: var(--admin-card-bg);
-  border: 1px solid var(--admin-card-border);
-  border-radius: 12px;
-  padding: 8px 16px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
+  gap: 12px;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
 }
 
-.am-date-picker:hover {
-  border-color: var(--admin-accent);
+@media (max-width: 500px) {
+  .am-date-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* Metrics Grid - 4 on top, 2 on mid */
