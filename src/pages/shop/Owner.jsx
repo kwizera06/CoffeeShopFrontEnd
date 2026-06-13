@@ -123,8 +123,9 @@ export default function Owner() {
     wastage_notes: ''
   })
   const [productionLoading, setProductionLoading] = useState(false)
-  const [bakerySubTab, setBakerySubTab] = useState('PRODUCTION')
+  const [bakerySubTab, setBakerySubTab] = useState('PRODUCTION') // PRODUCTION | PRODUCTS | HISTORY
   const [bakerySummary, setBakerySummary] = useState(null)
+  const [bakeryHistory, setBakeryHistory] = useState([])
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('ALL')
   
   const [actionMenu, setActionMenu] = useState(null)
@@ -226,6 +227,17 @@ export default function Owner() {
     try {
       await api(`/api/shop/owner/inventory/${id}`, { method: 'DELETE' })
       setActionMenu(null)
+      await reloadCore()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function deleteProduction(id) {
+    if (!window.confirm('Revert this production run? This will restore ingredients and remove produced items from stock.')) return;
+    setError('')
+    try {
+      await api(`/api/shop/owner/production/${id}`, { method: 'DELETE' })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -352,13 +364,14 @@ export default function Owner() {
   }, [role, tab, allowed, setSearchParams])
 
   const reloadCore = useCallback(async () => {
-    const [o, m, s, i, l, b] = await Promise.all([
+    const [o, m, s, i, l, b, bh] = await Promise.all([
       api(`/api/shop/owner/overview?date=${reportDay}`),
       api('/api/shop/menu'),
       api('/api/shop/staff'),
       api('/api/shop/owner/inventory'),
       api('/api/shop/loans'),
       api(`/api/shop/owner/reports/bakery?date=${reportDay}`),
+      api('/api/shop/owner/production'),
     ])
     setOverview(o)
     setMenu(m)
@@ -366,6 +379,7 @@ export default function Owner() {
     setIngredients(i)
     setLoans(l || [])
     setBakerySummary(b)
+    setBakeryHistory(bh || [])
   }, [reportDay])
 
   const reloadOverview = useCallback(async () => {
@@ -1536,13 +1550,14 @@ export default function Owner() {
 
           <div className="stack" style={{ gap: 40 }}>
             {Object.entries(
-              menu.reduce((acc, m) => {
+              menu.filter(m => !m.is_bakery).reduce((acc, m) => {
                 const cat = m.category || 'Uncategorized';
                 if (!acc[cat]) acc[cat] = [];
                 acc[cat].push(m);
                 return acc;
               }, {})
             )
+            .filter(([cat]) => !['Bakery', 'Bakery & Desserts'].includes(cat) && !cat.toLowerCase().includes('bakery'))
             .filter(([cat]) => cat.toLowerCase().includes(menuSearch.toLowerCase()) || menuSearch === '')
             .map(([cat, items]) => (
               <div key={cat} className="am-category-group am-animate">
@@ -2051,13 +2066,17 @@ export default function Owner() {
             {/* Form Column */}
             {canEdit && (
             <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
-               <h3 className="am-card-title">+ Add Ingredient</h3>
+             <h3 className="am-card-title">{ingForm.id ? '✏️ Edit Ingredient' : '+ Add Ingredient'}</h3>
                <form 
                  onSubmit={async (e) => {
                    e.preventDefault();
                    try {
-                     await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
-                     setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 });
+                     if (ingForm.id) {
+                       await api(`/api/shop/owner/inventory/${ingForm.id}`, { method: 'PUT', body: JSON.stringify(ingForm) });
+                     } else {
+                       await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
+                     }
+                     setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' });
                      await reloadCore();
                    } catch(err) { setError(err.message) }
                  }} 
@@ -2103,7 +2122,7 @@ export default function Owner() {
                     <button 
                       className="btn outline xl" 
                       type="button" 
-                      onClick={() => setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0 })}
+                      onClick={() => setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })}
                       style={{ borderRadius: 12 }}
                     >
                       Clear
@@ -2144,65 +2163,33 @@ export default function Owner() {
                {ingredients.filter(i => i.stock_level < i.min_threshold).length > 0 && (
                  <div className="am-category-sales-card">
                     <h3 className="am-card-title" style={{ color: '#FF5252 !important', fontSize: '14px' }}>CRITICAL & LOW STOCK</h3>
-                    <table className="am-modern-table">
-                       <thead>
-                          <tr>
-                             <th>INGREDIENT</th>
-                             <th>CURRENT STOCK</th>
-                             <th>MIN</th>
-                             <th>PRICE</th>
-                             <th>STATUS</th>
-                             <th style={{ textAlign: 'right' }}></th>
-                          </tr>
-                       </thead>
-                       <tbody>
-                          {ingredients
-                            .filter(i => (inventoryCategoryFilter === 'ALL' || i.category === inventoryCategoryFilter) && i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
-                            .slice((criticalPage - 1) * 6, criticalPage * 6)
-                            .map(ing => (
-                              <tr key={ing.id} style={{ userSelect: 'none', WebkitUserSelect: 'none', cursor: 'pointer' }} onPointerDown={() => handlePointerDown(ing)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onContextMenu={e => e.preventDefault()}>
-                                <td>
-                                  <div style={{ fontWeight: 600 }}>{ing.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
-                                </td>
-                                <td>
-                                   <div style={{ color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800', fontWeight: 700 }}>
-                                      {ing.stock_level} {ing.unit}
-                                   </div>
-                                   <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
-                                      <div 
-                                        className="am-prod-bar-fill" 
-                                        style={{ 
-                                          width: `${Math.max(0, Math.min(100, (ing.stock_level / Math.max(1, ing.min_threshold)) * 100))}%`,
-                                          backgroundColor: ing.stock_level <= 0 ? '#FF5252' : '#FF9800'
-                                        }}
-                                      ></div>
-                                   </div>
-                                </td>
-                                <td style={{ color: 'var(--admin-text-muted)' }}>{ing.min_threshold}</td>
-                                <td>{Number(ing.buying_price).toLocaleString()}</td>
-                                <td>
-                                   <span style={{ 
-                                     padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                                     background: ing.stock_level <= 0 ? 'rgba(255,82,82,0.1)' : 'rgba(255,152,0,0.1)',
-                                     color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800'
-                                   }}>
-                                     {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
-                                   </span>
-                                </td>
-                                <td style={{ textAlign: 'right' }}>
-                                  <button onClick={(e) => { e.stopPropagation(); setActionMenu(ing); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
-                                </td>
-                              </tr>
-                            ))}
-                       </tbody>
-                    </table>
-                    <div className="row-between" style={{ marginTop: 16 }}>
-                       <span className="muted text-sm">Page {criticalPage}</span>
-                       <div style={{ display: 'flex', gap: 8 }}>
-                          <button className="btn outline tiny" disabled={criticalPage === 1} onClick={() => setCriticalPage(p => p - 1)}>Prev</button>
-                          <button className="btn outline tiny" disabled={criticalPage * 6 >= ingredients.filter(i => (inventoryCategoryFilter === 'ALL' || i.category === inventoryCategoryFilter) && i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setCriticalPage(p => p + 1)}>Next</button>
-                       </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                      {ingredients
+                        .filter(i => (inventoryCategoryFilter === 'ALL' || i.category === inventoryCategoryFilter) && i.stock_level < i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                        .map(ing => (
+                          <div key={ing.id} className="am-metric-card" style={{ border: `1px solid ${ing.stock_level <= 0 ? '#FF5252' : '#FF9800'}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                              <div>
+                                <div style={{ fontWeight: 700 }}>{ing.name}</div>
+                                <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
+                              </div>
+                              <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800, background: ing.stock_level <= 0 ? 'rgba(255,82,82,0.1)' : 'rgba(255,152,0,0.1)', color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>
+                                {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
+                              </span>
+                            </div>
+                            <div style={{ margin: '12px 0' }}>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>{ing.stock_level}</div>
+                              <div className="am-prod-bar-bg" style={{ width: '100%', marginTop: 4 }}>
+                                <div className="am-prod-bar-fill" style={{ width: `${Math.max(0, Math.min(100, (ing.stock_level / Math.max(1, ing.min_threshold)) * 100))}%`, backgroundColor: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}></div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              {canEdit && <button className="btn tiny primary" onClick={() => { setIngForm(ing); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️</button>}
+                              {canEdit && <button className="btn tiny" style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }} onClick={() => deleteIngredient(ing.id)}>🗑️</button>}
+                              <button onClick={() => setActionMenu(ing)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                  </div>
                )}
@@ -2210,59 +2197,31 @@ export default function Owner() {
                {/* Healthy Stock Group */}
                <div className="am-category-sales-card">
                   <h3 className="am-card-title" style={{ fontSize: '14px' }}>HEALTHY STOCK</h3>
-                  <table className="am-modern-table">
-                     <thead>
-                        <tr>
-                           <th>INGREDIENT</th>
-                           <th>CURRENT STOCK</th>
-                           <th>MIN</th>
-                           <th>PRICE</th>
-                           <th>STATUS</th>
-                           <th style={{ textAlign: 'right' }}></th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {ingredients
-                          .filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
-                          .slice((healthyPage - 1) * 12, healthyPage * 12)
-                          .map(ing => (
-                            <tr key={ing.id} style={{ userSelect: 'none', WebkitUserSelect: 'none', cursor: 'pointer' }} onPointerDown={() => handlePointerDown(ing)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp} onContextMenu={e => e.preventDefault()}>
-                              <td>
-                                <div style={{ fontWeight: 600 }}>{ing.name}</div>
-                                <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
-                              </td>
-                              <td>
-                                 <div style={{ fontWeight: 700 }}>{ing.stock_level} {ing.unit}</div>
-                                 <div className="am-prod-bar-bg" style={{ width: 60, marginTop: 4 }}>
-                                    <div 
-                                      className="am-prod-bar-fill" 
-                                      style={{ width: '100%', backgroundColor: '#1D3557' }}
-                                    ></div>
-                                 </div>
-                              </td>
-                              <td style={{ color: 'var(--admin-text-muted)' }}>{ing.min_threshold}</td>
-                              <td>{Number(ing.buying_price).toLocaleString()}</td>
-                              <td>
-                                 <span style={{ 
-                                   padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                                   background: 'rgba(76,175,80,0.1)', color: '#1D3557'
-                                 }}>
-                                   HEALTHY
-                                 </span>
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button onClick={(e) => { e.stopPropagation(); setActionMenu(ing); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
-                              </td>
-                            </tr>
-                          ))}
-                     </tbody>
-                  </table>
-                  <div className="row-between" style={{ marginTop: 16 }}>
-                     <span className="muted text-sm">Page {healthyPage}</span>
-                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn outline tiny" disabled={healthyPage === 1} onClick={() => setHealthyPage(p => p - 1)}>Prev</button>
-                        <button className="btn outline tiny" disabled={healthyPage * 12 >= ingredients.filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase())).length} onClick={() => setHealthyPage(p => p + 1)}>Next</button>
-                     </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                    {ingredients
+                      .filter(i => i.stock_level >= i.min_threshold && i.name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                      .map(ing => (
+                        <div key={ing.id} className="am-metric-card">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{ing.name}</div>
+                              <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{ing.unit}</div>
+                            </div>
+                            <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800, background: 'rgba(76,175,80,0.1)', color: '#1D3557' }}>HEALTHY</span>
+                          </div>
+                          <div style={{ margin: '12px 0' }}>
+                            <div style={{ fontSize: 20, fontWeight: 800 }}>{ing.stock_level}</div>
+                            <div className="am-prod-bar-bg" style={{ width: '100%', marginTop: 4 }}>
+                              <div className="am-prod-bar-fill" style={{ width: '100%', backgroundColor: '#1D3557' }}></div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {canEdit && <button className="btn tiny primary" onClick={() => { setIngForm(ing); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>✏️</button>}
+                            {canEdit && <button className="btn tiny" style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }} onClick={() => deleteIngredient(ing.id)}>🗑️</button>}
+                            <button onClick={() => setActionMenu(ing)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9CA3AF', padding: '2px 6px' }}>⋮</button>
+                          </div>
+                        </div>
+                      ))}
                   </div>
                </div>
             </div>
@@ -2400,84 +2359,119 @@ export default function Owner() {
             ))}
           </div>
 
-          <div className="am-category-sales-card">
-            <table className="am-modern-table">
-              <thead>
-                <tr>
-                  <th>ITEM</th>
-                  <th>TYPE</th>
-                  <th>CATEGORY</th>
-                  <th>REMAINING</th>
-                  <th>MIN</th>
-                  <th>STATUS</th>
-                  <th style={{ textAlign: 'right' }}>HISTORY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStockItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#6B7280' }}>
-                      {stockFilter === 'ALL' ? 'No stock items found.' : `No ${stockFilter.toLowerCase()} stock items.`}
-                    </td>
-                  </tr>
-                ) : filteredStockItems.map(item => {
-                  const status = getItemStockStatus(item)
-                  return (
-                    <tr
-                      key={`${item.itemType}-${item.id}`}
-                      style={{ cursor: 'pointer' }}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {filteredStockItems.length === 0 ? (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#6B7280', background: 'var(--admin-card-bg)', borderRadius: 16, border: '1px solid var(--admin-border)' }}>
+                {stockFilter === 'ALL' ? 'No stock items found.' : `No ${stockFilter.toLowerCase()} stock items.`}
+              </div>
+            ) : filteredStockItems.map(item => {
+              const status = getItemStockStatus(item)
+              const isIng = item.itemType === 'INGREDIENT'
+              const ing = isIng ? ingredients.find(i => i.id === item.id) : null
+              const menuItem = !isIng ? menu.find(m => m.id === item.id) : null
+              return (
+                <div
+                  key={`${item.itemType}-${item.id}`}
+                  style={{
+                    background: 'var(--admin-card-bg)',
+                    borderRadius: 14,
+                    border: `1.5px solid ${ status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : 'var(--admin-border)'}`,
+                    padding: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}
+                >
+                  {/* Header row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--admin-text)' }}>{item.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{item.category} · {item.unit}</div>
+                    </div>
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800,
+                      background: status === 'CRITICAL' ? 'rgba(255,82,82,0.1)' : status === 'LOW' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)',
+                      color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557',
+                    }}>{status}</span>
+                  </div>
+
+                  {/* Stock bar */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                      <span style={{ color: 'var(--admin-text-muted)' }}>Stock</span>
+                      <span style={{ fontWeight: 700, color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557' }}>
+                        {item.stock} {item.unit}
+                      </span>
+                    </div>
+                    <div style={{ background: '#E5E7EB', borderRadius: 4, height: 6 }}>
+                      <div style={{
+                        height: 6, borderRadius: 4,
+                        width: `${Math.max(4, Math.min(100, item.minThreshold > 0 ? (item.stock / item.minThreshold) * 60 : Math.min(100, item.stock * 2)))}%`,
+                        background: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#2E7D32',
+                        transition: 'width 0.3s'
+                      }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--admin-text-muted)', marginTop: 4 }}>Min: {item.minThreshold} {item.unit}</div>
+                  </div>
+
+                  {/* Type badge */}
+                  <div>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                      background: isIng ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)',
+                      color: isIng ? '#2E7D32' : '#2196F3',
+                    }}>{isIng ? 'Ingredient' : 'Product'}</span>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn outline tiny"
+                      style={{ flex: 1, minWidth: 70 }}
                       onClick={() => openStockItemHistory(item)}
-                    >
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{item.name}</div>
-                        <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{item.unit}</div>
-                      </td>
-                      <td>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                          background: item.itemType === 'MENU_ITEM' ? 'rgba(33,150,243,0.1)' : 'rgba(76,175,80,0.1)',
-                          color: item.itemType === 'MENU_ITEM' ? '#2196F3' : '#2E7D32',
-                        }}>
-                          {item.itemType === 'MENU_ITEM' ? 'Product' : 'Ingredient'}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--admin-text-muted)', fontSize: 13 }}>{item.category}</td>
-                      <td>
-                        <div style={{
-                          fontWeight: 700,
-                          color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557',
-                        }}>
-                          {item.stock} {item.unit}
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--admin-text-muted)' }}>{item.minThreshold}</td>
-                      <td>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800,
-                          background: status === 'CRITICAL' ? 'rgba(255,82,82,0.1)' : status === 'LOW' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)',
-                          color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557',
-                        }}>
-                          {status}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="btn outline tiny"
-                          onClick={(e) => { e.stopPropagation(); openStockItemHistory(item) }}
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <p style={{ margin: '16px 0 0', fontSize: 12, color: '#6B7280' }}>
-              Click any row to see every stock movement from the beginning (oldest first).
-            </p>
+                    >📜 History</button>
+
+                    {canEdit && isIng && ing && (
+                      <button
+                        type="button"
+                        className="btn tiny primary"
+                        style={{ flex: 1, minWidth: 70 }}
+                        onClick={() => { setIngForm(ing); setTab('inventory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      >✏️ Edit</button>
+                    )}
+                    {canEdit && !isIng && menuItem && (
+                      <button
+                        type="button"
+                        className="btn tiny primary"
+                        style={{ flex: 1, minWidth: 70 }}
+                        onClick={() => { editMenu(menuItem); setShowMenuForm(true); setTab('menu'); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                      >✏️ Edit</button>
+                    )}
+                    {(ownerAccess || isManagerRole(role)) && isIng && (
+                      <button
+                        type="button"
+                        className="btn tiny"
+                        style={{ flex: 1, minWidth: 70, background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }}
+                        onClick={() => deleteIngredient(item.id)}
+                      >🗑️ Delete</button>
+                    )}
+                    {(ownerAccess || isManagerRole(role)) && !isIng && (
+                      <button
+                        type="button"
+                        className="btn tiny"
+                        style={{ flex: 1, minWidth: 70, background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }}
+                        onClick={() => deleteProduct(item.id)}
+                      >🗑️ Delete</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
+          <p style={{ margin: '16px 0 0', fontSize: 12, color: '#6B7280' }}>
+            Click History on any card to see every stock movement from the beginning.
+          </p>
         </>
       ) : null}
 
@@ -3061,26 +3055,26 @@ export default function Owner() {
                 {/* ── Revenue Summary ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Revenue Summary</h3>
-                  <div className="am-eod-grid-4">
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Total Revenue</span>
-                      <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(paidRevenue).toLocaleString()} RWF</span>
-                      <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>Payments received: {Number(eodRevenue).toLocaleString()} RWF</span>
+                    <div className="am-eod-grid-4">
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Total Revenue</span>
+                        <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(paidRevenue).toLocaleString()} RWF</span>
+                        <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>Payments received: {Number(eodRevenue).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Total Cost</span>
+                        <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(paidCost).toLocaleString()} RWF</span>
+                        {bundledCost > 0 && <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>+ {Number(bundledCost).toLocaleString()} RWF bundled cost</span>}
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Net Profit</span>
+                        <span className="am-eod-stat-value" style={{ color: paidProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(paidProfit).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Profit Margin</span>
+                        <span className="am-eod-stat-value">{profitMargin}%</span>
+                      </div>
                     </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Total Cost</span>
-                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(paidCost).toLocaleString()} RWF</span>
-                      {bundledCost > 0 && <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>+ {Number(bundledCost).toLocaleString()} RWF bundled cost</span>}
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Net Profit</span>
-                      <span className="am-eod-stat-value" style={{ color: paidProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(paidProfit).toLocaleString()} RWF</span>
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Profit Margin</span>
-                      <span className="am-eod-stat-value">{profitMargin}%</span>
-                    </div>
-                  </div>
                   {eodRevenue !== paidRevenue && (
                     <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, border: '1px solid #FFD54F', fontSize: 12, color: '#F57F17' }}>
                       <strong>Note:</strong> The sum of the menu products you sold is {Number(paidRevenue).toLocaleString()} RWF, but your cashiers physically collected <strong>{Number(eodRevenue).toLocaleString()} RWF</strong> today. The {Number(Math.abs(eodRevenue - paidRevenue)).toLocaleString()} RWF difference represents multi-day loan repayments, overpayments, or custom price adjustments logged by cashiers today.
@@ -3091,46 +3085,46 @@ export default function Owner() {
                 {/* ── Payment Breakdown ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Payment Breakdown</h3>
-                  <div className="am-eod-grid-3">
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Cash</span>
-                      <span className="am-eod-stat-value">{Number(eodCash).toLocaleString()} RWF</span>
-                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodCash / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                    <div className="am-eod-grid-3">
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Cash</span>
+                        <span className="am-eod-stat-value">{Number(eodCash).toLocaleString()} RWF</span>
+                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodCash / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">MoMo</span>
+                        <span className="am-eod-stat-value">{Number(eodMomo).toLocaleString()} RWF</span>
+                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodMomo / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">POS / Card</span>
+                        <span className="am-eod-stat-value">{Number(eodPos).toLocaleString()} RWF</span>
+                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodPos / eodRevenue) * 100).toFixed(0) : 0}%</span>
+                      </div>
                     </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">MoMo</span>
-                      <span className="am-eod-stat-value">{Number(eodMomo).toLocaleString()} RWF</span>
-                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodMomo / eodRevenue) * 100).toFixed(0) : 0}%</span>
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">POS / Card</span>
-                      <span className="am-eod-stat-value">{Number(eodPos).toLocaleString()} RWF</span>
-                      <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodPos / eodRevenue) * 100).toFixed(0) : 0}%</span>
-                    </div>
-                  </div>
                 </section>
 
                 {/* ── Order Stats ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Order Statistics</h3>
-                  <div className="am-eod-grid-4">
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Total Orders</span>
-                      <span className="am-eod-stat-value">{eodOrders}</span>
+                    <div className="am-eod-grid-4">
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Total Orders</span>
+                        <span className="am-eod-stat-value">{eodOrders}</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Items Sold</span>
+                        <span className="am-eod-stat-value">{totalItemsSold}</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Avg Order Value</span>
+                        <span className="am-eod-stat-value">{avgOrderValue.toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Peak Hour</span>
+                        <span className="am-eod-stat-value">{peakHour ? `${peakHour[0]}:00` : 'N/A'}</span>
+                      </div>
                     </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Items Sold</span>
-                      <span className="am-eod-stat-value">{totalItemsSold}</span>
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Avg Order Value</span>
-                      <span className="am-eod-stat-value">{avgOrderValue.toLocaleString()} RWF</span>
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Peak Hour</span>
-                      <span className="am-eod-stat-value">{peakHour ? `${peakHour[0]}:00` : 'N/A'}</span>
-                    </div>
-                  </div>
                 </section>
 
                 {/* ── Category Breakdown (Rich version from Reports) ── */}
@@ -3373,24 +3367,24 @@ export default function Owner() {
                   )}
                 </section>
 
-                {/* ── Outstanding Credits ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Outstanding Credits</h3>
-                  <div className="am-eod-grid-3">
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Active Loans</span>
-                      <span className="am-eod-stat-value">{activeLoansCount}</span>
+                  {/* ── Outstanding Credits ── */}
+                  <section className="am-eod-section">
+                    <h3 className="am-eod-section-title">Outstanding Credits</h3>
+                    <div className="am-eod-grid-3">
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Active Loans</span>
+                        <span className="am-eod-stat-value">{activeLoansCount}</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Total Owed</span>
+                        <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(totalOwed).toLocaleString()} RWF</span>
+                      </div>
+                      <div className="am-eod-stat">
+                        <span className="am-eod-stat-label">Loan Clients</span>
+                        <span className="am-eod-stat-value">{loans.filter(l => l.status !== 'PAID').length}</span>
+                      </div>
                     </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Total Owed</span>
-                      <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(totalOwed).toLocaleString()} RWF</span>
-                    </div>
-                    <div className="am-eod-stat">
-                      <span className="am-eod-stat-label">Loan Clients</span>
-                      <span className="am-eod-stat-value">{loans.filter(l => l.status !== 'PAID').length}</span>
-                    </div>
-                  </div>
-                </section>
+                  </section>
 
                 {/* ── Cash Reconciliation ── */}
                 {shifts.length > 0 && (
@@ -3497,7 +3491,7 @@ export default function Owner() {
                         )
                       })
                     )}
-                  </section>
+                </section>
                 )}
 
                 {/* ── Shifts ── */}
@@ -3551,7 +3545,7 @@ export default function Owner() {
             </div>
             {/* Sub-navigation for Bakery */}
             <div className="am-filter-pills" style={{ margin: 0, background: 'rgba(0,0,0,0.05)', padding: '4px 8px' }}>
-              {['PRODUCTION', 'PRODUCTS'].map(sub => (
+              {['PRODUCTION', 'PRODUCTS', 'HISTORY'].map(sub => (
                 <div 
                   key={sub} 
                   className={`am-pill ${bakerySubTab === sub ? 'active' : ''}`}
@@ -3585,62 +3579,88 @@ export default function Owner() {
               </div>
 
               {/* Add Bakery Product Form */}
-              <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
-                 <h3 className="am-card-title">+ New Multi-Product Recipe</h3>
-                 <p style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>Set your standard recipe and the products it produces (e.g. donuts of different sizes)</p>
-                 <form onSubmit={async (e) => {
+              <div id="bakery-form" className="am-category-sales-card" style={{ height: 'fit-content' }}>
+                 <h3 className="am-card-title">{menuForm.id ? "✏️ Edit Bakery Item" : "+ New Multi-Product Recipe"}</h3>
+                 <p style={{ fontSize: 11, color: '#666', marginBottom: 16 }}>{menuForm.id ? "Update your recipe and variants." : "Set your standard recipe and the products it produces (e.g. donuts of different sizes)"}</p>
+                  <form onSubmit={async (e) => {
                      e.preventDefault();
                      try {
                         const mainItemName = menuForm.name;
-                        // 1. Create the Main Recipe Item
-                        const item = await api('/api/shop/menu', { 
-                          method: 'POST', 
-                          body: JSON.stringify({
-                            ...menuForm, 
-                            price: Number(menuForm.price || 0),
-                            recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
-                            category: 'Bakery', 
-                            is_recipe: true, 
-                            is_bakery: true, 
-                            category_group: mainItemName
-                          }) 
-                        });
-                       
-                        // 2. Create Variants
-                        if (menuForm.variantOutputs && menuForm.variantOutputs.length > 0) {
-                          for (const v of menuForm.variantOutputs) {
-                            await api('/api/shop/menu', {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                name: v.name,
-                                price: Number(v.price || 0),
-                                category: 'Bakery',
-                                category_group: mainItemName,
-                                available: true,
-                                is_bakery: true,
-                                recipe_reference_yield: Number(v.standard_yield || 0)
-                              })
-                            });
-                          }
-                        }
 
-                        // 3. Save Ingredients
-                        if (menuForm.productRecipe && menuForm.productRecipe.length > 0) {
-                          for (const r of menuForm.productRecipe) {
-                            await api('/api/shop/owner/recipes', {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                menu_item_id: item.id,
-                                ingredient_id: r.ingredient_id,
-                                quantity_required: Number(r.quantity_required || 0)
-                              })
-                            });
-                          }
-                        }
+                        if (menuForm.id) {
+                          // ── EDIT MODE: UPDATE existing item ─────────────────
+                          await api(`/api/shop/menu/${menuForm.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                              name: menuForm.name,
+                              price: Number(menuForm.price || 0),
+                              recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+                              category: 'Bakery',
+                              is_recipe: true,
+                              is_bakery: true,
+                              category_group: menuForm.category_group || mainItemName,
+                              available: menuForm.available,
+                              recipe: menuForm.productRecipe || []
+                            })
+                          });
+                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
+                          await reloadCore();
+                          alert(`✅ Recipe "${mainItemName}" updated successfully!`);
 
-                        setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
-                        await reloadCore();
-                        alert(`🌟 Recipe "${mainItemName}" and its variants created!`);
+                        } else {
+                          // ── CREATE MODE: POST new item + variants ────────────
+                          // 1. Create the Main Recipe Item
+                          const item = await api('/api/shop/menu', { 
+                            method: 'POST', 
+                            body: JSON.stringify({
+                              ...menuForm, 
+                              price: Number(menuForm.price || 0),
+                              recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+                              category: 'Bakery', 
+                              is_recipe: true, 
+                              is_bakery: true, 
+                              category_group: mainItemName
+                            }) 
+                          });
+                         
+                          // 2. Create Variants
+                          if (menuForm.variantOutputs && menuForm.variantOutputs.length > 0) {
+                            for (const v of menuForm.variantOutputs) {
+                              await api('/api/shop/menu', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                  name: v.name,
+                                  price: Number(v.price || 0),
+                                  category: 'Bakery',
+                                  category_group: mainItemName,
+                                  available: true,
+                                  is_bakery: true,
+                                  recipe_reference_yield: Number(v.standard_yield || 0)
+                                })
+                              });
+                            }
+                          }
+
+                          // 3. Save Ingredients
+                          if (item?.id && menuForm.productRecipe && menuForm.productRecipe.length > 0) {
+                            for (const r of menuForm.productRecipe) {
+                              if (!r.ingredient_id && !r.component_menu_item_id) continue;
+                              await api('/api/shop/owner/recipes', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                  menu_item_id: item.id,
+                                  ingredient_id: r.ingredient_id,
+                                  component_menu_item_id: r.component_menu_item_id,
+                                  quantity_required: Number(r.quantity_required || 0)
+                                })
+                              });
+                            }
+                          }
+
+                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
+                          await reloadCore();
+                          alert(`🌟 Recipe "${mainItemName}" and its variants created!`);
+                        }
                      } catch(err) { alert(err.message) }
                   }} className="stack" style={{ gap: 16 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -3734,7 +3754,16 @@ export default function Owner() {
                        </div>
                     </div>
 
-                    <button className="btn success xl w-full" type="submit">Create Item & Set Standard</button>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button className="btn success xl" style={{ flex: 1 }} type="submit">{menuForm.id ? "Update Item" : "Create Item & Set Standard"}</button>
+                      {menuForm.id && (
+                        <button 
+                          className="btn ghost xl" 
+                          type="button" 
+                          onClick={() => setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 })}
+                        >Cancel</button>
+                      )}
+                    </div>
                  </form>
               </div>
 
@@ -3786,12 +3815,83 @@ export default function Owner() {
                           <td style={{ textAlign: 'right', fontWeight: 800, color: '#10B981' }}>
                             {stockVal.toLocaleString()}
                           </td>
-                          <td></td>
+                           <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button
+                                className="btn tiny primary"
+                                style={{ padding: '6px 10px' }}
+                                onClick={() => { editMenu(m); document.getElementById('bakery-form')?.scrollIntoView({ behavior: 'smooth' }); }}
+                              >✏️ Edit</button>
+                              {(ownerAccess || isManagerRole(role)) && (
+                                <button
+                                  className="btn tiny"
+                                  style={{ padding: '6px 10px', background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }}
+                                  onClick={() => deleteProduct(m.id)}
+                                >🗑️</button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                        )
                      })}
                    </tbody>
                  </table>
+              </div>
+            </div>
+          )}
+
+          {bakerySubTab === 'HISTORY' && (
+            <div className="am-category-sales-card">
+              <h3 className="am-card-title">Production History</h3>
+              <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>Review and manage past production batches. Reverting a run will restore ingredient stock and remove produced products.</p>
+              
+              <div style={{ overflowX: 'auto' }}>
+                <table className="am-modern-table">
+                  <thead>
+                    <tr>
+                      <th>DATE</th>
+                      <th>PRODUCT(S)</th>
+                      <th>YIELD</th>
+                      <th>COST (RWF)</th>
+                      <th>NOTES</th>
+                      <th style={{ textAlign: 'right' }}>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bakeryHistory.length === 0 ? (
+                      <tr><td colSpan="6" style={{ textAlign: 'center', padding: 40, color: '#94A3B8' }}>No production history found.</td></tr>
+                    ) : (
+                      bakeryHistory.map(run => (
+                        <tr key={run.id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{new Date(run.created_at).toLocaleDateString('en-GB')}</div>
+                            <div style={{ fontSize: 10, color: '#94A3B8' }}>{new Date(run.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{run.menu_items?.name || 'Multi-Product Batch'}</div>
+                            {run.production_outputs?.length > 1 && (
+                              <div style={{ fontSize: 10, color: '#64748B' }}>
+                                {run.production_outputs.map(o => `${o.menu_items?.name} (${o.quantity})`).join(', ')}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{run.actual_yield} units</td>
+                          <td>{Number(run.total_cost || 0).toLocaleString()}</td>
+                          <td style={{ fontSize: 11, maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                             {run.notes || run.wastage_notes || '-'}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              className="btn tiny"
+                              style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5', padding: '6px 12px' }}
+                              onClick={() => deleteProduction(run.id)}
+                            >🗑️ Revert</button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
