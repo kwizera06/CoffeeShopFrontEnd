@@ -117,7 +117,13 @@ export default function Billing() {
         method: 'POST',
         body: JSON.stringify({ method, clientName: method === 'LOAN' ? clientName : undefined }),
       })
-      printReceipt({ shopName: context?.name, order: paid, paymentMethod: method })
+      printReceipt({ 
+        shopName: context?.name, 
+        order: paid, 
+        paymentMethod: method,
+        momoName: context?.momoName,
+        momoNumber: context?.momoNumber
+      })
       setSelected(null)
       setClientName('')
       setPaymentMethod(null)
@@ -134,7 +140,9 @@ export default function Billing() {
     printReceipt({ 
       shopName: context?.name, 
       order: selected, 
-      paymentMethod: 'UNPAID (PRO-FORMA)' 
+      paymentMethod: 'UNPAID (PRO-FORMA)',
+      momoName: context?.momoName,
+      momoNumber: context?.momoNumber
     })
   }
 

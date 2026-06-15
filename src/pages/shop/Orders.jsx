@@ -194,7 +194,9 @@ export default function Orders() {
         total: items.reduce((acc, i) => acc + (i.quantity * i.price), 0),
         waiterName: staff.find(s => s.id === selectedWaiter)?.name || 'Staff'
       },
-      paymentMethod: 'CASH' // Preview default
+      paymentMethod: 'CASH', // Preview default
+      momoName: context?.momoName,
+      momoNumber: context?.momoNumber
     })
   }
 

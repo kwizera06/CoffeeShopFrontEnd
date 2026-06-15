@@ -937,6 +937,7 @@ export default function CashierDashboard() {
                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Cash (RWF):</span>
                            <input 
                               type="number" 
+                              inputMode="decimal"
                               placeholder="0" 
                               value={splitAmounts[o.id]?.CASH || ''} 
                               onChange={e => handleSplitAmountChange(o.id, 'CASH', e.target.value)}
@@ -948,6 +949,7 @@ export default function CashierDashboard() {
                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>MoMo (RWF):</span>
                            <input 
                               type="number" 
+                              inputMode="decimal"
                               placeholder="0" 
                               value={splitAmounts[o.id]?.MOBILE_MONEY || ''} 
                               onChange={e => handleSplitAmountChange(o.id, 'MOBILE_MONEY', e.target.value)}
@@ -959,6 +961,7 @@ export default function CashierDashboard() {
                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Card/POS:</span>
                            <input 
                               type="number" 
+                              inputMode="decimal"
                               placeholder="0" 
                               value={splitAmounts[o.id]?.POS || ''} 
                               onChange={e => handleSplitAmountChange(o.id, 'POS', e.target.value)}
@@ -970,6 +973,7 @@ export default function CashierDashboard() {
                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Loan (RWF):</span>
                            <input 
                               type="number" 
+                              inputMode="decimal"
                               placeholder="0" 
                               value={splitAmounts[o.id]?.LOAN || ''} 
                               onChange={e => handleSplitAmountChange(o.id, 'LOAN', e.target.value)}
@@ -1021,7 +1025,13 @@ export default function CashierDashboard() {
                             itemName: l.itemName || l.name,
                           })),
                         }
-                        printReceipt({ shopName, order: previewOrder, paymentMethod: printPayMethod });
+                        printReceipt({ 
+                          shopName, 
+                          order: previewOrder, 
+                          paymentMethod: printPayMethod,
+                          momoName: context?.momoName,
+                          momoNumber: context?.momoNumber
+                        });
                      }}>
                         Print Preview
                      </button>

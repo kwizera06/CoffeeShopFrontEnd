@@ -278,13 +278,13 @@
 }
 
 /* Remove default number spinners */
-.cashier-table-val::-webkit-inner-spin-button,
-.cashier-table-val::-webkit-outer-spin-button {
+.cashier-dashboard input[type=number]::-webkit-inner-spin-button,
+.cashier-dashboard input[type=number]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   appearance: none;
   margin: 0;
 }
-.cashier-table-val {
+.cashier-dashboard input[type=number] {
   -moz-appearance: textfield;
   appearance: textfield;
 }

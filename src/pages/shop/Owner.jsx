@@ -625,11 +625,15 @@ export default function Owner() {
   function aggregateItems(rows) {
     const map = {}
     rows.forEach(row => {
+      // Calculate attribution ratio for split payments
+      const orderTotal = row.orderTotal || (row.rawItems || []).reduce((acc, it) => acc + (Number(it.price) * (it.qty || 1)), 0);
+      const ratio = orderTotal > 0 ? (Number(row.amount) / orderTotal) : 1;
+
       (row.rawItems || []).forEach(item => {
         const key = item.name || item.item_name || 'Unknown'
         if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, category: item.category || 'Uncategorized' }
-        map[key].qty += item.qty || 1
-        map[key].revenue += (Number(item.price) || 0) * (item.qty || 1)
+        map[key].qty += (item.qty || 1) * ratio
+        map[key].revenue += (Number(item.price) || 0) * (item.qty || 1) * ratio
       })
     })
     return Object.values(map).sort((a, b) => b.revenue - a.revenue)
@@ -639,10 +643,13 @@ export default function Owner() {
   function aggregateItemsWithProfit(rows) {
     const map = {}
     rows.forEach(row => {
+      const orderTotal = row.orderTotal || (row.rawItems || []).reduce((acc, it) => acc + (Number(it.price) * (it.qty || 1)), 0);
+      const ratio = orderTotal > 0 ? (Number(row.amount) / orderTotal) : 1;
+
       (row.rawItems || []).forEach(item => {
         const key = item.name || item.item_name || 'Unknown'
         if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, cost: 0, category: item.category || 'Uncategorized' }
-        const qty = item.qty || 1
+        const qty = (item.qty || 1) * ratio
         map[key].qty += qty
         map[key].revenue += (Number(item.price) || 0) * qty
         map[key].cost += (Number(item.buying_price) || 0) * qty
