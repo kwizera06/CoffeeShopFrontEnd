@@ -477,6 +477,16 @@ export default function CashierDashboard() {
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
+  async function handleRevertToPending(id) {
+    if (!window.confirm('Revert this order back to the kitchen queue?')) return;
+    setBusy(true)
+    try {
+      await api(`/api/shop/orders/${id}/revert-pending`, { method: 'POST' })
+      await loadBilling()
+      setTab('pending')
+    } catch(e) { alert(e.message) }
+    finally { setBusy(false) }
+  }
   async function cancelOrderRequest(id) {
     if(!window.confirm('Cancel this order?')) return;
     try {
@@ -1035,10 +1045,19 @@ export default function CashierDashboard() {
                      }}>
                         Print Preview
                      </button>
-                     <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
-                        Pay & Print
+                      <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
+                         Pay & Print
+                      </button>
+                   </div>
+                   {role === 'SHOP_ADMIN' && (
+                     <button 
+                       className="cashier-btn-close-shift" 
+                       style={{ width: '100%', marginTop: 8, padding: 8, fontSize: 12, border: '1px dashed #DC2626', color: '#DC2626', background: 'rgba(220,38,38,0.05)' }} 
+                       onClick={() => handleRevertToPending(o.id)}
+                     >
+                       ↩️ Revert to Pending (Owner Only)
                      </button>
-                  </div>
+                   )}
                 </div>
               ))}
             </div>

@@ -78,13 +78,23 @@ export default function Billing() {
     }
   }, [allowed, nav, load])
 
-  async function markReady(orderId) {
-    setError('')
+  async function markReady(id) {
+    setBusy(true)
     try {
-      await api(`/api/shop/orders/${orderId}/mark-ready`, { method: 'POST' })
-    } catch (e) {
-      setError(e.message)
-    }
+      await api(`/api/shop/orders/${id}/mark-ready`, { method: 'POST' })
+      load()
+    } catch (e) { alert(e.message) }
+    finally { setBusy(false) }
+  }
+
+  async function handleRevertToPending(id) {
+    if (!window.confirm('Revert this order back to the kitchen queue?')) return;
+    setBusy(true)
+    try {
+      await api(`/api/shop/orders/${id}/revert-pending`, { method: 'POST' })
+      load()
+    } catch (e) { alert(e.message) }
+    finally { setBusy(false) }
   }
 
   async function cancelOrderRequest(orderId) {
@@ -298,6 +308,15 @@ export default function Billing() {
                     >
                       <HiOutlinePrinter /> Print Receipt
                     </button>
+                    {role === 'SHOP_ADMIN' && (
+                      <button
+                        type="button"
+                        onClick={() => handleRevertToPending(selected.id)}
+                        style={{ width: '100%', background: 'transparent', border: '1px dashed #DC2626', color: '#DC2626', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                      >
+                        ↩️ Revert to Pending (Owner Only)
+                      </button>
+                    )}
                   </>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
