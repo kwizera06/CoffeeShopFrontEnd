@@ -119,7 +119,7 @@ export default function AdminHome() {
     }
     setError('')
     try {
-      await api(`/api/admin/tenants/${id}/reset-owner-password`, {
+      await api(`/api/admin/tenants/${id}/reset-password`, {
         method: 'POST',
         body: JSON.stringify({ newPassword: pw }),
       })

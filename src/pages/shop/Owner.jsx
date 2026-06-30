@@ -2713,207 +2713,307 @@ export default function Owner() {
           const generatePDF = async (mode) => {
     setIsExporting(true)
     try {
-      let data, title, dateRange
+      // ── 1. DETERMINE PERIOD DATES ──────────────────────────────
+      let title = '', dateRange = '', startStr = '', endStr = ''
       if (mode === 'daily') {
-        data = { dailyRows, overview, bakerySummary, shifts, reportDay }
-        title = `Daily Report - ${reportDay}`
+        title = 'Daily Operations Report'
         dateRange = reportDay
+        startStr = reportDay
+        endStr = reportDay
       } else if (mode === 'weekly') {
         const weekly = await api(`/api/shop/owner/reports/weekly?date=${reportDay}`)
-        data = { ...weekly, bakerySummary } 
-        title = `Weekly Financial Report`
-        dateRange = `${weekly.startDate} to ${weekly.endDate}`
+        title = 'Weekly Operations Report'
+        startStr = weekly.startDate
+        endStr = weekly.endDate
+        dateRange = `${weekly.startDate}  →  ${weekly.endDate}`
       } else {
-        const monthly = await api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`)
-        data = { monthly, month }
-        title = `Monthly Performance Review`
-        dateRange = `${month.month} / ${month.year}`
+        title = 'Monthly Operations Report'
+        const lastDay = new Date(month.year, month.month, 0).getDate()
+        startStr = `${month.year}-${String(month.month).padStart(2, '0')}-01`
+        endStr   = `${month.year}-${String(month.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        dateRange = `${new Date(startStr).toLocaleDateString('en-GB', { month: 'long' })} ${month.year}`
       }
 
+      // ── 2. FETCH SHIFTS FRESH FROM API (always accurate) ────────
+      let shiftsList = []
+      if (mode === 'daily') {
+        const fetched = await api(`/api/shop/shifts?date=${startStr}`)
+        shiftsList = fetched || []
+      } else {
+        const fetched = await api(`/api/shop/shifts/range?start=${startStr}&end=${endStr}`)
+        shiftsList = fetched || []
+      }
+
+      // Sum all shift financials
+      const agg = {
+        initial_cash: 0, initial_momo: 0,
+        total_cash_sales: 0, total_momo_sales: 0, total_pos_sales: 0,
+        actual_cash_on_hand: 0, actual_momo_on_hand: 0,
+        cashout: 0, expenses: 0,
+        total_loan_sales: 0, total_loan_repayments: 0,
+      }
+      shiftsList.forEach(sh => {
+        agg.initial_cash        += parseFloat(sh.initial_cash        || 0)
+        agg.initial_momo        += parseFloat(sh.initial_momo        || 0)
+        agg.total_cash_sales    += parseFloat(sh.total_cash_sales    || 0)
+        agg.total_momo_sales    += parseFloat(sh.total_momo_sales    || 0)
+        agg.total_pos_sales     += parseFloat(sh.total_pos_sales     || 0)
+        agg.actual_cash_on_hand += parseFloat(sh.actual_cash_on_hand || 0)
+        agg.actual_momo_on_hand += parseFloat(sh.actual_momo_on_hand || 0)
+        agg.cashout             += parseFloat(sh.cashout             || 0)
+        agg.expenses            += parseFloat(sh.expenses            || 0)
+        agg.total_loan_sales    += parseFloat(sh.total_loan_sales    || 0)
+        agg.total_loan_repayments += parseFloat(sh.total_loan_repayments || 0)
+      })
+
+      // ── 3. COMPUTE EXPECTED vs ACTUAL ──────────────────────────
+      const expectedCash = agg.initial_cash + agg.total_cash_sales - agg.expenses
+      const diffCash     = agg.actual_cash_on_hand - expectedCash
+      const expectedMomo = agg.initial_momo + agg.total_momo_sales - agg.cashout
+      const diffMomo     = agg.actual_momo_on_hand - expectedMomo
+
+      // ── 4. FETCH LOANS FRESH & FILTER BY PERIOD ────────────────
+      const isInPeriod = (iso) => {
+        if (!iso) return false
+        const d = new Date(iso)
+        return d >= new Date(`${startStr}T00:00:00+02:00`) &&
+               d <= new Date(`${endStr}T23:59:59.999+02:00`)
+      }
+
+      let freshLoans = []
+      try {
+        freshLoans = await api('/api/shop/loans') || []
+      } catch {
+        freshLoans = loans || []
+      }
+
+      const loansIssued  = []
+      const loansRepaid  = []
+      let totalIssued = 0, totalRepaid = 0
+      freshLoans.forEach(loan => {
+        if (isInPeriod(loan.created_at)) {
+          loansIssued.push({ name: loan.client_name, amount: Number(loan.amount), status: loan.status })
+          totalIssued += Number(loan.amount)
+        }
+        ;(loan.loan_payments || []).forEach(p => {
+          if (isInPeriod(p.paid_at)) {
+            loansRepaid.push({ name: loan.client_name, amount: Number(p.amount), method: p.method })
+            totalRepaid += Number(p.amount)
+          }
+        })
+      })
+
+      // ── 5. BUILD PDF ───────────────────────────────────────────
       const doc = new jsPDF()
-      const primaryColor = [29, 53, 87] // #1D3557
-      const accentColor = [33, 150, 243] // #2196F3
-      
-      // Helper: Format Currency
-      const f = (val) => `${Number(val || 0).toLocaleString()} RWF`
+      const f   = (v) => `${Number(v || 0).toLocaleString()} RWF`
+      const BLUE  = [29, 53, 87]
+      const RED   = [220, 38, 38]
+      const GREEN = [22, 163, 74]
 
-      // ──────────────────────────────────────────────────────────
-      // PAGE 1: COVER & SUMMARY
-      // ──────────────────────────────────────────────────────────
-      doc.setFillColor(...primaryColor)
-      doc.rect(0, 0, 210, 45, 'F')
+      // Track vertical position for sequential layout
+      let y = 48
+      const newPageIfNeeded = (needed) => {
+        if (y + needed > 278) { doc.addPage(); y = 18 }
+      }
+
+      // ── HEADER ─────────────────────────────────────────────────
+      doc.setFillColor(...BLUE)
+      doc.rect(0, 0, 210, 36, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(24)
       doc.setFont('helvetica', 'bold')
-      doc.text('OLITECH COFFEE SHOP', 105, 20, { align: 'center' })
-      doc.setFontSize(14)
+      doc.setFontSize(20)
+      doc.text((context?.name || 'OLITECH COFFEE SHOP').toUpperCase(), 105, 14, { align: 'center' })
       doc.setFont('helvetica', 'normal')
-      doc.text(title.toUpperCase(), 105, 32, { align: 'center' })
-      
-      doc.setTextColor(100, 100, 100)
-      doc.setFontSize(9)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 10, 52)
-      doc.text(`Period: ${dateRange}`, 10, 57)
+      doc.setFontSize(14)
+      doc.text(title, 105, 23, { align: 'center' })
+      doc.setFontSize(12)
+      doc.text(`Period: ${dateRange}`, 105, 30, { align: 'center' })
 
-      // Summary Metrics
-      let revenue = 0, profit = 0, count = 0, cost = 0
-      if (mode === 'daily') {
-        revenue = overview?.todayRevenue || 0
-        profit = overview?.todayProfit || 0
-        count = overview?.todayPaidOrdersCount || 0
-      } else if (mode === 'weekly') {
-        revenue = data.totalRevenue || 0
-        count = data.orderCount || 0
-        // Profit estimation for weekly
-        data.payments?.forEach(p => {
-          p.items?.forEach(i => {
-            profit += (Number(i.price) - Number(i.menu_items?.buying_price || 0)) * (i.quantity || 1)
-          })
-        })
-      } else if (mode === 'monthly') {
-        data.monthly?.forEach(p => {
-          revenue += Number(p.amount)
-          count++
-          p.rawItems?.forEach(i => {
-            profit += (Number(i.price) - Number(i.buying_price || 0)) * (i.qty || 1)
-          })
-        })
-      }
-      cost = revenue - profit
+      doc.setTextColor(120)
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}`, 14, 44)
+      doc.text(`Shifts included: ${shiftsList.length}`, 196, 44, { align: 'right' })
+
+      y = 52;
+
+      // ── SECTION 1: MONEY RECONCILIATION ────────────────────────
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(...BLUE)
+      doc.text('1. MONEY RECONCILIATION', 14, y)
+      y += 6
+
+      const reconBody = [
+        [{ content: 'CASH', colSpan: 3, styles: { halign: 'left', fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 13 } }],
+        ['Opening Balance',                 f(agg.initial_cash),          ''],
+        ['Sales Collected',                 f(agg.total_cash_sales),      ''],
+        ['Expenses Paid Out',          `- ${f(agg.expenses)}`,            ''],
+        ['Expected Closing',                f(expectedCash),              'System'],
+        ['Actual Counted',                  f(agg.actual_cash_on_hand),   'Cashier'],
+        ['Variance',                        f(diffCash),                  diffCash === 0 ? '✓ Balanced' : '⚠ MISMATCH'],
+        [{ content: 'MOBILE MONEY (MOMO)', colSpan: 3, styles: { halign: 'left', fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 13 } }],
+        ['Opening Balance',                 f(agg.initial_momo),          ''],
+        ['Sales Received',                  f(agg.total_momo_sales),      ''],
+        ['Transferred to Owner',       `- ${f(agg.cashout)}`,            ''],
+        ['Actual Phone Balance',            f(agg.actual_momo_on_hand),   'Cashier'],
+        [{ content: 'CARD (POS) & LOANS', colSpan: 3, styles: { halign: 'left', fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 13 } }],
+        ['POS / CARD — Total Sales',        f(agg.total_pos_sales),       ''],
+        ['LOANS — Credits Issued',          f(agg.total_loan_sales),      ''],
+        ['LOANS — Repayments Received',     f(agg.total_loan_repayments), ''],
+      ]
 
       autoTable(doc, {
-        startY: 65,
-        head: [['EXECUTIVE SUMMARY', 'VALUE']],
-        body: [
-          ['Total Gross Revenue', f(revenue)],
-          ['Estimated COGS (Cost)', f(cost)],
-          ['Net Profit Margin', f(profit)],
-          ['Total Transaction Count', count],
-          ['Average Order Value', f(count > 0 ? revenue / count : 0)]
-        ],
+        startY: y,
+        head: [['Description', 'Amount (RWF)', 'Note']],
+        body: reconBody,
         theme: 'grid',
-        headStyles: { fillColor: primaryColor, fontSize: 11, halign: 'center' },
-        styles: { fontSize: 10, cellPadding: 5 }
-      })
-
-      // Bakery & Special Sections
-      let lastY = doc.lastAutoTable.finalY + 15
-      
-      if (mode === 'daily' && bakerySummary?.productions?.length > 0) {
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bold')
-        doc.text('BAKERY PRODUCTION SUMMARY', 10, lastY)
-        autoTable(doc, {
-          startY: lastY + 5,
-          head: [['Recipe', 'Yield', 'Cost', 'Est. Profit']],
-          body: bakerySummary.productions.map(p => [
-            p.recipeName,
-            `${p.yield} pcs`,
-            f(p.cost),
-            f(p.profit)
-          ]),
-          headStyles: { fillColor: [233, 30, 99] } // Bakery Pink
-        })
-        lastY = doc.lastAutoTable.finalY + 15
-      }
-
-      // ──────────────────────────────────────────────────────────
-      // PAGE 2: ANALYTICS (Category & Products)
-      // ──────────────────────────────────────────────────────────
-      doc.addPage()
-      doc.setTextColor(...primaryColor)
-      doc.setFontSize(14)
-      doc.text('DEPARTMENTAL ANALYSIS', 10, 20)
-
-      // Aggregating Category Sales
-      const catMap = {}
-      const prodMap = {}
-      
-      const processItems = (items) => {
-        items.forEach(i => {
-          const cat = i.category || i.menu_items?.category || 'General'
-          const name = i.name || i.item_name
-          const qty = Number(i.qty || i.quantity || 1)
-          const rev = Number(i.price) * qty
+        headStyles: { fillColor: BLUE, fontSize: 10, fontStyle: 'bold', textColor: 255 },
+        styles: { fontSize: 10, cellPadding: 4 },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          if (data.section !== 'body') return
+          const label = String(data.row.cells[0]?.raw || '')
           
-          if (!catMap[cat]) catMap[cat] = { rev: 0, qty: 0 }
-          catMap[cat].rev += rev
-          catMap[cat].qty += qty
+          if (data.row.cells.length === 1) return; // Skip subheaders
 
-          if (!prodMap[name]) prodMap[name] = { name, rev: 0, qty: 0, cat }
-          prodMap[name].rev += rev
-          prodMap[name].qty += qty
-        })
-      }
-
-      if (mode === 'daily') {
-        dailyRows.forEach(r => processItems(r.rawItems || []))
-      } else if (mode === 'weekly') {
-        data.payments?.forEach(p => processItems(p.items || []))
-      } else if (mode === 'monthly') {
-        data.monthly?.forEach(p => processItems(p.rawItems || []))
-      }
-
-      autoTable(doc, {
-        startY: 25,
-        head: [['Category', 'Units Sold', 'Revenue', '% of Total']],
-        body: Object.entries(catMap).sort((a,b) => b[1].rev - a[1].rev).map(([cat, d]) => [
-          cat,
-          d.qty,
-          f(d.rev),
-          `${Math.round((d.rev / revenue) * 100)}%`
-        ]),
-        headStyles: { fillColor: accentColor }
+          const isVariance = label.includes('Variance')
+          const isMismatch = (label.includes('Variance') && diffCash !== 0)
+          const isBalanced = (label.includes('Variance') && diffCash === 0)
+          
+          if (isMismatch) {
+            data.cell.styles.textColor = RED
+            data.cell.styles.fontStyle = 'bold'
+            data.cell.styles.fillColor = [255, 240, 240]
+          } else if (isBalanced) {
+            data.cell.styles.textColor = GREEN
+            data.cell.styles.fontStyle = 'bold'
+          } else if (label.includes('Expected') || label.includes('Actual') || label.includes('Phone')) {
+            data.cell.styles.fontStyle = 'bold'
+          }
+        }
       })
+      y = doc.lastAutoTable.finalY + 12
 
+      // ── SECTION 2: ALL CURRENT STOCK ───────────────────────────
+      newPageIfNeeded(40)
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(14)
-      doc.text('TOP PERFORMING PRODUCTS', 10, doc.lastAutoTable.finalY + 15)
-      
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 20,
-        head: [['Rank', 'Product Name', 'Category', 'Qty', 'Revenue']],
-        body: Object.values(prodMap).sort((a,b) => b.rev - a.rev).slice(0, 15).map((p, i) => [
-          `#${i+1}`,
-          p.name,
-          p.cat,
-          p.qty,
-          f(p.rev)
-        ]),
-        headStyles: { fillColor: primaryColor }
+      doc.setTextColor(...BLUE)
+      doc.text('2. CURRENT STOCK LEVELS', 14, y)
+      y += 6
+
+      const stockBody = stockItems.map(item => {
+        const status = getItemStockStatus(item)
+        return [
+          item.name,
+          `${item.stock} ${item.unit || 'pcs'}`,
+          status,
+        ]
       })
 
-      // ──────────────────────────────────────────────────────────
-      // PAGE 3: TRANSACTION LOG (Condensed)
-      // ──────────────────────────────────────────────────────────
-      if (mode === 'daily' || mode === 'weekly') {
-        doc.addPage()
-        doc.setFontSize(14)
-        doc.text('DETAILED TRANSACTION LOG', 10, 20)
-        
-        const logData = mode === 'daily' ? dailyRows : data.payments
+      autoTable(doc, {
+        startY: y,
+        head: [['Name', 'In Stock', 'Status']],
+        body: stockBody,
+        theme: 'grid',
+        headStyles: { fillColor: BLUE, fontSize: 10, fontStyle: 'bold', textColor: 255 },
+        styles: { fontSize: 10, cellPadding: 3 },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          if (data.section !== 'body' || data.column.index !== 2) return
+          const val = String(data.cell.raw || '')
+          if (val === 'CRITICAL') {
+            data.cell.styles.textColor = RED
+            data.cell.styles.fontStyle = 'bold'
+          } else if (val === 'LOW') {
+            data.cell.styles.textColor = [217, 119, 6]
+            data.cell.styles.fontStyle = 'bold'
+          } else if (val === 'HEALTHY') {
+            data.cell.styles.textColor = GREEN
+          }
+        }
+      })
+      y = doc.lastAutoTable.finalY + 12
+
+      // ── SECTION 3: LOANS & CREDITS ─────────────────────────────
+      newPageIfNeeded(40)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(...BLUE)
+      doc.text('3. CREDIT & LOANS ACTIVITY', 14, y)
+      y += 6
+
+      const loanSummaryBody = [
+        ['New Credits Issued (count)',    String(loansIssued.length),  ''],
+        ['Total Amount Issued',           f(totalIssued),              ''],
+        ['Repayments Collected (count)',  String(loansRepaid.length),  ''],
+        ['Total Amount Repaid',           f(totalRepaid),              ''],
+        ['Net Outstanding Change',
+          `${totalIssued - totalRepaid >= 0 ? '+' : ''}${f(totalIssued - totalRepaid)}`,
+          totalIssued - totalRepaid > 0 ? 'Debt Increased' : totalIssued - totalRepaid < 0 ? 'Debt Reduced' : 'No Change'],
+      ]
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Metric', 'Value', 'Note']],
+        body: loanSummaryBody,
+        theme: 'grid',
+        headStyles: { fillColor: BLUE, fontSize: 10, fontStyle: 'bold', textColor: 255 },
+        styles: { fontSize: 10, cellPadding: 4 },
+        margin: { left: 14, right: 14 },
+        didParseCell: (data) => {
+          if (data.section !== 'body') return
+          const label = String(data.row.cells[0]?.raw || '')
+          if (label.includes('Net Outstanding')) {
+            const netVal = totalIssued - totalRepaid
+            data.cell.styles.fontStyle = 'bold'
+            if (netVal > 0) data.cell.styles.textColor = RED
+            else if (netVal < 0) data.cell.styles.textColor = GREEN
+          }
+        }
+      })
+      y = doc.lastAutoTable.finalY + 8
+
+      // Detailed loans issued (if any)
+      if (loansIssued.length > 0) {
+        newPageIfNeeded(30)
+        y += 2
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(12)
+        doc.setTextColor(80)
+        doc.text('Credits Issued This Period:', 14, y)
+        y += 6
         autoTable(doc, {
-          startY: 25,
-          head: [['Time/Date', 'Order Ref', 'Method', 'Total']],
-          body: logData.slice(0, 50).map(r => [
-            new Date(r.at || r.paid_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }),
-            `#${String(r.orderId || r.order_id).slice(-4).toUpperCase()}`,
-            r.methodLabel || r.method,
-            f(r.amount)
-          ]),
-          foot: logData.length > 50 ? [[{ content: `... and ${logData.length - 50} more transactions`, colSpan: 4, styles: { halign: 'center', fontStyle: 'italic' } }]] : [],
-          headStyles: { fillColor: primaryColor }
+          startY: y,
+          head: [['Client Name', 'Amount', 'Status']],
+          body: loansIssued.map(l => [l.name, f(l.amount), l.status]),
+          theme: 'grid',
+          headStyles: { fillColor: [71, 85, 105], fontSize: 10, textColor: 255 },
+          styles: { fontSize: 10, cellPadding: 3 },
+          margin: { left: 14, right: 14 },
         })
+        y = doc.lastAutoTable.finalY + 8
       }
 
-      // Footer on all pages
-      const pageCount = doc.internal.getNumberOfPages()
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i)
-        doc.setFontSize(8)
-        doc.setTextColor(150)
-        doc.text(`Olitech Coffee Shop Management System | Confidential Financial Document | Page ${i} of ${pageCount}`, 105, 285, { align: 'center' })
+      if (loansRepaid.length > 0) {
+        newPageIfNeeded(30)
+        y += 2
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(12)
+        doc.setTextColor(80)
+        doc.text('Repayments Collected This Period:', 14, y)
+        y += 6
+        autoTable(doc, {
+          startY: y,
+          head: [['Client Name', 'Amount Paid', 'Method']],
+          body: loansRepaid.map(r => [r.name, f(r.amount), r.method]),
+          theme: 'grid',
+          headStyles: { fillColor: [71, 85, 105], fontSize: 10, textColor: 255 },
+          styles: { fontSize: 10, cellPadding: 3 },
+          margin: { left: 14, right: 14 },
+        })
+        y = doc.lastAutoTable.finalY + 8
       }
-
       doc.save(`Olitech_${mode}_Report_${reportDay}.pdf`)
     } catch (err) {
       console.error(err)
@@ -2922,7 +3022,6 @@ export default function Owner() {
       setIsExporting(false)
     }
   }
-
   return (
     <>
       <header className="am-header">
@@ -2970,408 +3069,34 @@ export default function Owner() {
       </header>
 
               <div className="am-eod-report">
-                {/* ── Monthly & Top Metrics (Merged from Reports) ── */}
-                <section className="am-eod-section" style={{ background: '#F8FAFC', padding: 20, borderRadius: 16, border: '1px solid #E2E8F0', marginBottom: 24 }}>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                      <h3 style={{ margin: 0, fontSize: 16, color: '#475569' }}>Monthly Performance</h3>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input 
-                           type="number" 
-                           value={month.year} 
-                           onChange={e => setMonth(m => ({ ...m, year: e.target.value }))}
-                           style={{ width: 70, border: '1px solid #CBD5E1', borderRadius: 8, padding: '4px 8px' }}
-                        />
-                        <select 
-                           value={month.month} 
-                           onChange={e => setMonth(m => ({ ...m, month: e.target.value }))}
-                           style={{ border: '1px solid #CBD5E1', borderRadius: 8, padding: '4px 8px' }}
-                        >
-                           {Array.from({ length: 12 }, (_, i) => (
-                             <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
-                           ))}
-                        </select>
-                      </div>
-                   </div>
-                   <div className="am-eod-grid-4">
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Month Revenue</span>
-                        <span className="am-eod-stat-value">{(monthlyRows.reduce((a,c) => a + Number(c.amount), 0)).toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Daily Avg (Month)</span>
-                        <span className="am-eod-stat-value">{Math.round(monthlyRows.reduce((a,c) => a + Number(c.amount), 0) / 30).toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Avg Order (Today)</span>
-                        <span className="am-eod-stat-value">{(overview?.avgOrderValue || 0).toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Orders (Today)</span>
-                        <span className="am-eod-stat-value">{overview?.todayPaidOrdersCount || 0}</span>
-                      </div>
-                   </div>
-                </section>
-
-                {/* ── Bakery Production Today ── */}
-                {bakerySummary && bakerySummary.productions?.length > 0 && (
-                  <section className="am-eod-section" style={{ borderLeft: '4px solid #E91E63' }}>
-                    <h3 className="am-eod-section-title" style={{ color: '#E91E63' }}>Bakery Production Today</h3>
-                    <div className="am-eod-grid-4" style={{ marginBottom: 20 }}>
-                       <div className="am-eod-stat">
-                         <span className="am-eod-stat-label">Items Produced</span>
-                         <span className="am-eod-stat-value">{bakerySummary.totalQty}</span>
-                       </div>
-                       <div className="am-eod-stat">
-                         <span className="am-eod-stat-label">Production Cost</span>
-                         <span className="am-eod-stat-value">{bakerySummary.totalCost.toLocaleString()} RWF</span>
-                       </div>
-                       <div className="am-eod-stat">
-                         <span className="am-eod-stat-label">Est. Revenue</span>
-                         <span className="am-eod-stat-value">{bakerySummary.totalRevenue.toLocaleString()} RWF</span>
-                       </div>
-                       <div className="am-eod-stat">
-                         <span className="am-eod-stat-label">Est. Profit</span>
-                         <span className="am-eod-stat-value" style={{ color: '#2E7D32' }}>{bakerySummary.totalProfit.toLocaleString()} RWF</span>
-                       </div>
-                    </div>
-                    
-                    <div className="am-eod-table">
-                       <div className="am-eod-table-head" style={{ background: '#FCE4EC' }}>
-                         <span>Master Recipe</span>
-                         <span>Produced Products</span>
-                         <span>Cost</span>
-                         <span>Profit</span>
-                       </div>
-                       {bakerySummary.productions.map(p => (
-                         <div key={p.id} className="am-eod-table-row">
-                           <span className="am-eod-cell-name">
-                             {p.recipeName}
-                             <span className="am-eod-cell-cat">{p.yield} total pcs</span>
-                           </span>
-                           <span style={{ fontSize: 11, maxWidth: 200 }}>
-                              {p.outputs.map(o => `${o.qty}x ${o.name}`).join(', ')}
-                           </span>
-                           <span style={{ color: '#E57373' }}>{p.cost.toLocaleString()}</span>
-                           <span style={{ color: '#2E7D32', fontWeight: 700 }}>{p.profit.toLocaleString()}</span>
-                         </div>
-                       ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* ── Revenue Summary ── */}
+                {/* ── Current Stock Levels ── */}
                 <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Revenue Summary</h3>
-                    <div className="am-eod-grid-4">
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Total Revenue</span>
-                        <span className="am-eod-stat-value" style={{ color: '#1D3557' }}>{Number(paidRevenue).toLocaleString()} RWF</span>
-                        <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>Payments received: {Number(eodRevenue).toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Total Cost</span>
-                        <span className="am-eod-stat-value" style={{ color: '#E57373' }}>{Number(paidCost).toLocaleString()} RWF</span>
-                        {bundledCost > 0 && <span style={{ fontSize: 11, color: '#888', marginTop: 4, display: 'block' }}>+ {Number(bundledCost).toLocaleString()} RWF bundled cost</span>}
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Net Profit</span>
-                        <span className="am-eod-stat-value" style={{ color: paidProfit >= 0 ? '#1D3557' : '#E57373' }}>{Number(paidProfit).toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Profit Margin</span>
-                        <span className="am-eod-stat-value">{profitMargin}%</span>
-                      </div>
+                  <h3 className="am-eod-section-title">Current Stock Levels</h3>
+                  <div className="am-eod-table">
+                    <div className="am-eod-table-head">
+                      <span>Item Name</span>
+                      <span>Category</span>
+                      <span>In Stock</span>
+                      <span>Status</span>
                     </div>
-                  {eodRevenue !== paidRevenue && (
-                    <div style={{ marginTop: 12, padding: '10px 14px', background: '#FFF8E1', borderRadius: 8, border: '1px solid #FFD54F', fontSize: 12, color: '#F57F17' }}>
-                      <strong>Note:</strong> The sum of the menu products you sold is {Number(paidRevenue).toLocaleString()} RWF, but your cashiers physically collected <strong>{Number(eodRevenue).toLocaleString()} RWF</strong> today. The {Number(Math.abs(eodRevenue - paidRevenue)).toLocaleString()} RWF difference represents multi-day loan repayments, overpayments, or custom price adjustments logged by cashiers today.
-                    </div>
-                  )}
-                </section>
-
-                {/* ── Payment Breakdown ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Payment Breakdown</h3>
-                    <div className="am-eod-grid-3">
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Cash</span>
-                        <span className="am-eod-stat-value">{Number(eodCash).toLocaleString()} RWF</span>
-                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodCash / eodRevenue) * 100).toFixed(0) : 0}%</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">MoMo</span>
-                        <span className="am-eod-stat-value">{Number(eodMomo).toLocaleString()} RWF</span>
-                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodMomo / eodRevenue) * 100).toFixed(0) : 0}%</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">POS / Card</span>
-                        <span className="am-eod-stat-value">{Number(eodPos).toLocaleString()} RWF</span>
-                        <span className="am-eod-stat-pct">{eodRevenue > 0 ? ((eodPos / eodRevenue) * 100).toFixed(0) : 0}%</span>
-                      </div>
-                    </div>
-                </section>
-
-                {/* ── Order Stats ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Order Statistics</h3>
-                    <div className="am-eod-grid-4">
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Total Orders</span>
-                        <span className="am-eod-stat-value">{eodOrders}</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Items Sold</span>
-                        <span className="am-eod-stat-value">{totalItemsSold}</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Avg Order Value</span>
-                        <span className="am-eod-stat-value">{avgOrderValue.toLocaleString()} RWF</span>
-                      </div>
-                      <div className="am-eod-stat">
-                        <span className="am-eod-stat-label">Peak Hour</span>
-                        <span className="am-eod-stat-value">{peakHour ? `${peakHour[0]}:00` : 'N/A'}</span>
-                      </div>
-                    </div>
-                </section>
-
-                {/* ── Category Breakdown (Rich version from Reports) ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Sales by Category</h3>
-                  <div className="am-category-sales-card" style={{ border: '1px solid #E5E7EB', borderRadius: 16 }}>
-                    {Object.keys(overview?.categoryDetails || {}).length === 0 && (
-                      <div style={{ padding: '40px 0', textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic' }}>
-                        No sales data found for this date.
-                      </div>
-                    )}
-                    
-                    {Object.entries(overview?.categoryDetails || {}).map(([cat, details], idx) => {
-                      const colors = ['#1D3557', '#2196F3', '#FF9800', '#9C27B0', '#E91E63'];
-                      const catColor = colors[idx % colors.length];
-                      const catPercent = Math.round((details.total / overview.todayRevenue) * 100) || 0;
-                      
-                      return (
-                        <div key={cat} className="am-cat-row" style={{ padding: '20px', borderBottom: '1px solid #F3F4F6' }}>
-                           <div className="am-cat-main-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                             <div className="am-cat-name" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: 15 }}>
-                               <div className="am-cat-dot" style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: catColor }}></div>
-                               {cat}
-                             </div>
-                             <div className="am-cat-total-val" style={{ fontWeight: 800, color: '#1D3557' }}>
-                               {details.total.toLocaleString()} RWF
-                               <span className="am-cat-pct" style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: 6 }}>{catPercent}%</span>
-                             </div>
-                           </div>
-                           
-                           <div className="am-prod-list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              {Object.entries(details.products).sort((a,b) => b[1].rev - a[1].rev).slice(0, 5).map(([name, prod], pIdx) => (
-                                <div key={name} className="am-prod-row" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 16, alignItems: 'center' }}>
-                                   <div className="am-prod-name" style={{ fontSize: 13, color: '#4B5563' }}>{name}</div>
-                                   <div className="am-prod-stats" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                     <div className="am-prod-qty" style={{ fontSize: 11, color: '#9CA3AF', width: 50 }}>{prod.qty} sold</div>
-                                     <div className="am-prod-bar-bg" style={{ width: 100, height: 4, background: '#F3F4F6', borderRadius: 2, overflow: 'hidden' }}>
-                                        <div 
-                                          className="am-prod-bar-fill" 
-                                          style={{ 
-                                            width: `${Math.min(100, (prod.rev / details.total) * 100)}%`,
-                                            height: '100%',
-                                            backgroundColor: catColor,
-                                            opacity: 1 - (pIdx * 0.15)
-                                          }}
-                                        ></div>
-                                     </div>
-                                   </div>
-                                   <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13, color: '#1F2937', width: 100 }}>{prod.rev.toLocaleString()} RWF</div>
-                                </div>
-                              ))}
-                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-
-                {/* ── Shift Summary ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Shift Summary</h3>
-                  <div className="am-eod-table" style={{ border: '1px solid #E5E7EB', borderRadius: 16 }}>
-                    <div className="am-eod-table-head" style={{ background: '#F8FAFC' }}>
-                      <span>Staff</span>
-                      <span>Expected Cash</span>
-                      <span>Actual Cash</span>
-                      <span>Difference</span>
-                    </div>
-                    {shifts.length === 0 && <div className="am-eod-empty">No closed shifts for this date</div>}
-                    {shifts.map((s, idx) => {
-                      const exp = (s.total_cash_sales || 0);
-                      const giv = (s.actual_cash_on_hand || 0);
-                      const bal = giv - exp;
+                    {stockItems.map((item, idx) => {
+                      const status = getItemStockStatus(item);
                       return (
                         <div key={idx} className="am-eod-table-row">
-                          <span className="am-eod-cell-name">{s.staff_name || 'Staff'} <span className="am-eod-cell-cat">{formatShiftRange(s)}</span></span>
-                          <span style={{ fontWeight: 600 }}>{exp.toLocaleString()}</span>
-                          <span>{giv.toLocaleString()}</span>
-                          <span style={{ color: bal >= 0 ? '#2E7D32' : '#D32F2F', fontWeight: 800 }}>
-                             {bal > 0 ? `+${bal.toLocaleString()}` : bal.toLocaleString()}
+                          <span className="am-eod-cell-name">
+                            {item.name} <span className="am-eod-cell-cat">{item.itemType === 'INGREDIENT' ? 'Ingredient' : 'Product'}</span>
+                          </span>
+                          <span>{item.category}</span>
+                          <span style={{ fontWeight: 600 }}>{item.stock} {item.unit || 'pcs'}</span>
+                          <span>
+                            <span className={`badge ${status === 'HEALTHY' ? 'badge-success' : status === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
+                              {status}
+                            </span>
                           </span>
                         </div>
                       );
                     })}
                   </div>
-                </section>
-
-                {/* ── Top Products ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Top Products <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({paidProducts.length} paid products)</span></h3>
-                  <div className="am-eod-table">
-                    <div className="am-eod-table-head">
-                      <span>Product</span>
-                      <span>Qty</span>
-                      <span>Revenue</span>
-                      <span>Profit</span>
-                    </div>
-                    {paidProducts.length === 0 && <div className="am-eod-empty">No products sold this date</div>}
-                    {(() => {
-                      const perPage = 15
-                      const totalPages = Math.ceil(paidProducts.length / perPage)
-                      const start = (eodProductPage - 1) * perPage
-                      const pageItems = paidProducts.slice(start, start + perPage)
-                      return (
-                        <>
-                          {pageItems.map((p, idx) => (
-                            <div key={start + idx} className="am-eod-table-row">
-                              <span className="am-eod-cell-name">
-                                <span className="am-eod-rank">#{start + idx + 1}</span>
-                                {p.name}
-                                <span className="am-eod-cell-cat">{p.category}</span>
-                              </span>
-                              <span>{p.qty}</span>
-                              <span style={{ color: '#1D3557' }}>{Number(p.revenue).toLocaleString()}</span>
-                              <span style={{ color: p.revenue - p.cost >= 0 ? '#1D3557' : '#E57373' }}>{Number(p.revenue - p.cost).toLocaleString()}</span>
-                            </div>
-                          ))}
-                          <div className="am-eod-table-row" style={{ background: '#EDF2F9', borderTop: '2px solid #1D3557', fontWeight: 800 }}>
-                            <span className="am-eod-cell-name">
-                              <span className="am-eod-rank">∑</span>
-                              Total Products Revenue
-                            </span>
-                            <span>{paidProducts.reduce((s, p) => s + p.qty, 0)}</span>
-                            <span style={{ color: '#1D3557' }}>{Number(paidProducts.reduce((s, p) => s + p.revenue, 0)).toLocaleString()}</span>
-                            <span style={{ color: '#1D3557' }}>{Number(paidProducts.reduce((s, p) => s + (p.revenue - p.cost), 0)).toLocaleString()}</span>
-                          </div>
-                          {totalPages > 1 && (
-                            <div className="am-eod-table-row" style={{ background: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px' }}>
-                              <span style={{ fontSize: 12, color: '#666' }}>Page {eodProductPage} of {totalPages}</span>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                <button
-                                  className="btn tiny"
-                                  style={{ opacity: eodProductPage === 1 ? 0.4 : 1, cursor: eodProductPage === 1 ? 'not-allowed' : 'pointer' }}
-                                  onClick={() => setEodProductPage(p => Math.max(1, p - 1))}
-                                  disabled={eodProductPage === 1}
-                                >← Prev</button>
-                                <button
-                                  className="btn tiny"
-                                  style={{ opacity: eodProductPage === totalPages ? 0.4 : 1, cursor: eodProductPage === totalPages ? 'not-allowed' : 'pointer' }}
-                                  onClick={() => setEodProductPage(p => Math.min(totalPages, p + 1))}
-                                  disabled={eodProductPage === totalPages}
-                                >Next →</button>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )
-                    })()}
-                  </div>
-                </section>
-
-                {/* ── Bundled Items (Free Accompaniments) ── */}
-                {bundledItems.length > 0 && (
-                  <section className="am-eod-section">
-                    <h3 className="am-eod-section-title">Bundled Items <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>({bundledItems.length} free accompaniments)</span></h3>
-                    <div className="am-eod-table">
-                      <div className="am-eod-table-head">
-                        <span>Product</span>
-                        <span>Qty</span>
-                        <span>Revenue</span>
-                        <span>Note</span>
-                      </div>
-                      {bundledItems.map((p, idx) => (
-                        <div key={idx} className="am-eod-table-row" style={{ opacity: 0.8 }}>
-                          <span className="am-eod-cell-name">
-                            <span className="am-eod-rank">#{idx + 1}</span>
-                            {p.name}
-                            <span className="am-eod-cell-cat">{p.category}</span>
-                          </span>
-                          <span>{p.qty}</span>
-                          <span style={{ color: '#888', fontStyle: 'italic' }}>—</span>
-                          <span style={{ fontSize: 12, color: '#888' }}>Bundled with meal</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* ── Staff Performance ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Staff Performance <span style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>(waiters & cashiers)</span></h3>
-                  {topStaff.length === 0 && <div className="am-eod-empty">No waiter or cashier sales recorded for this date</div>}
-                  {topStaff.map((s, idx) => (
-                    <div key={idx} style={{ marginBottom: 20, border: '1px solid #E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{s.name}</div>
-                          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{s.count} order{s.count !== 1 ? 's' : ''}</div>
-                        </div>
-                        <div style={{ fontWeight: 800, fontSize: 16, color: '#1D3557' }}>{Number(s.amount).toLocaleString()} RWF</div>
-                      </div>
-                      {s.products?.length > 0 ? (
-                        <div className="am-eod-table">
-                          <div className="am-eod-table-head">
-                            <span>Product</span>
-                            <span>Qty</span>
-                            <span>Amount</span>
-                          </div>
-                          {s.products.map((p, pIdx) => (
-                            <div key={pIdx} className="am-eod-table-row">
-                              <span className="am-eod-cell-name">{p.name}</span>
-                              <span>{p.qty}</span>
-                              <span style={{ color: '#1D3557' }}>{Number(p.amount).toLocaleString()} RWF</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="am-eod-empty" style={{ padding: 16 }}>No product details</div>
-                      )}
-                    </div>
-                  ))}
-                </section>
-
-                {/* ── Inventory Alerts ── */}
-                <section className="am-eod-section">
-                  <h3 className="am-eod-section-title">Inventory Alerts</h3>
-                  {lowStockItems.length === 0 ? (
-                    <div className="am-eod-empty" style={{ padding: 20 }}>All stock levels are healthy</div>
-                  ) : (
-                    <div className="am-eod-table">
-                      <div className="am-eod-table-head">
-                        <span>Ingredient</span>
-                        <span>Stock</span>
-                        <span>Min Required</span>
-                        <span>Status</span>
-                      </div>
-                      {lowStockItems.map((ing, idx) => (
-                        <div key={idx} className="am-eod-table-row">
-                          <span className="am-eod-cell-name">{ing.name}</span>
-                          <span style={{ color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>{ing.stock_level} {ing.unit}</span>
-                          <span>{ing.min_threshold} {ing.unit}</span>
-                          <span>
-                            <span className={`badge ${ing.stock_level <= 0 ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
-                              {ing.stock_level <= 0 ? 'CRITICAL' : 'LOW'}
-                            </span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </section>
 
                   {/* ── Outstanding Credits ── */}
