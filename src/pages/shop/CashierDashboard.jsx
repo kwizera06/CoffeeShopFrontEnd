@@ -564,6 +564,7 @@ export default function CashierDashboard() {
         momoNumber: context?.momoNumber
       })
       await loadBilling()
+      await loadMenu()
       
       // Cleanup states
       setPaymentMethods(prev => {
@@ -867,9 +868,6 @@ export default function CashierDashboard() {
                       <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
                          <HiOutlinePencilSquare />
                       </button>
-                     <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={()=>cancelOrderRequest(o.id)}>
-                        <HiOutlineTrash />
-                     </button>
                   </div>
                 </div>
               ))}

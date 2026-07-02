@@ -4016,65 +4016,6 @@ export default function Owner() {
                 <div className="am-metric-trend am-trend-pos">fully paid this session</div>
              </div>
           </div>
-
-          <div className="am-main-grid am-grid-form-list">
-            {/* Form Card */}
-            <div className="am-category-sales-card" style={{ height: 'fit-content' }}>
-               <h3 className="am-card-title">+ Record New Credit</h3>
-               <form 
-                 onSubmit={async (e) => {
-                    e.preventDefault();
-                    try {
-                      await api('/api/shop/loans', { method: 'POST', body: JSON.stringify(loanForm) });
-                      setLoanForm({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' });
-                      await reloadCore();
-                    } catch(err) { setError(err.message) }
-                 }}
-                 className="stack" 
-                 style={{ gap: 20 }}
-               >
-                  <div className="grid-2" style={{ gap: 16 }}>
-                    <label className="am-field">
-                      <span>Client Name</span>
-                      <input className="am-input" value={loanForm.client_name} onChange={e => setLoanForm(f => ({...f, client_name: e.target.value}))} required placeholder="e.g. Jean Pierre" />
-                    </label>
-                    <label className="am-field">
-                      <span>Amount (RWF)</span>
-                      <input className="am-input" type="number" value={loanForm.amount} onChange={e => setLoanForm(f => ({...f, amount: e.target.value}))} required placeholder="0" />
-                    </label>
-                  </div>
-                  <div className="grid-2" style={{ gap: 16 }}>
-                    <label className="am-field">
-                      <span>Amount Paid (RWF)</span>
-                      <input className="am-input" type="number" value={loanForm.amount_paid} onChange={e => setLoanForm(f => ({...f, amount_paid: Number(e.target.value)}))} placeholder="0" />
-                    </label>
-                    <label className="am-field">
-                      <span>Date</span>
-                      <input className="am-input" type="date" value={loanForm.created_at || new Date().toISOString().split('T')[0]} disabled />
-                    </label>
-                  </div>
-                  <div className="grid-2" style={{ gap: 16 }}>
-                    <label className="am-field">
-                      <span>Note (Optional)</span>
-                      <input className="am-input" value={loanForm.notes} onChange={e => setLoanForm(f => ({...f, notes: e.target.value}))} placeholder="e.g. Lunch order" />
-                    </label>
-                    <label className="am-field">
-                      <span>Status</span>
-                      <select className="am-input" value={loanForm.status} onChange={e => setLoanForm(f => ({...f, status: e.target.value}))}>
-                         <option value="UNPAID">Unpaid</option>
-                         <option value="PARTIAL">Partial</option>
-                         <option value="PAID">Paid</option>
-                      </select>
-                    </label>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                    <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>Record credit</button>
-                    <button className="btn outline xl" type="button" onClick={() => setLoanForm({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' })} style={{ borderRadius: 12 }}>Clear</button>
-                  </div>
-               </form>
-            </div>
-
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
@@ -4181,7 +4122,6 @@ export default function Owner() {
                   </table>
                </div>
             </div>
-          </div>
         </>
       ) : null}
       </div>
