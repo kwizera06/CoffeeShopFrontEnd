@@ -868,6 +868,11 @@ export default function CashierDashboard() {
                       <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
                          <HiOutlinePencilSquare />
                       </button>
+                      {showAdmin && (
+                        <button className="cashier-btn-close-shift" style={{padding: '0 12px', color: '#EF4444', borderColor: '#EF4444'}} onClick={() => cancelOrderRequest(o.id)} title="Cancel Order">
+                           <HiOutlineTrash />
+                        </button>
+                      )}
                   </div>
                 </div>
               ))}

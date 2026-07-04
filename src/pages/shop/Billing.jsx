@@ -326,6 +326,11 @@ export default function Billing() {
                     <button type="button" onClick={() => nav(`/app/orders?edit=${selected.id}`)} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#A0A0A0', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                       <HiOutlinePencilSquare /> Edit Items
                     </button>
+                    {role === 'SHOP_ADMIN' && (
+                      <button type="button" onClick={() => cancelOrderRequest(selected.id)} style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px', borderRadius: 12, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <HiOutlineTrash /> Cancel Order
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
