@@ -133,6 +133,8 @@ export default function Owner() {
   const [stockHistory, setStockHistory] = useState(null)
   const [ingredientStockHistory, setIngredientStockHistory] = useState(null)
   const [linkedProducts, setLinkedProducts] = useState(null)
+  const [managerAdditions, setManagerAdditions] = useState([])
+  const [managerAdditionsLoading, setManagerAdditionsLoading] = useState(false)
   const longPressTimer = useRef(null)
 
   const handlePointerDown = (ing) => {
@@ -363,6 +365,19 @@ export default function Owner() {
     }
   }, [role, tab, allowed, setSearchParams])
 
+  const reloadManagerAdditions = useCallback(async () => {
+    if (role !== 'SHOP_ADMIN') return
+    setManagerAdditionsLoading(true)
+    try {
+      const data = await api('/api/shop/owner/reports/manager-additions')
+      setManagerAdditions(data || [])
+    } catch (err) {
+      console.error('Failed to load manager additions:', err)
+    } finally {
+      setManagerAdditionsLoading(false)
+    }
+  }, [role])
+
   const reloadCore = useCallback(async () => {
     const [o, m, s, i, l, b, bh] = await Promise.all([
       api(`/api/shop/owner/overview?date=${reportDay}`),
@@ -380,7 +395,17 @@ export default function Owner() {
     setLoans(l || [])
     setBakerySummary(b)
     setBakeryHistory(bh || [])
-  }, [reportDay])
+
+    if (role === 'SHOP_ADMIN') {
+      void reloadManagerAdditions().catch(() => {})
+    }
+  }, [reportDay, role, reloadManagerAdditions])
+
+  useEffect(() => {
+    if (tab === 'inventory' && role === 'SHOP_ADMIN') {
+      void reloadManagerAdditions().catch(() => {})
+    }
+  }, [tab, role, reloadManagerAdditions])
 
   const reloadOverview = useCallback(async () => {
     try {
@@ -1405,7 +1430,7 @@ export default function Owner() {
               }}>
                 Cancel
               </button>
-              {menuForm.id && (
+              {menuForm.id && canEdit && (
                 <button type="button" className="btn warn" style={{ marginLeft: 'auto' }} onClick={() => {
                   deleteMenu(menuForm.id)
                   setShowMenuForm(false)
@@ -1992,7 +2017,7 @@ export default function Owner() {
                                   <td style={{ textAlign: 'right' }}>
                                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                                         <button className="btn ghost tiny" onClick={() => editStaff(staffMember)}>📝</button>
-                                        {!isOwner && (
+                                        {!isOwner && canEdit && (
                                           <button className="btn ghost tiny" style={{ color: '#FF5252' }} onClick={() => deleteStaff(staffMember.id)}>🗑️</button>
                                         )}
                                      </div>
@@ -2258,7 +2283,7 @@ export default function Owner() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                      <button className="btn primary xl" style={{ width: '100%' }} onClick={() => { setProductActionMenu(null); editMenu(productActionMenu); setShowMenuForm(true); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>✏️ Edit Product</button>
                      <button className="btn xl" style={{ width: '100%', background: '#EDF2F9', color: '#1D3557', borderColor: '#B8CCE4' }} onClick={() => openProductHistory(productActionMenu)}>📜 Stock History</button>
-                     <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteProduct(productActionMenu.id)}>🗑️ Delete Product</button>
+                     {canEdit && <button className="btn warn xl" style={{ width: '100%', background: '#FEE2E2', color: '#DC2626', borderColor: '#FCA5A5' }} onClick={() => deleteProduct(productActionMenu.id)}>🗑️ Delete Product</button>}
                      <button className="btn ghost xl" style={{ width: '100%', marginTop: 8 }} onClick={() => setProductActionMenu(null)}>Cancel</button>
                   </div>
                </div>
@@ -2296,6 +2321,98 @@ export default function Owner() {
                </div>
              </div>,
              document.body
+           )}
+
+           {/* Manager Additions Audit Section — Owner only */}
+           {role === 'SHOP_ADMIN' && (
+             <div className="am-category-sales-card" style={{ marginTop: 24 }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                 <div>
+                   <h3 className="am-card-title" style={{ margin: 0, fontSize: '18px' }}>Manager Additions Audit</h3>
+                   <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--admin-text-muted)' }}>
+                     Verifiable log of stock increases recorded by managers
+                   </p>
+                 </div>
+                 <button
+                   type="button"
+                   className="btn outline tiny"
+                   onClick={reloadManagerAdditions}
+                   disabled={managerAdditionsLoading}
+                 >
+                   {managerAdditionsLoading ? 'Loading...' : '🔄 Refresh Audit'}
+                 </button>
+               </div>
+
+               <div style={{ overflowX: 'auto' }}>
+                 <table className="am-modern-table">
+                   <thead>
+                     <tr>
+                       <th>ITEM</th>
+                       <th>TYPE</th>
+                       <th>QTY ADDED</th>
+                       <th>STOCK BEFORE → AFTER</th>
+                       <th>RECORDED BY</th>
+                       <th>DATE / TIME</th>
+                       <th>NOTES</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {managerAdditions.length === 0 ? (
+                       <tr>
+                         <td colSpan="7" style={{ textAlign: 'center', padding: '32px 0', opacity: 0.5 }}>
+                           {managerAdditionsLoading ? 'Loading additions...' : 'No manager stock additions found in audit logs.'}
+                         </td>
+                       </tr>
+                     ) : (
+                       managerAdditions.map(row => {
+                         const dateFormatted = new Date(row.createdAt).toLocaleString('en-GB', {
+                           day: '2-digit',
+                           month: 'short',
+                           year: 'numeric',
+                           hour: '2-digit',
+                           minute: '2-digit',
+                           timeZone: 'Africa/Kigali',
+                         });
+                         return (
+                           <tr key={row.id}>
+                             <td>
+                               <div style={{ fontWeight: 700 }}>{row.itemName}</div>
+                               <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{row.itemCategory}</div>
+                             </td>
+                             <td>
+                               <span style={{
+                                 padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                                 background: row.itemType === 'INGREDIENT' ? 'rgba(76,175,80,0.1)' : 'rgba(33,150,243,0.1)',
+                                 color: row.itemType === 'INGREDIENT' ? '#2E7D32' : '#2196F3',
+                               }}>
+                                 {row.itemType === 'INGREDIENT' ? 'Ingredient' : 'Product'}
+                               </span>
+                             </td>
+                             <td style={{ fontWeight: 800, color: '#2E7D32' }}>
+                               +{row.quantityAdded} {row.unit}
+                             </td>
+                             <td style={{ fontSize: 13 }}>
+                               <span style={{ opacity: 0.6 }}>{row.previousStock ?? 0}</span>
+                               <span style={{ margin: '0 8px' }}>→</span>
+                               <span style={{ fontWeight: 700 }}>{row.newStock ?? 0}</span>
+                             </td>
+                             <td>
+                               <div style={{ fontWeight: 600 }}>{row.addedBy}</div>
+                             </td>
+                             <td style={{ fontSize: 12, color: 'var(--admin-text-muted)' }}>
+                               {dateFormatted}
+                             </td>
+                             <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.notes}>
+                               {row.notes || <span style={{ opacity: 0.3 }}>N/A</span>}
+                             </td>
+                           </tr>
+                         );
+                       })
+                     )}
+                   </tbody>
+                 </table>
+               </div>
+             </div>
            )}
         </>
       ) : null}
@@ -2463,7 +2580,7 @@ export default function Owner() {
                         onClick={() => deleteIngredient(item.id)}
                       >🗑️ Delete</button>
                     )}
-                    {(ownerAccess || isManagerRole(role)) && !isIng && (
+                    {canEdit && !isIng && (
                       <button
                         type="button"
                         className="btn tiny"
@@ -3558,7 +3675,7 @@ export default function Owner() {
                                 <button
                                   className="btn tiny"
                                   style={{ padding: '6px 10px', background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5' }}
-                                  onClick={() => deleteProduct(m.id)}
+                                  onClick={() => canEdit && deleteProduct(m.id)}
                                 >🗑️</button>
                               )}
                             </div>
@@ -3616,7 +3733,7 @@ export default function Owner() {
                             <button
                               className="btn tiny"
                               style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FCA5A5', padding: '6px 12px' }}
-                              onClick={() => deleteProduction(run.id)}
+                              onClick={() => canEdit && deleteProduction(run.id)}
                             >🗑️ Revert</button>
                           </td>
                         </tr>

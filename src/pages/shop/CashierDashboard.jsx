@@ -730,21 +730,35 @@ export default function CashierDashboard() {
                 {filteredMenu.map(m => {
                   const qty = qtyById[m.id] || 0;
                   const theme = getCategoryColors(m.category);
+                  const isOutOfStock = m.is_recipe === false && m.stock_level <= 0;
+                  const hasEnoughStock = m.is_recipe !== false || qty < m.stock_level;
+
                   return (
                     <div
                       key={m.id}
-                      className="cashier-card"
-                      onClick={() => setQty(m.id, qty + 1)}
+                      className={`cashier-card ${isOutOfStock ? 'disabled' : ''}`}
+                      onClick={() => {
+                        if (isOutOfStock) return;
+                        if (!hasEnoughStock) {
+                            alert(`Not enough stock for ${m.name}. Only ${m.stock_level} left.`);
+                            return;
+                        }
+                        setQty(m.id, qty + 1);
+                      }}
                       style={{
-                        background: theme.bg,
+                        background: isOutOfStock ? '#f3f4f6' : theme.bg,
                         borderColor: theme.border,
+                        opacity: isOutOfStock ? 0.6 : 1,
+                        cursor: isOutOfStock ? 'not-allowed' : 'pointer'
                       }}
                     >
                       <div className="cashier-card-decor" style={{ background: theme.border }} />
                       {qty > 0 && <div className="cashier-card-qty">{qty}</div>}
-                      <div className="cashier-card-icon" style={{ color: theme.text }}>{getItemIcon(m.name, m.category)}</div>
-                      <div className="cashier-card-title" style={{ color: theme.text }}>{m.name}</div>
-                      <div className="cashier-card-price" style={{ color: theme.text }}>{Number(m.price).toLocaleString()} RWF</div>
+                      <div className="cashier-card-icon" style={{ color: isOutOfStock ? '#9ca3af' : theme.text }}>{getItemIcon(m.name, m.category)}</div>
+                      <div className="cashier-card-title" style={{ color: isOutOfStock ? '#9ca3af' : theme.text }}>{m.name}</div>
+                      <div className="cashier-card-price" style={{ color: isOutOfStock ? '#ef4444' : theme.text, fontWeight: isOutOfStock ? 'bold' : 'normal' }}>
+                          {isOutOfStock ? 'Empty in Stock' : `${Number(m.price).toLocaleString()} RWF`}
+                      </div>
                     </div>
                   )
                 })}
@@ -794,7 +808,14 @@ export default function CashierDashboard() {
                              </button>
                              <span style={{ fontWeight: 700, minWidth: 24, textAlign: 'center', color: '#E6CCB2', fontSize: 24 }}>{l.quantity}</span>
                              <button 
-                               onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] + 1)}
+                               onClick={() => {
+                                 const mi = menu.find(x => x.id === l.menuItemId);
+                                 if (mi && mi.is_recipe === false && qtyById[l.menuItemId] >= mi.stock_level) {
+                                    alert(`Not enough stock for ${mi.name}. Only ${mi.stock_level} left.`);
+                                    return;
+                                 }
+                                 setQty(l.menuItemId, qtyById[l.menuItemId] + 1)
+                               }}
                                style={{ background: 'transparent', border: 'none', color: '#E6CCB2', cursor: 'pointer', display: 'flex', fontSize: 32 }}
                              >
                                <HiOutlinePlusCircle />
