@@ -35,11 +35,12 @@ export default function Billing() {
   const allowed = role === 'CASHIER' || role === 'SHOP_ADMIN'
 
   const load = useCallback(async () => {
-    const [p, r] = await Promise.all([
+    const [p, chefReady, r] = await Promise.all([
       api('/api/shop/orders/kitchen-queue'),
+      api('/api/shop/orders/chef-ready'),
       api('/api/shop/orders/ready'),
     ])
-    setPending(p)
+    setPending([...p, ...chefReady].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)))
     setReady(r)
   }, [])
 
@@ -189,8 +190,8 @@ export default function Billing() {
                   <div style={{ fontWeight: 700, fontSize: 14 }}>#{String(o.id).slice(0, 6)}</div>
                   <div style={{ color: '#A0A0A0', fontSize: 12 }}>Table {o.tableNumber}</div>
                 </div>
-                <span style={{ background: tab === 'pending' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? '#FF9800' : '#4CAF50', padding: '3px 10px', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>
-                  {tab === 'pending' ? 'PREP' : 'READY'}
+                <span style={{ background: tab === 'pending' ? (o.status === 'CHEF_READY' ? 'rgba(234,179,8,0.1)' : 'rgba(255,152,0,0.1)') : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? (o.status === 'CHEF_READY' ? '#EAB308' : '#FF9800') : '#4CAF50', padding: '3px 10px', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>
+                  {tab === 'pending' ? (o.status === 'CHEF_READY' ? 'CHEFS READY' : 'PREP') : 'READY'}
                 </span>
               </div>
               
@@ -208,7 +209,7 @@ export default function Billing() {
                     markReady(o.id)
                   }}
                 >
-                  Mark Ready
+                  Mark Ready to Pay
                 </button>
               )}
             </div>
@@ -246,8 +247,8 @@ export default function Billing() {
                    <div style={{ fontWeight: 700, fontSize: 16 }}>Table {selected.tableNumber}</div>
                    <div style={{ color: '#A0A0A0', fontSize: 11 }}>#{selected.id.slice(0, 8)}</div>
                 </div>
-                <span style={{ background: tab === 'pending' ? 'rgba(255,152,0,0.1)' : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? '#FF9800' : '#4CAF50', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
-                  {tab === 'pending' ? 'PENDING' : 'READY'}
+                <span style={{ background: tab === 'pending' ? (selected.status === 'CHEF_READY' ? 'rgba(234,179,8,0.1)' : 'rgba(255,152,0,0.1)') : 'rgba(76,175,80,0.1)', color: tab === 'pending' ? (selected.status === 'CHEF_READY' ? '#EAB308' : '#FF9800') : '#4CAF50', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
+                  {tab === 'pending' ? (selected.status === 'CHEF_READY' ? 'CHEFS READY' : 'PENDING') : 'READY'}
                 </span>
               </div>
 

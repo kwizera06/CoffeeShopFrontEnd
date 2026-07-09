@@ -110,6 +110,7 @@ export default function Owner() {
     email: '',
     password: '',
     role: 'WAITER',
+    security_key: '',
   })
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })
   const [productionForm, setProductionForm] = useState({ 
@@ -864,7 +865,7 @@ export default function Owner() {
       } else {
         await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(payload) })
       }
-      setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType })
+      setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType, security_key: '' })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -882,7 +883,8 @@ export default function Owner() {
       name: staffMember.name,
       email: staffMember.email,
       password: '',
-      role: staffMember.role
+      role: staffMember.role,
+      security_key: staffMember.security_key || ''
     })
   }
 
@@ -1812,7 +1814,7 @@ export default function Owner() {
                <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : 'Register new staff'}</h3>
 
                {!staffForm.id && (
-                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
                    <button
                      type="button"
                      className={`am-staff-type-card ${staffAddType === 'WAITER' ? 'active' : ''}`}
@@ -1828,7 +1830,7 @@ export default function Owner() {
                    >
                      <div style={{ fontWeight: 800, fontSize: 15, color: '#2E7D32', marginBottom: 6 }}>Waiter</div>
                      <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
-                       Takes orders and serves tables. Shows in the waiter/cashier dropdown when posting orders.
+                       Takes orders and serves tables.
                      </div>
                    </button>
                    <button
@@ -1846,7 +1848,7 @@ export default function Owner() {
                    >
                      <div style={{ fontWeight: 800, fontSize: 15, color: '#2196F3', marginBottom: 6 }}>Cashier</div>
                      <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
-                       POS and billing access. Opens/closes shifts. Uses the desktop cashier app.
+                       POS and billing access. Opens/closes shifts.
                      </div>
                    </button>
                    <button
@@ -1864,7 +1866,25 @@ export default function Owner() {
                    >
                      <div style={{ fontWeight: 800, fontSize: 15, color: '#7B1FA2', marginBottom: 6 }}>Manager</div>
                      <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
-                       Supervises daily ops. Reports, EOD, stock levels, loans. No menu, inventory edits, or staff changes.
+                       Supervises daily ops, reports, EOD.
+                     </div>
+                   </button>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'CHEF' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('CHEF')
+                       setStaffForm(f => ({ ...f, role: 'CHEF' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'CHEF' ? '2px solid #FF5722' : '1px solid #E5E7EB',
+                       background: staffAddType === 'CHEF' ? 'rgba(255,87,34,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#BF360C', marginBottom: 6 }}>🍳 Chef</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       Kitchen display. Sees & marks orders ready.
                      </div>
                    </button>
                  </div>
@@ -1877,7 +1897,7 @@ export default function Owner() {
                >
                   {!staffForm.id && (
                     <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F3F4F6', fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : 'Waiter'}</span>
+                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : staffAddType === 'CHEF' ? '#FF5722' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : staffAddType === 'CHEF' ? 'Chef' : 'Waiter'}</span>
                     </div>
                   )}
                   <div className="grid-2" style={{ gap: 16 }}>
@@ -1902,6 +1922,7 @@ export default function Owner() {
                            <option value="WAITER">Waiter — orders & tables</option>
                            <option value="CASHIER">Cashier — POS & billing</option>
                            <option value="MANAGER">Manager — reports & supervision</option>
+                           <option value="CHEF">Chef — kitchen display</option>
                            {staffForm.role === 'SHOP_ADMIN' && <option value="SHOP_ADMIN">Owner</option>}
                         </select>
                       </label>
@@ -1911,21 +1932,29 @@ export default function Owner() {
                         <input className="am-input" readOnly value={
                           staffAddType === 'CASHIER' ? 'Cashier — POS, billing & shifts'
                           : staffAddType === 'MANAGER' ? 'Manager — reports, EOD & supervision'
+                          : staffAddType === 'CHEF' ? 'Chef — kitchen display & order queue'
                           : 'Waiter — orders & tables'
                         } />
                       </label>
                     )}
                   </div>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Security PIN (Optional)</span>
+                      <input className="am-input" type="text" maxLength="12" value={staffForm.security_key || ''} onChange={e => setStaffForm(f => ({...f, security_key: e.target.value}))} placeholder="e.g. 12345678" />
+                      <span style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Used by waiters to authenticate on POS</span>
+                    </label>
+                  </div>
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>
-                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : 'Register Waiter')}
+                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : staffAddType === 'CHEF' ? 'Register Chef' : 'Register Waiter')}
                     </button>
                     <button
                       className="btn outline xl"
                       type="button"
                       onClick={() => {
-                        setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType })
+                        setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType, security_key: '' })
                       }}
                       style={{ borderRadius: 12 }}
                     >
@@ -1938,7 +1967,7 @@ export default function Owner() {
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
-                  {['ALL', 'OWNER', 'MANAGER', 'WAITER', 'CASHIER'].map(f => (
+                  {['ALL', 'OWNER', 'MANAGER', 'WAITER', 'CASHIER', 'CHEF'].map(f => (
                     <div 
                       key={f} 
                       className={`am-pill ${staffFilter === f ? 'active' : ''}`}
@@ -1949,7 +1978,8 @@ export default function Owner() {
                        {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#9C27B0' }} />}
                        {f === 'WAITER' && <HiOutlineUsers size={14} style={{ color: '#4CAF50' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
-                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f.charAt(0) + f.slice(1).toLowerCase()}
+                       {f === 'CHEF' && <span style={{ color: '#FF5722', fontSize: 14 }}>🍳</span>}
+                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f === 'CHEF' ? 'Chef' : f.charAt(0) + f.slice(1).toLowerCase()}
                     </div>
                   ))}
                </div>

@@ -24,7 +24,8 @@ import {
   HiOutlineChartBar,
   HiOutlineClock,
   HiOutlineCalendar,
-  HiOutlineReceiptPercent
+  HiOutlineReceiptPercent,
+  HiOutlinePrinter
 } from 'react-icons/hi2'
 import {
   IoCafeOutline,
@@ -34,6 +35,29 @@ import {
   IoIceCreamOutline
 } from 'react-icons/io5'
 import { MdOutlineLocalDrink, MdOutlineDinnerDining, MdBakeryDining } from 'react-icons/md'
+
+function playBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const play = (freq, start, dur) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start)
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + start)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + dur)
+      osc.start(ctx.currentTime + start)
+      osc.stop(ctx.currentTime + start + dur)
+    }
+    play(880, 0, 0.15)       // first ding
+    play(1100, 0.2, 0.15)    // second ding (higher)
+    play(880, 0.4, 0.2)      // third ding
+  } catch (e) {}
+}
 
 const CATEGORY_THEMES = {
   'Hot Coffee':           { bg: '#FFF3E0', border: '#FFB74D', text: '#E65100' },
@@ -129,7 +153,16 @@ export default function CashierDashboard() {
   const [catFilter, setCatFilter] = useState('All')
   const [tableNumber, setTableNumber] = useState('1')
   const [selectedWaiter, setSelectedWaiter] = useState('')
+  const [pendingWaiterId, setPendingWaiterId] = useState(null)
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
   const [qtyById, setQtyById] = useState({})
+  const [initialQtyById, setInitialQtyById] = useState({})
+  
+  const [showCashierAuthPayload, setShowCashierAuthPayload] = useState(null)
+  const [cashierAuthPin, setCashierAuthPin] = useState('')
+  const [cashierAuthError, setCashierAuthError] = useState('')
 
   const serviceStaff = useMemo(
     () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
@@ -138,12 +171,38 @@ export default function CashierDashboard() {
 
   // Dynamic Categories from available menu items
   const dynamicCategories = useMemo(() => {
-    const cats = new Set();
-    menu.forEach(m => {
-      if (m.category) cats.add(m.category);
-    });
-    return ["All", ...Array.from(cats).sort()];
-  }, [menu]);
+    const cats = new Set(menu.map(m => m.category).filter(Boolean))
+    return ['All', ...Array.from(cats)].sort()
+  }, [menu])
+
+  const handleWaiterSelect = (waiterId) => {
+    if (!waiterId) {
+      setSelectedWaiter('')
+      return
+    }
+    const staffMember = serviceStaff.find(s => s.id === waiterId)
+    if (staffMember && staffMember.security_key) {
+      setPendingWaiterId(waiterId)
+      setPinInput('')
+      setPinError('')
+      setShowPinModal(true)
+    } else {
+      setSelectedWaiter(waiterId)
+    }
+  }
+
+  const confirmWaiterPin = (e) => {
+    e.preventDefault()
+    const staffMember = serviceStaff.find(s => s.id === pendingWaiterId)
+    if (staffMember && staffMember.security_key === pinInput.trim()) {
+      setSelectedWaiter(pendingWaiterId)
+      setShowPinModal(false)
+      setPendingWaiterId(null)
+    } else {
+      setPinError('Incorrect PIN')
+      setPinInput('')
+    }
+  };
 
   // Billing (Pending & Ready) states
   const [pending, setPending] = useState([])
@@ -297,14 +356,16 @@ export default function CashierDashboard() {
     }
   }, [tab, selectedShiftId, loadHistory])
 
-  // Load Billing (real-time)
   const loadBilling = useCallback(async () => {
     try {
-      const [p, r] = await Promise.all([
+      const [kitchen, drafts, chefReady, r] = await Promise.all([
         api('/api/shop/orders/kitchen-queue'),
+        api('/api/shop/orders/drafts'),
+        api('/api/shop/orders/chef-ready'),
         api('/api/shop/orders/ready')
       ])
-      setPending(p)
+      // Merge and sort
+      setPending([...kitchen, ...chefReady, ...drafts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
       const mappedReady = r.map(o => {
         const total = o.lines.reduce((sum, l) => sum + Number(l.price)*l.quantity, 0)
         return { ...o, total }
@@ -329,7 +390,13 @@ export default function CashierDashboard() {
     const onStockUpdate = () => { loadMenu().catch(()=>{}) };
     const onStaffUpdate = () => { loadMenu().catch(()=>{}) };
     const onEodUpdate = () => { reloadShift().catch(()=>{}) };
-    const onOrderUpdate = () => { loadBilling().catch(()=>{}) };
+    const onOrderUpdate = (data) => { 
+      loadBilling().catch(()=>{})
+      // Beep for cashier/waiter when chef marks an order ready
+      if (data && data.action === 'MARK_READY') {
+        playBeep()
+      }
+    };
 
     socket.on('menuUpdate', onMenuUpdate);
     socket.on('stockUpdate', onStockUpdate);
@@ -356,6 +423,7 @@ export default function CashierDashboard() {
         const qtys = {}
         order.lines.forEach(l => { qtys[l.menuItemId] = l.quantity })
         setQtyById(qtys)
+        setInitialQtyById(qtys)
       }).catch(e => setError(e.message))
     }
   }, [editId])
@@ -386,6 +454,13 @@ export default function CashierDashboard() {
 
   // Cart Actions
   function setQty(id, next) {
+    if (editId && (role === 'CASHIER' || role === 'WAITER')) {
+      const initialQty = initialQtyById[id] || 0;
+      if (next < initialQty) {
+        alert(`Cashiers and waiters cannot reduce quantities below the original ordered amount (${initialQty}).`);
+        return;
+      }
+    }
     setQtyById(m => {
       const copy = { ...m, [id]: next }
       if (next <= 0) delete copy[id]
@@ -443,11 +518,12 @@ export default function CashierDashboard() {
         }
         setSearchParams({ tab: 'pending' })
         setQtyById({})
+        setInitialQtyById({})
         setTableNumber('1')
       } else {
         const created = await api('/api/shop/orders', {
           method: 'POST',
-          body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter, submitToKitchen: true })
+          body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter, submitToKitchen: printKitchen })
         })
         if (printKitchen) {
           printKitchenTicket({
@@ -459,6 +535,7 @@ export default function CashierDashboard() {
           })
         }
         setQtyById({})
+        setInitialQtyById({})
         setTableNumber('1')
         setTab('pending')
       }
@@ -502,7 +579,13 @@ export default function CashierDashboard() {
   }
 
   // Awaiting Payment Actions
-  async function payOrder(o) {
+  async function payOrder(o, forceAuthorize = false) {
+    if ((role === 'WAITER' || role === 'CASHIER') && !forceAuthorize) {
+      setShowCashierAuthPayload(o);
+      setCashierAuthPin('');
+      setCashierAuthError('');
+      return;
+    }
     setBusy(true)
     try {
       let payload = {};
@@ -708,7 +791,7 @@ export default function CashierDashboard() {
                   <IoCafeOutline /> Tbl
                   <input type="number" min="1" className="cashier-table-val" value={tableNumber} onChange={e=>setTableNumber(e.target.value)} />
                 </div>
-                <select className="cashier-waiter-sel" value={selectedWaiter} disabled={!!editId} onChange={(e) => setSelectedWaiter(e.target.value)}>
+                <select className="cashier-waiter-sel" value={selectedWaiter} disabled={!!editId} onChange={(e) => handleWaiterSelect(e.target.value)}>
                    <option value="">Waiter / Cashier...</option>
                    {serviceStaff.map(s => (
                      <option key={s.id} value={s.id}>
@@ -772,7 +855,7 @@ export default function CashierDashboard() {
                     </div>
                     {editId && (
                       <button 
-                        onClick={() => { setSearchParams({}); setQtyById({}); setTableNumber('1'); }}
+                        onClick={() => { setSearchParams({}); setQtyById({}); setInitialQtyById({}); setTableNumber('1'); }}
                         style={{ background: 'transparent', border: 'none', color: '#E53935', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                       >
                         Cancel
@@ -865,38 +948,72 @@ export default function CashierDashboard() {
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <div className="cashier-billing-grid">
               {pending.length === 0 && <p className="muted" style={{padding: 24}}>No pending orders.</p>}
-              {pending.map(o => (
-                <div key={o.id} className="cashier-order-card">
+              {pending.map(o => {
+                const isChefReady = o.status === 'CHEF_READY'
+                const isKitchen = o.locked === true && !isChefReady
+                const isDraft = !isKitchen && !isChefReady
+                return (
+                <div key={o.id} className="cashier-order-card" style={{ borderLeft: isChefReady ? '3px solid #EAB308' : isKitchen ? '3px solid #4ADE80' : '3px solid #60A5FA' }}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
                     <div className="table-badge">Table {o.tableNumber}</div>
-                    <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(o.createdAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {isChefReady 
+                        ? <span style={{ fontSize: 10, fontWeight: 800, color: '#EAB308', background: 'rgba(234,179,8,0.12)', padding: '2px 8px', borderRadius: 20 }}>🔔 READY IN KITCHEN</span>
+                        : isKitchen
+                        ? <span style={{ fontSize: 10, fontWeight: 800, color: '#4ADE80', background: 'rgba(74,222,128,0.12)', padding: '2px 8px', borderRadius: 20 }}>🍳 IN KITCHEN</span>
+                        : <span style={{ fontSize: 10, fontWeight: 800, color: '#60A5FA', background: 'rgba(96,165,250,0.12)', padding: '2px 8px', borderRadius: 20 }}>📋 NO KITCHEN</span>
+                      }
+                      <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(o.createdAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
+                    </div>
                   </div>
                   <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
                   <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
                      {o.lines.map((l, i) => (
                        <div key={i} style={{marginBottom: 4, display: 'flex', gap: '8px'}}>
-                           <strong style={{color: '#4ADE80'}}>{l.quantity}x</strong> 
+                           <strong style={{color: isChefReady ? '#EAB308' : '#4ADE80'}}>{l.quantity}x</strong> 
                            <span>{l.itemName}</span>
                        </div>
                      ))}
                   </div>
 
                   <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-close-shift active" style={{flex: 1, padding: 0}} onClick={()=>markReady(o.id)} disabled={busy}>
-                        <HiOutlineCheckCircle /> Mark Ready
+                     {(isKitchen || isChefReady || isDraft) && (
+                       <button className="cashier-btn-close-shift active" style={{flex: 1, padding: 0}} onClick={()=>markReady(o.id)} disabled={busy}>
+                         <HiOutlineCheckCircle /> Mark Ready to Pay
+                       </button>
+                     )}
+                     <button title="Print Preview" className="cashier-btn-close-shift" style={{padding: '0 12px', borderColor: '#E6CCB2', color: '#E6CCB2'}} onClick={() => {
+                        const previewOrder = {
+                          ...o,
+                          total: o.total ?? o.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.price || 0), 0),
+                          lines: o.lines.map(l => ({
+                            ...l,
+                            itemName: l.itemName || l.name,
+                          })),
+                        }
+                        printReceipt({ 
+                          shopName, 
+                          order: previewOrder, 
+                          paymentMethod: null,
+                          momoName: context?.momoName,
+                          momoNumber: context?.momoNumber
+                        });
+                     }}>
+                        <HiOutlinePrinter />
                      </button>
-                      <button className="cashier-btn-close-shift" style={{padding: '0 12px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
-                         <HiOutlinePencilSquare />
-                      </button>
-                      {showAdmin && (
-                        <button className="cashier-btn-close-shift" style={{padding: '0 12px', color: '#EF4444', borderColor: '#EF4444'}} onClick={() => cancelOrderRequest(o.id)} title="Cancel Order">
-                           <HiOutlineTrash />
-                        </button>
-                      )}
+                     <button className="cashier-btn-close-shift" style={{ flex: (!isKitchen && !isChefReady) ? 1 : undefined, padding: (!isKitchen && !isChefReady) ? undefined : '0 12px' }} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
+                        <HiOutlinePencilSquare /> {(!isKitchen && !isChefReady) && 'Edit'}
+                     </button>
+                     {showAdmin && (
+                       <button className="cashier-btn-close-shift" style={{padding: '0 12px', color: '#EF4444', borderColor: '#EF4444'}} onClick={() => cancelOrderRequest(o.id)} title="Cancel Order">
+                          <HiOutlineTrash />
+                       </button>
+                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -1363,6 +1480,72 @@ export default function CashierDashboard() {
           </div>
         </div>
       )}
+
+      {showPinModal && (
+        <div className="cashier-modal-overlay">
+          <div className="cashier-modal" style={{ maxWidth: 360 }}>
+            <h3 style={{ marginBottom: 8 }}>Authentication Required</h3>
+            <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
+              Enter the security PIN for {serviceStaff.find(s => s.id === pendingWaiterId)?.name}
+            </p>
+            <form onSubmit={confirmWaiterPin}>
+              {pinError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{pinError}</div>}
+              <input
+                type="password"
+                className="cashier-search"
+                style={{ fontSize: 24, padding: '12px 16px', textAlign: 'center', letterSpacing: 12, marginBottom: 24, fontWeight: 'bold', width: '100%' }}
+                autoFocus
+                placeholder="****"
+                value={pinInput}
+                onChange={e => { setPinInput(e.target.value); setPinError('') }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <button type="button" className="cashier-btn-close-shift" onClick={() => { setShowPinModal(false); setPendingWaiterId(null); setPinInput(''); setPinError(''); }}>Cancel</button>
+                <button type="submit" className="cashier-btn-submit active">Confirm</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showCashierAuthPayload && (
+        <div className="cashier-modal-overlay">
+          <div className="cashier-modal" style={{ maxWidth: 360 }}>
+            <h3 style={{ marginBottom: 8 }}>Cashier Authorization</h3>
+            <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
+              A cashier MUST enter their secure PIN to confirm and process this payment.
+            </p>
+            <form onSubmit={e => {
+              e.preventDefault();
+              const approver = staff.find(s => (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') && s.security_key === cashierAuthPin.trim());
+              if (approver) {
+                const o = showCashierAuthPayload;
+                setShowCashierAuthPayload(null);
+                payOrder(o, true);
+              } else {
+                setCashierAuthError('Invalid Cashier PIN');
+                setCashierAuthPin('');
+              }
+            }}>
+              {cashierAuthError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{cashierAuthError}</div>}
+              <input
+                type="password"
+                className="cashier-search"
+                style={{ fontSize: 24, padding: '12px 16px', textAlign: 'center', letterSpacing: 12, marginBottom: 24, fontWeight: 'bold', width: '100%' }}
+                autoFocus
+                placeholder="****"
+                value={cashierAuthPin}
+                onChange={e => { setCashierAuthPin(e.target.value); setCashierAuthError('') }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <button type="button" className="cashier-btn-close-shift" onClick={() => { setShowCashierAuthPayload(null); setCashierAuthPin(''); setCashierAuthError(''); }}>Cancel</button>
+                <button type="submit" className="cashier-btn-submit active">Authorize</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

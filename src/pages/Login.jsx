@@ -193,6 +193,8 @@ function navigateByRole(nav, role) {
     nav('/app/admin?tab=overview', { replace: true })
   } else if (role === 'WAITER') {
     nav('/app/cashier', { replace: true })
+  } else if (role === 'CHEF') {
+    nav('/app/chef', { replace: true })
   } else {
     nav('/app/cashier', { replace: true })
   }
