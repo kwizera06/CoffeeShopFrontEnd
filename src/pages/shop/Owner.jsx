@@ -3378,7 +3378,7 @@ export default function Owner() {
                   <section className="am-eod-section">
                     <h3 className="am-eod-section-title">Shift Timeline</h3>
                     <div className="am-eod-table">
-                      <div className="am-eod-table-head">
+                      <div className="am-eod-table-head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}>
                         <span>Staff</span>
                         <span>Start</span>
                         <span>End</span>
@@ -3386,7 +3386,7 @@ export default function Owner() {
                         <span>Status</span>
                       </div>
                       {shifts.map((sh, idx) => (
-                        <div key={idx} className="am-eod-table-row">
+                        <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr' }}>
                           <span className="am-eod-cell-name">{sh.opened_by_user?.name || 'Staff'}</span>
                           <span>{sh.opened_at ? new Date(sh.opened_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : '-'}</span>
                           <span>{sh.closed_at ? new Date(sh.closed_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : 'Active'}</span>
@@ -3403,6 +3403,87 @@ export default function Owner() {
                     </div>
                   </section>
                 )}
+
+                {/* ── Staff Work Performance ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title" style={{ marginBottom: 16 }}>Staff Work Performance</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                    {topStaff.map((staffStats, idx) => (
+                      <div key={idx} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 16, padding: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 12, background: '#DBEAFE', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16 }}>
+                            {staffStats.name[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 16, color: '#0F172A' }}>{staffStats.name}</div>
+                            <div style={{ fontSize: 12, color: '#64748B' }}>{staffStats.count} orders handled</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, borderBottom: '1px solid #E2E8F0', paddingBottom: 12 }}>
+                           <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Total Sales</span>
+                           <span style={{ fontSize: 16, fontWeight: 800, color: '#10B981' }}>{Number(staffStats.amount).toLocaleString()} RWF</span>
+                        </div>
+                        <div>
+                           <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Top Products Sold</div>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                             {staffStats.products.slice(0, 3).map((p, i) => (
+                               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                 <span style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}><strong style={{ color: '#0F172A' }}>{p.qty}x</strong> {p.name}</span>
+                                 <span style={{ fontWeight: 600, color: '#1D3557' }}>{Number(p.amount).toLocaleString()} RWF</span>
+                               </div>
+                             ))}
+                             {staffStats.products.length === 0 && <span style={{ fontSize: 11, color: '#94A3B8' }}>No specific products</span>}
+                           </div>
+                        </div>
+                      </div>
+                    ))}
+                    {topStaff.length === 0 && (
+                      <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px', color: '#94A3B8', background: '#F8FAFC', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+                         No staff performance data for this date.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* ── Completed Orders ── */}
+                <section className="am-eod-section">
+                  <h3 className="am-eod-section-title">Completed Orders</h3>
+                  <div className="am-eod-table">
+                    <div className="am-eod-table-head" style={{ gridTemplateColumns: '0.8fr 3.5fr 1fr 1fr 1.2fr' }}>
+                      <span>Time</span>
+                      <span>Items</span>
+                      <span>Waiter</span>
+                      <span>Method</span>
+                      <span>Total Amount</span>
+                    </div>
+                    {dailyRows.sort((a, b) => new Date(a.at) - new Date(b.at)).map((row, idx) => (
+                      <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '0.8fr 3.5fr 1fr 1fr 1.2fr' }}>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>
+                          {row.at ? new Date(row.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' }) : '-'}
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {row.rawItems && row.rawItems.length > 0 ? row.rawItems.map((item, i) => (
+                            <span key={i} style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '4px 8px', borderRadius: 6, fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>
+                              <strong style={{ color: '#0F172A', marginRight: 4 }}>{item.qty}x</strong>{item.name}
+                            </span>
+                          )) : (
+                            <span style={{ fontSize: 12, color: '#94A3B8' }}>No items</span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{row.waiterName || '-'}</span>
+                        <span>
+                          <span className="am-status-badge" style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3', fontSize: 10, padding: '4px 8px' }}>
+                            {row.methodLabel || 'Cash'}
+                          </span>
+                        </span>
+                        <span style={{ fontWeight: 800, color: '#10B981', fontSize: 13 }}>{Number(row.amount || 0).toLocaleString()} RWF</span>
+                      </div>
+                    ))}
+                    {dailyRows.length === 0 && (
+                      <div className="am-eod-empty">No completed orders found for this date.</div>
+                    )}
+                  </div>
+                </section>
 
                 {/* ── Footer ── */}
                 <div className="am-eod-footer">
