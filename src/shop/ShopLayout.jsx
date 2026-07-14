@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },
   { tab: 'staff', label: 'Staff', ownerOnly: true },
   { tab: 'eod', label: 'EOD Report' },
+  { tab: 'audit', label: 'Manager Audit', ownerOnly: true },
 ]
 
 function Shell() {
@@ -121,6 +122,9 @@ function Shell() {
             <HiOutlineBell />
             <span style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, background: '#FF5722', borderRadius: '50%' }}></span>
           </div>
+          {(role === 'MANAGER' || role === 'SHOP_ADMIN') && (
+             <NavLink to="/app/billing" className="pos-btn-modern" style={{ background: '#2196F3', borderColor: '#2196F3', marginRight: '8px' }}>Billing / Refunds</NavLink>
+          )}
           <NavLink to="/app/cashier" className="pos-btn-modern">POS</NavLink>
           <div className="user-avatar-modern" title="Click to logout" onClick={logout} style={{ cursor: 'pointer' }}>{initials}</div>
         </div>

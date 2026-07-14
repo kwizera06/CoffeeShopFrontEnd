@@ -403,7 +403,7 @@ export default function Owner() {
   }, [reportDay, role, reloadManagerAdditions])
 
   useEffect(() => {
-    if (tab === 'inventory' && role === 'SHOP_ADMIN') {
+    if (tab === 'audit' && role === 'SHOP_ADMIN') {
       void reloadManagerAdditions().catch(() => {})
     }
   }, [tab, role, reloadManagerAdditions])
@@ -1814,7 +1814,7 @@ export default function Owner() {
                <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : 'Register new staff'}</h3>
 
                {!staffForm.id && (
-                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
                    <button
                      type="button"
                      className={`am-staff-type-card ${staffAddType === 'WAITER' ? 'active' : ''}`}
@@ -1887,6 +1887,24 @@ export default function Owner() {
                        Kitchen display. Sees & marks orders ready.
                      </div>
                    </button>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'AUDITOR' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('AUDITOR')
+                       setStaffForm(f => ({ ...f, role: 'AUDITOR' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'AUDITOR' ? '2px solid #00BCD4' : '1px solid #E5E7EB',
+                       background: staffAddType === 'AUDITOR' ? 'rgba(0,188,212,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#00838F', marginBottom: 6 }}>👁️ Auditor</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       Read-only access to reports and audit logs.
+                     </div>
+                   </button>
                  </div>
                )}
 
@@ -1897,7 +1915,7 @@ export default function Owner() {
                >
                   {!staffForm.id && (
                     <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F3F4F6', fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : staffAddType === 'CHEF' ? '#FF5722' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : staffAddType === 'CHEF' ? 'Chef' : 'Waiter'}</span>
+                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : staffAddType === 'CHEF' ? '#FF5722' : staffAddType === 'AUDITOR' ? '#00BCD4' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : staffAddType === 'CHEF' ? 'Chef' : staffAddType === 'AUDITOR' ? 'Auditor' : 'Waiter'}</span>
                     </div>
                   )}
                   <div className="grid-2" style={{ gap: 16 }}>
@@ -1923,6 +1941,7 @@ export default function Owner() {
                            <option value="CASHIER">Cashier — POS & billing</option>
                            <option value="MANAGER">Manager — reports & supervision</option>
                            <option value="CHEF">Chef — kitchen display</option>
+                           <option value="AUDITOR">Auditor — read-only reports</option>
                            {staffForm.role === 'SHOP_ADMIN' && <option value="SHOP_ADMIN">Owner</option>}
                         </select>
                       </label>
@@ -1933,6 +1952,7 @@ export default function Owner() {
                           staffAddType === 'CASHIER' ? 'Cashier — POS, billing & shifts'
                           : staffAddType === 'MANAGER' ? 'Manager — reports, EOD & supervision'
                           : staffAddType === 'CHEF' ? 'Chef — kitchen display & order queue'
+                          : staffAddType === 'AUDITOR' ? 'Auditor — read-only access to ops/reports'
                           : 'Waiter — orders & tables'
                         } />
                       </label>
@@ -1948,7 +1968,7 @@ export default function Owner() {
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>
-                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : staffAddType === 'CHEF' ? 'Register Chef' : 'Register Waiter')}
+                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : staffAddType === 'CHEF' ? 'Register Chef' : staffAddType === 'AUDITOR' ? 'Register Auditor' : 'Register Waiter')}
                     </button>
                     <button
                       className="btn outline xl"
@@ -1967,7 +1987,7 @@ export default function Owner() {
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
-                  {['ALL', 'OWNER', 'MANAGER', 'WAITER', 'CASHIER', 'CHEF'].map(f => (
+                  {['ALL', 'OWNER', 'MANAGER', 'AUDITOR', 'WAITER', 'CASHIER', 'CHEF'].map(f => (
                     <div 
                       key={f} 
                       className={`am-pill ${staffFilter === f ? 'active' : ''}`}
@@ -1976,10 +1996,11 @@ export default function Owner() {
                        {f === 'ALL' && <HiOutlineUsers size={14} />}
                        {f === 'OWNER' && <HiOutlinePlusCircle size={14} style={{ color: '#1D3557' }} />}
                        {f === 'MANAGER' && <HiOutlineChartBar size={14} style={{ color: '#9C27B0' }} />}
+                       {f === 'AUDITOR' && <HiOutlineDocumentText size={14} style={{ color: '#00BCD4' }} />}
                        {f === 'WAITER' && <HiOutlineUsers size={14} style={{ color: '#4CAF50' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                        {f === 'CHEF' && <span style={{ color: '#FF5722', fontSize: 14 }}>🍳</span>}
-                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f === 'CHEF' ? 'Chef' : f.charAt(0) + f.slice(1).toLowerCase()}
+                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f === 'CHEF' ? 'Chef' : f === 'AUDITOR' ? 'Auditor' : f.charAt(0) + f.slice(1).toLowerCase()}
                     </div>
                   ))}
                </div>
@@ -2353,14 +2374,26 @@ export default function Owner() {
              document.body
            )}
 
+        </>
+      ) : null}
+
+
+      {tab === 'audit' && role === 'SHOP_ADMIN' ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Manager Audit Dashboard</h1>
+              <p>Verifiable log of activities and stock increases recorded by managers.</p>
+            </div>
+          </header>
            {/* Manager Additions Audit Section — Owner only */}
            {role === 'SHOP_ADMIN' && (
              <div className="am-category-sales-card" style={{ marginTop: 24 }}>
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                  <div>
-                   <h3 className="am-card-title" style={{ margin: 0, fontSize: '18px' }}>Manager Additions Audit</h3>
+                   <h3 className="am-card-title" style={{ margin: 0, fontSize: '18px' }}>Manager Action Audit</h3>
                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--admin-text-muted)' }}>
-                     Verifiable log of stock increases recorded by managers
+                     Verifiable log of stock increases and refunds recorded by managers
                    </p>
                  </div>
                  <button
@@ -2390,7 +2423,7 @@ export default function Owner() {
                      {managerAdditions.length === 0 ? (
                        <tr>
                          <td colSpan="7" style={{ textAlign: 'center', padding: '32px 0', opacity: 0.5 }}>
-                           {managerAdditionsLoading ? 'Loading additions...' : 'No manager stock additions found in audit logs.'}
+                           {managerAdditionsLoading ? 'Loading actions...' : 'No manager actions found in audit logs.'}
                          </td>
                        </tr>
                      ) : (
@@ -2417,8 +2450,15 @@ export default function Owner() {
                                }}>
                                  {row.itemType === 'INGREDIENT' ? 'Ingredient' : 'Product'}
                                </span>
+                               <span style={{
+                                 display: 'inline-block', marginLeft: 6, padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                                 background: row.movementType === 'REFUND_RESTORE' ? 'rgba(233,30,99,0.1)' : 'rgba(156,39,176,0.1)',
+                                 color: row.movementType === 'REFUND_RESTORE' ? '#E91E63' : '#9C27B0'
+                               }}>
+                                 {row.movementType === 'REFUND_RESTORE' ? 'Refund' : 'Added'}
+                               </span>
                              </td>
-                             <td style={{ fontWeight: 800, color: '#2E7D32' }}>
+                             <td style={{ fontWeight: 800, color: row.movementType === 'REFUND_RESTORE' ? '#E91E63' : '#2E7D32' }}>
                                +{row.quantityAdded} {row.unit}
                              </td>
                              <td style={{ fontSize: 13 }}>
@@ -4322,7 +4362,7 @@ export default function Owner() {
                                   </td>
                                   <td style={{ textAlign: 'right' }}>
                                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                        {loan.status !== 'PAID' && (
+                                        {(ownerAccess || isManagerRole(role)) && loan.status !== 'PAID' && (
                                           <button 
                                             className="btn ghost tiny"
                                             onClick={async () => {
