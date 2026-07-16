@@ -89,7 +89,11 @@ export default function Owner() {
   const SUB_CATEGORIES = [
     'Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Soft Drinks', 
     'Beer & Alcohol', 'Juice & Smoothies', 'Fast Food', 
-    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks','Accompaniments','breakFast','whisky'
+    'Main Food / Meals','Wines' ,'Bakery & Desserts', 'Snacks',
+    'Accompaniments','breakFast','whisky','Cold Starter','Hot Starter',
+    'Boiled and Dishes','Egg Dish','Sandwich','Big Hot Dishes','Local Dishes(East Africa Dishes)',
+    'Chicken','Fish','Pork','Meat of Langue','Skewers','Mix Platter Grilled','Meat Challenged',
+    'Pizza','Pasta','Side Dish','Souce','Dessert'
   ]
 
   const CATEGORY_MAP = {
