@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { api, clearSession, getSession } from '../../api'
 import { supabase } from '../../supabaseClient.js'
 
+const ALL_TABS = [
+  { key: 'overview',         label: 'Overview' },
+  { key: 'menu',             label: 'Menu' },
+  { key: 'inventory',        label: 'Inventory' },
+  { key: 'bakery',           label: 'Bakery' },
+  { key: 'stock',            label: 'Stock Levels' },
+  { key: 'loans',            label: 'Loans' },
+  { key: 'requested_order',  label: 'Requisitions' },
+  { key: 'staff',            label: 'Staff' },
+  { key: 'eod',              label: 'EOD Report' },
+  { key: 'audit',            label: 'Manager Audit' },
+]
+
 export default function AdminHome() {
   const nav = useNavigate()
   const [stats, setStats] = useState(null)
@@ -18,6 +31,10 @@ export default function AdminHome() {
     momoNumber: '',
   })
   const [editId, setEditId] = useState(null)
+
+  // Tab configuration panel
+  const [tabConfigId, setTabConfigId] = useState(null)   // tenant id whose panel is open
+  const [tabConfigDraft, setTabConfigDraft] = useState({}) // { [tenantId]: Set of enabled tab keys }
 
   const load = useCallback(async () => {
     try {
@@ -135,6 +152,51 @@ export default function AdminHome() {
     nav('/login', { replace: true })
   }
 
+  // ── Tab config helpers ──────────────────────────────────────────
+  function openTabConfig(t) {
+    // Initialise draft from existing enabledTabs (null = all enabled)
+    const current = t.enabledTabs
+      ? new Set(t.enabledTabs)
+      : new Set(ALL_TABS.map(x => x.key))
+    setTabConfigDraft(prev => ({ ...prev, [t.id]: current }))
+    setTabConfigId(prev => (prev === t.id ? null : t.id))
+  }
+
+  function toggleTabKey(tenantId, key) {
+    setTabConfigDraft(prev => {
+      const next = new Set(prev[tenantId])
+      if (next.has(key)) {
+        // Never allow deselecting overview — it's the landing tab
+        if (key === 'overview') return prev
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return { ...prev, [tenantId]: next }
+    })
+  }
+
+  async function saveTabConfig(tenantId) {
+    setError('')
+    setBusy(true)
+    try {
+      const draft = tabConfigDraft[tenantId]
+      // If all tabs selected → send null (means unrestricted)
+      const allSelected = ALL_TABS.every(t => draft.has(t.key))
+      const enabledTabs = allSelected ? null : [...draft]
+      await api(`/api/admin/tenants/${tenantId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabledTabs }),
+      })
+      setTabConfigId(null)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="page admin-page">
       <header className="admin-header">
@@ -250,37 +312,146 @@ export default function AdminHome() {
             <div></div>
           </div>
           {tenants.map((t) => (
-            <div key={t.id} className="row">
-              <div>{t.name}</div>
-              <div>{t.ownerEmail}</div>
-              <div style={{ fontSize: '12px' }}>
-                {t.momoName || t.momoNumber ? (
-                  <>
-                    <div style={{ fontWeight: 'bold' }}>{t.momoName || '—'}</div>
-                    <div>{t.momoNumber || '—'}</div>
-                  </>
-                ) : (
-                  <span className="muted">Not set</span>
-                )}
-              </div>
-              <div>{t.status}</div>
-              <div className="row-actions">
-                <button type="button" className="btn primary" onClick={() => enterEditMode(t)}>
-                  Edit
-                </button>
-                {t.status === 'ACTIVE' ? (
-                  <button type="button" className="btn warn" onClick={() => setTenantStatus(t.id, 'SUSPENDED')}>
-                    Suspend
+            <div key={t.id} className="row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0 }}>
+              {/* Main tenant row */}
+              <div style={{ display: 'flex', alignItems: 'center', padding: '16px', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 140px' }}>{t.shopName}</div>
+                <div style={{ flex: '1 1 180px' }}>{t.ownerEmail}</div>
+                <div style={{ fontSize: '12px', flex: '1 1 120px' }}>
+                  {t.momoName || t.momoNumber ? (
+                    <>
+                      <div style={{ fontWeight: 'bold' }}>{t.momoName || '—'}</div>
+                      <div>{t.momoNumber || '—'}</div>
+                    </>
+                  ) : (
+                    <span className="muted">Not set</span>
+                  )}
+                </div>
+                <div style={{ flex: '0 0 70px' }}>{t.status}</div>
+                <div className="row-actions" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  <button type="button" className="btn primary" onClick={() => enterEditMode(t)}>
+                    Edit
                   </button>
-                ) : (
-                  <button type="button" className="btn good" onClick={() => setTenantStatus(t.id, 'ACTIVE')}>
-                    Activate
+                  {t.status === 'ACTIVE' ? (
+                    <button type="button" className="btn warn" onClick={() => setTenantStatus(t.id, 'SUSPENDED')}>
+                      Suspend
+                    </button>
+                  ) : (
+                    <button type="button" className="btn good" onClick={() => setTenantStatus(t.id, 'ACTIVE')}>
+                      Activate
+                    </button>
+                  )}
+                  <button type="button" className="btn ghost" onClick={() => resetPassword(t.id)}>
+                    Reset password
                   </button>
-                )}
-                <button type="button" className="btn ghost" onClick={() => resetPassword(t.id)}>
-                  Reset password
-                </button>
+                  <button
+                    type="button"
+                    className={`btn ${tabConfigId === t.id ? 'primary' : 'ghost'}`}
+                    onClick={() => openTabConfig(t)}
+                    title="Configure which tabs this shop can see"
+                  >
+                    {tabConfigId === t.id ? '▲ Tabs' : '⚙ Tabs'}
+                  </button>
+                </div>
               </div>
+
+              {/* Inline tab configuration panel */}
+              {tabConfigId === t.id && tabConfigDraft[t.id] && (
+                <div style={{
+                  background: '#F8FAFC',
+                  borderTop: '1px solid #E2E8F0',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <strong style={{ fontSize: 14, color: '#1D3557' }}>Tab Access — {t.shopName}</strong>
+                      <p style={{ fontSize: 12, color: '#6B7280', margin: '2px 0 0' }}>
+                        Checked tabs are visible to the shop owner. Overview is always required.
+                        {!t.enabledTabs && <span style={{ color: '#16A34A', fontWeight: 600 }}> Currently: all tabs enabled.</span>}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        style={{ fontSize: 12 }}
+                        onClick={() => setTabConfigDraft(prev => ({ ...prev, [t.id]: new Set(ALL_TABS.map(x => x.key)) }))}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        style={{ fontSize: 12 }}
+                        onClick={() => setTabConfigDraft(prev => ({ ...prev, [t.id]: new Set(['overview']) }))}
+                      >
+                        Minimal
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                    gap: '10px 24px',
+                  }}>
+                    {ALL_TABS.map(tabDef => {
+                      const isChecked = tabConfigDraft[t.id].has(tabDef.key)
+                      const isLocked = tabDef.key === 'overview'
+                      return (
+                        <label
+                          key={tabDef.key}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            cursor: isLocked ? 'not-allowed' : 'pointer',
+                            padding: '8px 12px',
+                            borderRadius: 8,
+                            background: isChecked ? 'rgba(29,53,87,0.06)' : '#fff',
+                            border: isChecked ? '1px solid rgba(29,53,87,0.25)' : '1px solid #E5E7EB',
+                            transition: 'all 0.15s',
+                            opacity: isLocked ? 0.6 : 1,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isLocked}
+                            onChange={() => toggleTabKey(t.id, tabDef.key)}
+                            style={{ width: 16, height: 16, accentColor: '#1D3557', cursor: isLocked ? 'not-allowed' : 'pointer' }}
+                          />
+                          <span style={{ fontSize: 13, fontWeight: isChecked ? 700 : 400, color: isChecked ? '#1D3557' : '#6B7280' }}>
+                            {tabDef.label}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      disabled={busy}
+                      onClick={() => saveTabConfig(t.id)}
+                      style={{ minWidth: 120 }}
+                    >
+                      {busy ? 'Saving…' : 'Save tab access'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => setTabConfigId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {tenants.length === 0 ? <div className="muted pad">No shops yet.</div> : null}

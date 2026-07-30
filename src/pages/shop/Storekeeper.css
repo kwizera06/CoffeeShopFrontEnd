@@ -1,0 +1,291 @@
+/* ============================================================
+   Storekeeper.css — Premium Warehouse Dashboard Theme
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Page Shell ──────────────────────────────────────────── */
+.sk-page {
+  min-height: 100vh;
+  background: #F0F2F5;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Hero Header ─────────────────────────────────────────── */
+.sk-hero {
+  background: linear-gradient(135deg, #1D3557 0%, #274B73 55%, #1a3a6e 100%);
+  padding: 32px 32px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+}
+
+/* Decorative blobs in background */
+.sk-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.sk-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  left: 30%;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(232,117,26,0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.sk-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 1;
+}
+
+.sk-hero-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -1px;
+  flex-shrink: 0;
+  backdrop-filter: blur(8px);
+}
+
+.sk-hero-greeting {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  font-weight: 500;
+}
+
+.sk-hero-title {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+.sk-hero-sub {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 400;
+}
+
+.sk-hero-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 8px 16px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+/* ── Stats Row ───────────────────────────────────────────── */
+.sk-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 0 24px;
+  margin-top: -24px;    /* Overlap hero bottom edge */
+  position: relative;
+  z-index: 2;
+  margin-bottom: 8px;
+}
+
+.sk-stat-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sk-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+
+.sk-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sk-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1;
+}
+
+.sk-stat-label {
+  font-size: 12px;
+  color: #6B7280;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ── Tab Navigation ──────────────────────────────────────── */
+.sk-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 24px 24px 0;
+}
+
+.sk-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 2px solid #E5E7EB;
+  border-radius: 16px;
+  background: #FFFFFF;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  color: #374151;
+}
+
+.sk-tab-btn:hover {
+  border-color: #9CA3AF;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
+.sk-tab-btn.active {
+  background: #F8FBFF;
+  box-shadow: 0 4px 16px rgba(29,53,87,0.12);
+  transform: translateY(-2px);
+}
+
+.sk-tab-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #F3F4F6;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.sk-tab-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sk-tab-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.sk-tab-desc {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Content Area ────────────────────────────────────────── */
+.sk-content {
+  padding: 24px;
+  animation: sk-fadein 0.25s ease both;
+}
+
+@keyframes sk-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Shared card inside Storekeeper screens ────── */
+.sk-content .am-card {
+  border-radius: 20px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* ── Mobile Responsive ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .sk-hero {
+    padding: 24px 16px 36px;
+  }
+  .sk-hero-title {
+    font-size: 22px;
+  }
+  .sk-hero-avatar {
+    width: 52px;
+    height: 52px;
+    font-size: 18px;
+  }
+  .sk-stats-row {
+    grid-template-columns: 1fr;
+    padding: 0 12px;
+    gap: 10px;
+  }
+  .sk-tabs {
+    grid-template-columns: 1fr;
+    padding: 16px 12px 0;
+    gap: 8px;
+  }
+  .sk-content {
+    padding: 12px;
+  }
+  .sk-tab-desc {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .sk-hero-badge {
+    display: none;
+  }
+}

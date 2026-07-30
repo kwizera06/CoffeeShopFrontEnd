@@ -119,6 +119,15 @@ export default function CashierDashboard() {
   const nav = useNavigate()
   const session = getSession()
   const { role } = session
+
+  useEffect(() => {
+    if (role === 'STOREKEEPER') {
+      nav('/app/storekeeper', { replace: true })
+    } else if (role === 'AUDITOR') {
+      nav('/app/auditor', { replace: true })
+    }
+  }, [role, nav])
+
   const { context, shift, reload: reloadShift, setShift, isShopAdmin } = useShopContext()
   const shopName = context?.name || ''
   const showAdmin = shouldShowAdminDashboard(session, context) || isShopAdmin
@@ -130,6 +139,23 @@ export default function CashierDashboard() {
   const editId = searchParams.get('edit')
   
   const setTab = (t) => {
+    // Gate the ready tab — only CASHIER, MANAGER, SHOP_ADMIN can enter directly
+    if (t === 'ready') {
+      const canEnterDirectly = role === 'CASHIER' || role === 'MANAGER' || role === 'SHOP_ADMIN'
+      if (!canEnterDirectly) {
+        // Waiter — show PIN gate
+        setShowReadyPinModal(true)
+        setReadyPinInput('')
+        setReadyPinError('')
+        return
+      }
+      if (!readyTabUnlocked) {
+        setShowReadyPinModal(true)
+        setReadyPinInput('')
+        setReadyPinError('')
+        return
+      }
+    }
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.set('tab', t)
@@ -163,6 +189,15 @@ export default function CashierDashboard() {
   const [showCashierAuthPayload, setShowCashierAuthPayload] = useState(null)
   const [cashierAuthPin, setCashierAuthPin] = useState('')
   const [cashierAuthError, setCashierAuthError] = useState('')
+
+  // Ready tab PIN gate
+  const [readyTabUnlocked, setReadyTabUnlocked] = useState(false)
+  const [showReadyPinModal, setShowReadyPinModal] = useState(false)
+  const [readyPinInput, setReadyPinInput] = useState('')
+  const [readyPinError, setReadyPinError] = useState('')
+
+  // Which order cards have their billing section expanded
+  const [expandedBilling, setExpandedBilling] = useState({})
 
   const serviceStaff = useMemo(
     () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
@@ -347,6 +382,11 @@ export default function CashierDashboard() {
     }
     if (tab === 'loans') {
       loadLoans('UNPAID')
+    }
+    // Lock the ready tab whenever user navigates away from it
+    if (tab !== 'ready') {
+      setReadyTabUnlocked(false)
+      setExpandedBilling({})
     }
   }, [tab, historyDate, loadClosedShifts, loadLoans])
 
@@ -550,7 +590,8 @@ export default function CashierDashboard() {
     try {
       await api(`/api/shop/orders/${id}/mark-ready`, { method: 'POST' })
       await loadBilling()
-      setTab('ready')
+      // Navigate to ready tab directly (system action, bypass PIN gate)
+      setSearchParams(prev => { const n = new URLSearchParams(prev); n.set('tab', 'ready'); return n })
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
@@ -579,13 +620,7 @@ export default function CashierDashboard() {
   }
 
   // Awaiting Payment Actions
-  async function payOrder(o, forceAuthorize = false) {
-    if ((role === 'WAITER' || role === 'CASHIER') && !forceAuthorize) {
-      setShowCashierAuthPayload(o);
-      setCashierAuthPin('');
-      setCashierAuthError('');
-      return;
-    }
+  async function payOrder(o) {
     setBusy(true)
     try {
       let payload = {};
@@ -639,13 +674,6 @@ export default function CashierDashboard() {
         body: JSON.stringify(payload)
       })
 
-      printReceipt({ 
-        shopName, 
-        order: paid, 
-        paymentMethod: printPayMethod,
-        momoName: context?.momoName,
-        momoNumber: context?.momoNumber
-      })
       await loadBilling()
       await loadMenu()
       
@@ -970,9 +998,16 @@ export default function CashierDashboard() {
                   
                   <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{marginBottom: 4, display: 'flex', gap: '8px'}}>
-                           <strong style={{color: isChefReady ? '#EAB308' : '#4ADE80'}}>{l.quantity}x</strong> 
-                           <span>{l.itemName}</span>
+                       <div key={i} style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                         <strong style={{ color: l.needsKitchen ? '#FB923C' : '#4ADE80', minWidth: 28 }}>
+                           {l.quantity}x
+                         </strong>
+                         <span style={{ flex: 1 }}>{l.itemName}</span>
+                         {l.needsKitchen && (
+                           <span style={{ fontSize: 9, fontWeight: 800, color: '#FB923C', background: 'rgba(251,146,60,0.15)', padding: '1px 6px', borderRadius: 10, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                             🍳 KITCHEN
+                           </span>
+                         )}
                        </div>
                      ))}
                   </div>
@@ -1027,178 +1062,143 @@ export default function CashierDashboard() {
                 <div key={o.id} className="cashier-order-card" style={{borderColor: '#E6CCB2'}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
                     <div className="table-badge" style={{background: '#3A3022', color: '#E6CCB2'}}>Table {o.tableNumber}</div>
-                    <div style={{fontWeight: 700, fontSize: 18}}>{Number(o.total).toLocaleString()} RWF</div>
+                    <div style={{fontWeight: 700, fontSize: 15}}>{Number(o.total).toLocaleString()} RWF</div>
                   </div>
-                  <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
+                  <div style={{fontSize: 12, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
-                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
+                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 8, borderRadius: 6, fontSize: 12}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{marginBottom: 4, display: 'flex', gap: '8px'}}>
-                           <strong style={{color: '#4ADE80'}}>{l.quantity}x</strong> 
-                           <span>{l.itemName}</span>
+                       <div key={i} style={{ marginBottom: 3, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                         <strong style={{ color: l.needsKitchen ? '#FB923C' : '#4ADE80', minWidth: 24 }}>
+                           {l.quantity}x
+                         </strong>
+                         <span style={{ flex: 1 }}>{l.itemName}</span>
+                         {l.needsKitchen && (
+                           <span style={{ fontSize: 9, fontWeight: 800, color: '#FB923C', background: 'rgba(251,146,60,0.15)', padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                             🍳
+                           </span>
+                         )}
                        </div>
                      ))}
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: '700', color: '#E6CCB2' }}>Billing Option</span>
-                    <button 
-                      onClick={() => setSplitModes(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
-                      style={{
-                        background: splitModes[o.id] ? '#D90429' : '#1D3557',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 6,
-                        padding: '4px 10px',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        fontWeight: 'bold',
-                        transition: '0.2s'
-                      }}
-                    >
-                      {splitModes[o.id] ? '← Single Payment' : '⇌ Split Payment'}
-                    </button>
-                  </div>
+                  {/* Billing section — only visible after clicking Pay */}
+                  {expandedBilling[o.id] && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: '700', color: '#E6CCB2' }}>Billing Option</span>
+                        <button
+                          onClick={() => setSplitModes(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
+                          style={{ background: splitModes[o.id] ? '#D90429' : '#1D3557', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}
+                        >
+                          {splitModes[o.id] ? '← Single Payment' : '⇌ Split Payment'}
+                        </button>
+                      </div>
 
-                  {!splitModes[o.id] ? (
-                     <>
-                        <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
-                           {['CASH', 'MOBILE_MONEY', 'POS', 'LOAN'].map(m => (
-                             <button 
-                               key={m} 
-                               className={`cashier-cat-pill ${paymentMethods[o.id] === m ? 'active' : ''}`}
-                               onClick={()=>setPaymentMethods(prev => ({ ...prev, [o.id]: m }))}
-                               style={{ flex: 1, justifyContent: 'center' }}
-                             >
-                               {m === 'MOBILE_MONEY' ? 'MoMo' : m === 'CASH' ? 'Cash' : m}
-                             </button>
-                           ))}
-                        </div>
-                        {paymentMethods[o.id] === 'LOAN' && (
-                           <input type="text" placeholder="Client Name" value={clientNames[o.id] || ''} onChange={e=>{
-                             const val = e.target.value;
-                             setClientNames(prev => ({ ...prev, [o.id]: val }));
-                           }} style={{padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white'}}/>
-                        )}
-                     </>
-                  ) : (
-                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#181818', padding: '10px 12px', borderRadius: 8, border: '1px solid #333' }}>
-                        {/* Cash Amount */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Cash (RWF):</span>
-                           <input 
-                              type="number" 
-                              inputMode="decimal"
-                              placeholder="0" 
-                              value={splitAmounts[o.id]?.CASH || ''} 
-                              onChange={e => handleSplitAmountChange(o.id, 'CASH', e.target.value)}
-                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
-                           />
-                        </div>
-                        {/* MoMo Amount */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>MoMo (RWF):</span>
-                           <input 
-                              type="number" 
-                              inputMode="decimal"
-                              placeholder="0" 
-                              value={splitAmounts[o.id]?.MOBILE_MONEY || ''} 
-                              onChange={e => handleSplitAmountChange(o.id, 'MOBILE_MONEY', e.target.value)}
-                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
-                           />
-                        </div>
-                        {/* POS Amount */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Card/POS:</span>
-                           <input 
-                              type="number" 
-                              inputMode="decimal"
-                              placeholder="0" 
-                              value={splitAmounts[o.id]?.POS || ''} 
-                              onChange={e => handleSplitAmountChange(o.id, 'POS', e.target.value)}
-                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
-                           />
-                        </div>
-                        {/* Loan Amount */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                           <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Loan (RWF):</span>
-                           <input 
-                              type="number" 
-                              inputMode="decimal"
-                              placeholder="0" 
-                              value={splitAmounts[o.id]?.LOAN || ''} 
-                              onChange={e => handleSplitAmountChange(o.id, 'LOAN', e.target.value)}
-                              style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }}
-                           />
-                        </div>
-                        {/* Loan Client Name if Loan amount > 0 */}
-                        {parseFloat(splitAmounts[o.id]?.LOAN || 0) > 0 && (
-                           <input 
-                              type="text" 
-                              placeholder="Loan Client Name" 
-                              value={clientNames[o.id] || ''} 
-                              onChange={e => {
-                                 const val = e.target.value;
-                                 setClientNames(prev => ({ ...prev, [o.id]: val }));
-                              }}
-                              style={{ padding: '6px 8px', border: '1px solid #3E3E3E', borderRadius: 6, background: '#111', color: 'white', fontSize: 12, marginTop: 2 }}
-                           />
-                        )}
-                        {/* Live Balance / Remaining Check */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 'bold', borderTop: '1px solid #2A2828', paddingTop: 6, marginTop: 4 }}>
-                           <span style={{ color: '#A0A0A0' }}>Sum Entered:</span>
-                           <span style={{ color: Math.abs(getSplitTotal(o.id) - o.total) <= 0.05 ? '#4ADE80' : '#FF4D4D' }}>
+                      {!splitModes[o.id] ? (
+                        <>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {['CASH', 'MOBILE_MONEY', 'POS', 'LOAN'].map(m => (
+                              <button
+                                key={m}
+                                className={`cashier-cat-pill ${paymentMethods[o.id] === m ? 'active' : ''}`}
+                                onClick={() => setPaymentMethods(prev => ({ ...prev, [o.id]: m }))}
+                                style={{ flex: 1, justifyContent: 'center' }}
+                              >
+                                {m === 'MOBILE_MONEY' ? 'MoMo' : m === 'CASH' ? 'Cash' : m}
+                              </button>
+                            ))}
+                          </div>
+                          {paymentMethods[o.id] === 'LOAN' && (
+                            <input type="text" placeholder="Client Name" value={clientNames[o.id] || ''} onChange={e => { const val = e.target.value; setClientNames(prev => ({ ...prev, [o.id]: val })); }} style={{ padding: 8, border: '1px solid #3E3E3E', borderRadius: 8, background: '#1C1C1C', color: 'white' }} />
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#181818', padding: '10px 12px', borderRadius: 8, border: '1px solid #333' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Cash (RWF):</span>
+                            <input type="number" inputMode="decimal" placeholder="0" value={splitAmounts[o.id]?.CASH || ''} onChange={e => handleSplitAmountChange(o.id, 'CASH', e.target.value)} style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>MoMo (RWF):</span>
+                            <input type="number" inputMode="decimal" placeholder="0" value={splitAmounts[o.id]?.MOBILE_MONEY || ''} onChange={e => handleSplitAmountChange(o.id, 'MOBILE_MONEY', e.target.value)} style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Card/POS:</span>
+                            <input type="number" inputMode="decimal" placeholder="0" value={splitAmounts[o.id]?.POS || ''} onChange={e => handleSplitAmountChange(o.id, 'POS', e.target.value)} style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 12, width: '80px', color: '#A0A0A0', fontWeight: 'bold' }}>Loan (RWF):</span>
+                            <input type="number" inputMode="decimal" placeholder="0" value={splitAmounts[o.id]?.LOAN || ''} onChange={e => handleSplitAmountChange(o.id, 'LOAN', e.target.value)} style={{ flex: 1, padding: '6px 8px', border: '1px solid #333', borderRadius: 6, background: '#111', color: 'white', fontSize: 13, textAlign: 'right' }} />
+                          </div>
+                          {parseFloat(splitAmounts[o.id]?.LOAN || 0) > 0 && (
+                            <input type="text" placeholder="Loan Client Name" value={clientNames[o.id] || ''} onChange={e => { const val = e.target.value; setClientNames(prev => ({ ...prev, [o.id]: val })); }} style={{ padding: '6px 8px', border: '1px solid #3E3E3E', borderRadius: 6, background: '#111', color: 'white', fontSize: 12, marginTop: 2 }} />
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 'bold', borderTop: '1px solid #2A2828', paddingTop: 6, marginTop: 4 }}>
+                            <span style={{ color: '#A0A0A0' }}>Sum Entered:</span>
+                            <span style={{ color: Math.abs(getSplitTotal(o.id) - o.total) <= 0.05 ? '#4ADE80' : '#FF4D4D' }}>
                               {getSplitTotal(o.id).toLocaleString()} / {Number(o.total).toLocaleString()} RWF
-                           </span>
+                            </span>
+                          </div>
                         </div>
-                     </div>
+                      )}
+                    </>
                   )}
 
-                  <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
-                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2'}} onClick={() => {
-                        let printPayMethod = null;
-                        if (splitModes[o.id]) {
-                           const splits = splitAmounts[o.id] || {};
-                           const pList = [];
-                           if (parseFloat(splits.CASH || 0) > 0) pList.push({ method: 'CASH', amount: parseFloat(splits.CASH) });
-                           if (parseFloat(splits.MOBILE_MONEY || 0) > 0) pList.push({ method: 'MOBILE_MONEY', amount: parseFloat(splits.MOBILE_MONEY) });
-                           if (parseFloat(splits.POS || 0) > 0) pList.push({ method: 'POS', amount: parseFloat(splits.POS) });
-                           if (parseFloat(splits.LOAN || 0) > 0) pList.push({ method: 'LOAN', amount: parseFloat(splits.LOAN), clientName: clientNames[o.id] || 'Client' });
-                           printPayMethod = pList;
-                        } else {
-                           printPayMethod = paymentMethods[o.id] || null;
-                        }
-                        const previewOrder = {
-                          ...o,
-                          total: o.total ?? o.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.price || 0), 0),
-                          lines: o.lines.map(l => ({
-                            ...l,
-                            itemName: l.itemName || l.name,
-                          })),
-                        }
-                        printReceipt({ 
-                          shopName, 
-                          order: previewOrder, 
-                          paymentMethod: printPayMethod,
-                          momoName: context?.momoName,
-                          momoNumber: context?.momoNumber
-                        });
-                     }}>
-                        Print Preview
-                     </button>
-                      <button className="cashier-btn-submit active" style={{flex: 1, padding: 12}} onClick={()=>payOrder(o)}>
-                         Pay & Print
+                  <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                    {/* Print Preview — always visible */}
+                    <button className="cashier-btn-close-shift" style={{ flex: 1, padding: 12, border: '1px solid #E6CCB2', color: '#E6CCB2' }} onClick={() => {
+                      let printPayMethod = null;
+                      if (splitModes[o.id]) {
+                        const splits = splitAmounts[o.id] || {};
+                        const pList = [];
+                        if (parseFloat(splits.CASH || 0) > 0) pList.push({ method: 'CASH', amount: parseFloat(splits.CASH) });
+                        if (parseFloat(splits.MOBILE_MONEY || 0) > 0) pList.push({ method: 'MOBILE_MONEY', amount: parseFloat(splits.MOBILE_MONEY) });
+                        if (parseFloat(splits.POS || 0) > 0) pList.push({ method: 'POS', amount: parseFloat(splits.POS) });
+                        if (parseFloat(splits.LOAN || 0) > 0) pList.push({ method: 'LOAN', amount: parseFloat(splits.LOAN), clientName: clientNames[o.id] || 'Client' });
+                        printPayMethod = pList;
+                      } else {
+                        printPayMethod = paymentMethods[o.id] || null;
+                      }
+                      const previewOrder = {
+                        ...o,
+                        total: o.total ?? o.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.price || 0), 0),
+                        lines: o.lines.map(l => ({ ...l, itemName: l.itemName || l.name })),
+                      };
+                      printReceipt({ shopName, order: previewOrder, paymentMethod: printPayMethod, momoName: context?.momoName, momoNumber: context?.momoNumber });
+                    }}>
+                      Print Preview
+                    </button>
+
+                    {/* Pay button: first click expands billing, second click (with method selected) processes payment */}
+                    {!expandedBilling[o.id] ? (
+                      <button
+                        className="cashier-btn-submit active"
+                        style={{ flex: 1, padding: 12 }}
+                        onClick={() => setExpandedBilling({ [o.id]: true })}
+                      >
+                        Pay
                       </button>
-                   </div>
-                   {role === 'SHOP_ADMIN' && (
-                     <button 
-                       className="cashier-btn-close-shift" 
-                       style={{ width: '100%', marginTop: 8, padding: 8, fontSize: 12, border: '1px dashed #DC2626', color: '#DC2626', background: 'rgba(220,38,38,0.05)' }} 
-                       onClick={() => handleRevertToPending(o.id)}
-                     >
-                       ↩️ Revert to Pending (Owner Only)
-                     </button>
-                   )}
+                    ) : (
+                      <button
+                        className="cashier-btn-submit active"
+                        style={{ flex: 1, padding: 12 }}
+                        onClick={() => payOrder(o)}
+                      >
+                        Confirm Pay
+                      </button>
+                    )}
+                  </div>
+
+                  {role === 'SHOP_ADMIN' && (
+                    <button
+                      className="cashier-btn-close-shift"
+                      style={{ width: '100%', marginTop: 8, padding: 8, fontSize: 12, border: '1px dashed #DC2626', color: '#DC2626', background: 'rgba(220,38,38,0.05)' }}
+                      onClick={() => handleRevertToPending(o.id)}
+                    >
+                      ↩️ Revert to Pending (Owner Only)
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1508,43 +1508,65 @@ export default function CashierDashboard() {
         </div>
       )}
 
-      {showCashierAuthPayload && (
+      {/* Ready Tab PIN Gate */}
+      {showReadyPinModal && (
         <div className="cashier-modal-overlay">
           <div className="cashier-modal" style={{ maxWidth: 360 }}>
-            <h3 style={{ marginBottom: 8 }}>Cashier Authorization</h3>
+            <h3 style={{ marginBottom: 8 }}>🔒 Cashier Access Required</h3>
             <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
-              A cashier MUST enter their secure PIN to confirm and process this payment.
+              {role === 'WAITER'
+                ? 'Waiters are not allowed to access the Awaiting Payment tab. Ask your cashier or manager.'
+                : 'Enter a cashier or manager PIN to access the payment tab.'}
             </p>
-            <form onSubmit={e => {
-              e.preventDefault();
-              const approver = staff.find(s => (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') && s.security_key === cashierAuthPin.trim());
-              if (approver) {
-                const o = showCashierAuthPayload;
-                setShowCashierAuthPayload(null);
-                payOrder(o, true);
-              } else {
-                setCashierAuthError('Invalid Cashier PIN');
-                setCashierAuthPin('');
-              }
-            }}>
-              {cashierAuthError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{cashierAuthError}</div>}
-              <input
-                type="password"
-                className="cashier-search"
-                style={{ fontSize: 24, padding: '12px 16px', textAlign: 'center', letterSpacing: 12, marginBottom: 24, fontWeight: 'bold', width: '100%' }}
-                autoFocus
-                placeholder="****"
-                value={cashierAuthPin}
-                onChange={e => { setCashierAuthPin(e.target.value); setCashierAuthError('') }}
-              />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <button type="button" className="cashier-btn-close-shift" onClick={() => { setShowCashierAuthPayload(null); setCashierAuthPin(''); setCashierAuthError(''); }}>Cancel</button>
-                <button type="submit" className="cashier-btn-submit active">Authorize</button>
-              </div>
-            </form>
+            {role === 'WAITER' ? (
+              <button
+                className="cashier-btn-close-shift"
+                style={{ width: '100%' }}
+                onClick={() => setShowReadyPinModal(false)}
+              >
+                Close
+              </button>
+            ) : (
+              <form onSubmit={e => {
+                e.preventDefault()
+                const approver = staff.find(s =>
+                  (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') &&
+                  s.security_key === readyPinInput.trim()
+                )
+                if (approver) {
+                  setReadyTabUnlocked(true)
+                  setShowReadyPinModal(false)
+                  setReadyPinInput('')
+                  setReadyPinError('')
+                  setSearchParams(prev => { const n = new URLSearchParams(prev); n.set('tab', 'ready'); return n })
+                } else {
+                  setReadyPinError('Invalid PIN. Try again.')
+                  setReadyPinInput('')
+                }
+              }}>
+                {readyPinError && (
+                  <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{readyPinError}</div>
+                )}
+                <input
+                  type="password"
+                  className="cashier-search"
+                  style={{ fontSize: 24, padding: '12px 16px', textAlign: 'center', letterSpacing: 12, marginBottom: 24, fontWeight: 'bold', width: '100%' }}
+                  autoFocus
+                  placeholder="****"
+                  value={readyPinInput}
+                  onChange={e => { setReadyPinInput(e.target.value); setReadyPinError('') }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <button type="button" className="cashier-btn-close-shift" onClick={() => { setShowReadyPinModal(false); setReadyPinInput(''); setReadyPinError('') }}>Cancel</button>
+                  <button type="submit" className="cashier-btn-submit active">Enter</button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
+
+      {showCashierAuthPayload && null}
 
     </div>
   )

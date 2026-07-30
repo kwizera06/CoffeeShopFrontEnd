@@ -146,8 +146,16 @@ body {
 .app-content {
   flex: 1;
   padding: 32px;
-  max-width: var(--content-max);
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* When the owner dashboard is rendered, the owner-modern-page handles its own padding */
+@media (min-width: 1025px) {
+  .app-content:has(.am-content-wrapper) {
+    padding: 0;
+  }
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
@@ -865,9 +873,13 @@ h4 { font-size: 15px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+@media (max-width: 768px) {
+  .app-content { padding: 12px 10px; }
+  .topbar { padding: 0 12px; gap: 8px; }
+}
+
 @media (max-width: 640px) {
   .stats-grid { grid-template-columns: 1fr; }
-  .topbar { padding: 0 16px; }
 }
 
 /* ── Button class aliases (space-separated variants used in JSX) ── */

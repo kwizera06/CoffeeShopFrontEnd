@@ -16,6 +16,8 @@
   min-height: 100vh;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Header & Tabs */
@@ -841,7 +843,11 @@
 
 .am-content-wrapper {
   display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* Chef Dashboard Grid */
@@ -2166,5 +2172,60 @@
   }
   .am-eod-stat {
     padding: 12px;
+  }
+}
+
+/* Base Mobile Overrides for Dashboard Layouts */
+@media (max-width: 768px) {
+  .owner-modern-page {
+    padding: 12px;
+    padding-bottom: 80px; /* Leave space for bottom nav bar */
+  }
+
+  /* Grid Collapses */
+  .am-metrics-grid-top {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .am-metrics-grid-mid {
+    grid-template-columns: 1fr !important;
+  }
+  .am-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .am-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .am-method-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .am-reports-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Prod Row collapsing */
+  .am-prod-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* Responsive Tables */
+  .am-table-card {
+    padding: 16px 12px;
+    overflow-x: auto;
+  }
+  .am-modern-table {
+    min-width: 600px;
+  }
+  .am-chart-card {
+    padding: 16px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .am-metrics-grid-top {
+    grid-template-columns: 1fr !important;
+  }
+  .am-reports-grid {
+    grid-template-columns: 1fr;
   }
 }

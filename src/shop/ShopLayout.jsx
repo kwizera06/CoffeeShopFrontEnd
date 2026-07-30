@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { clearSession, getSession } from '../api'
 import { shouldShowAdminDashboard } from '../utils/adminAccess.js'
-import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole } from '../utils/roles.js'
+import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole, isStorekeeperRole } from '../utils/roles.js'
 import { supabase } from '../supabaseClient.js'
 import { ShopProvider, useShopContext } from './ShopContext'
 import ShiftManager from './ShiftManager'
@@ -30,7 +30,6 @@ const NAV_ITEMS = [
   { tab: 'overview', label: 'Overview' },
   { tab: 'menu', label: 'Menu', ownerOnly: true },
   { tab: 'inventory', label: 'Inventory', ownerOnly: true },
-  { tab: 'bakery', label: 'Bakery', ownerOnly: true },
   { tab: 'stock', label: 'Stock Levels' },
   { tab: 'loans', label: 'Loans' },
   { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },
@@ -69,15 +68,28 @@ function Shell() {
   }
 
   const showDashboard = canAccessDashboard(role) || isShopAdmin || shouldShowAdminDashboard(getSession(), context)
+
+  // enabledTabs: null means all tabs are enabled (backward compatible)
+  const enabledTabs = context?.enabledTabs || null
+
   const visibleNav = NAV_ITEMS.filter(item => {
-    if (item.ownerOnly) return isOwnerRole(role)
-    return canAccessTab(role, item.tab)
+    // 1. Role-based gate (ownerOnly tabs hidden from non-owners)
+    if (item.ownerOnly && !isOwnerRole(role)) return false
+    // 2. Role access gate (manager/auditor tab allowlist)
+    if (!isOwnerRole(role) && !canAccessTab(role, item.tab)) return false
+    // 3. Developer feature flag — if enabledTabs is set, only show listed tabs
+    if (enabledTabs && !enabledTabs.includes(item.tab)) return false
+    return true
   })
   const dashboardLabel = getDashboardLabel(role)
   const roleLabel = isOwnerRole(role) ? 'Shop Admin' : isManagerRole(role) ? 'Manager' : 'Shop Staff'
   const initials = (name || email || '?')[0].toUpperCase()
 
   if (loc.pathname === '/app/cashier' && !showDashboard) {
+    return <Outlet />
+  }
+
+  if (loc.pathname === '/app/storekeeper') {
     return <Outlet />
   }
 
@@ -125,7 +137,9 @@ function Shell() {
           {(role === 'MANAGER' || role === 'SHOP_ADMIN') && (
              <NavLink to="/app/billing" className="pos-btn-modern" style={{ background: '#2196F3', borderColor: '#2196F3', marginRight: '8px' }}>Billing / Refunds</NavLink>
           )}
-          <NavLink to="/app/cashier" className="pos-btn-modern">POS</NavLink>
+          {(role !== 'STOREKEEPER' && role !== 'AUDITOR') && (
+            <NavLink to="/app/cashier" className="pos-btn-modern">POS</NavLink>
+          )}
           <div className="user-avatar-modern" title="Click to logout" onClick={logout} style={{ cursor: 'pointer' }}>{initials}</div>
         </div>
       </header>

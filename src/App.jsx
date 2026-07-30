@@ -9,6 +9,7 @@ import Orders from './pages/shop/Orders.jsx'
 import Billing from './pages/shop/Billing.jsx'
 import ChefDashboard from './pages/shop/ChefDashboard.jsx'
 import CashierDashboard from './pages/shop/CashierDashboard.jsx'
+import Storekeeper from './pages/shop/Storekeeper.jsx'
 import { getSession } from './api'
 import './screenshot-ui.css'
 
@@ -16,6 +17,7 @@ function AppIndex() {
   const { role } = getSession()
   if (role === 'SHOP_ADMIN' || role === 'MANAGER') return <Navigate to="admin?tab=overview" replace />
   if (role === 'AUDITOR') return <Navigate to="auditor" replace />
+  if (role === 'STOREKEEPER') return <Navigate to="storekeeper" replace />
   if (role === 'CHEF') return <Navigate to="chef" replace />
   return <Navigate to="cashier" replace />
 }
@@ -36,6 +38,7 @@ export default function App() {
           <Route path="supplies" element={<Supplies />} />
           <Route path="admin" element={<Owner />} />
           <Route path="auditor" element={<Auditor />} />
+          <Route path="storekeeper" element={<Storekeeper />} />
           <Route path="chef" element={<ChefDashboard />} />
         </Route>
 

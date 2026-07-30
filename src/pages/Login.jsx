@@ -197,6 +197,8 @@ function navigateByRole(nav, role) {
     nav('/app/cashier', { replace: true })
   } else if (role === 'CHEF') {
     nav('/app/chef', { replace: true })
+  } else if (role === 'STOREKEEPER') {
+    nav('/app/storekeeper', { replace: true })
   } else {
     nav('/app/cashier', { replace: true })
   }

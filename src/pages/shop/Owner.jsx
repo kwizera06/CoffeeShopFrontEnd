@@ -131,6 +131,7 @@ export default function Owner() {
   const [bakerySubTab, setBakerySubTab] = useState('PRODUCTION') // PRODUCTION | PRODUCTS | HISTORY
   const [bakerySummary, setBakerySummary] = useState(null)
   const [bakeryHistory, setBakeryHistory] = useState([])
+  const [productionLogs, setProductionLogs] = useState([])
   const [inventoryCategoryFilter, setInventoryCategoryFilter] = useState('ALL')
   
   const [actionMenu, setActionMenu] = useState(null)
@@ -269,6 +270,7 @@ export default function Owner() {
     return { year: d.getFullYear(), month: d.getMonth() + 1 }
   })
   const [dailyRows, setDailyRows] = useState([])
+  const [showAllOrdersToggle, setShowAllOrdersToggle] = useState(false)
   const [monthlyRows, setMonthlyRows] = useState([])
   const [charts, setCharts] = useState({ hourly: [], topProducts: [] })
   const [shifts, setShifts] = useState([])
@@ -289,6 +291,14 @@ export default function Owner() {
 
   const [reqSearch, setReqSearch] = useState('')
   const [reqFilter, setReqFilter] = useState('ALL')
+
+  // Stock requests (storekeeper ↔ owner)
+  const [stockRequests, setStockRequests]       = useState([])
+  const [stockReqFilter, setStockReqFilter]     = useState('ALL')
+  const [stockReqBusy, setStockReqBusy]         = useState(false)
+  // Per-request approve-qty overrides: { [itemId]: number }
+  const [approveQtys, setApproveQtys]           = useState({})
+  const [deliveries, setDeliveries]             = useState([])
   
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
@@ -367,8 +377,14 @@ export default function Owner() {
   useEffect(() => {
     if (role && allowed && !canAccessTab(role, tab)) {
       setSearchParams({ tab: 'overview' })
+      return
     }
-  }, [role, tab, allowed, setSearchParams])
+    // Also redirect if the developer has disabled this tab for the tenant
+    const enabledTabs = context?.enabledTabs || null
+    if (enabledTabs && tab !== 'overview' && !enabledTabs.includes(tab)) {
+      setSearchParams({ tab: 'overview' })
+    }
+  }, [role, tab, allowed, context, setSearchParams])
 
   const reloadManagerAdditions = useCallback(async () => {
     if (role !== 'SHOP_ADMIN') return
@@ -384,7 +400,7 @@ export default function Owner() {
   }, [role])
 
   const reloadCore = useCallback(async () => {
-    const [o, m, s, i, l, b, bh] = await Promise.all([
+    const [o, m, s, i, l, b, bh, pl] = await Promise.all([
       api(`/api/shop/owner/overview?date=${reportDay}`),
       api('/api/shop/menu'),
       api('/api/shop/staff'),
@@ -392,6 +408,7 @@ export default function Owner() {
       api('/api/shop/loans'),
       api(`/api/shop/owner/reports/bakery?date=${reportDay}`),
       api('/api/shop/owner/production'),
+      api('/api/shop/storekeeper/production'),
     ])
     setOverview(o)
     setMenu(m)
@@ -400,6 +417,7 @@ export default function Owner() {
     setLoans(l || [])
     setBakerySummary(b)
     setBakeryHistory(bh || [])
+    setProductionLogs(pl || [])
 
     if (role === 'SHOP_ADMIN') {
       void reloadManagerAdditions().catch(() => {})
@@ -726,7 +744,13 @@ export default function Owner() {
     if (allowed && tab === 'requested_order') {
       fetchRequestedOrders();
     }
-  }, [allowed, tab, fetchRequestedOrders]);
+    if (allowed && ownerAccess && tab === 'stock_requests') {
+      fetchStockRequests();
+    }
+    if (allowed && ownerAccess && tab === 'deliveries') {
+      fetchDeliveries();
+    }
+  }, [allowed, ownerAccess, tab, fetchRequestedOrders]);
 
   // Close all modals when switching tabs
   useEffect(() => {
@@ -749,6 +773,33 @@ export default function Owner() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function fetchStockRequests() {
+    try {
+      const data = await api('/api/shop/storekeeper/stock-requests')
+      setStockRequests(data || [])
+    } catch (e) { setError(e.message) }
+  }
+
+  async function fetchDeliveries() {
+    try {
+      const data = await api('/api/shop/storekeeper/deliveries')
+      setDeliveries(data || [])
+    } catch (e) { setError(e.message) }
+  }
+
+  async function handleStockRequestAction(reqId, action, items) {
+    setStockReqBusy(true)
+    setError('')
+    try {
+      await api(`/api/shop/storekeeper/stock-requests/${reqId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action, items }),
+      })
+      await fetchStockRequests()
+    } catch (e) { setError(e.message) }
+    finally { setStockReqBusy(false) }
   }
 
   async function saveMenu(e) {
@@ -1059,13 +1110,6 @@ export default function Owner() {
                  </div>
               </div>
 
-              <div className="am-mini-status" onClick={() => openDrilldown('bakeryToday')}>
-                 <div className="am-status-icon" style={{ background: 'rgba(233, 30, 99, 0.1)', color: '#E91E63' }}><MdOutlineLocalFireDepartment /></div>
-                 <div className="am-status-info">
-                   <h4>Bakery</h4>
-                   <p>Manage & Produce</p>
-                 </div>
-              </div>
 
               <div className="am-mini-status" onClick={() => openDrilldown('lowstock')}>
                  <div className="am-status-icon" style={{ background: 'rgba(255,87,34,0.1)', color: '#FF5722' }}><HiOutlineExclamationTriangle /></div>
@@ -1113,10 +1157,12 @@ export default function Owner() {
                 <div className="am-table-card">
                   <div className="am-chart-header">
                     <h3>Recent Orders</h3>
-                    <button className="btn ghost tiny" onClick={() => setShowAllOrdersModal(true)}>All</button>
+                    <button className="btn ghost tiny" onClick={() => setShowAllOrdersToggle(!showAllOrdersToggle)}>
+                      {showAllOrdersToggle ? 'Hide' : 'All'}
+                    </button>
                   </div>
-                  <div className="am-order-list">
-                    {dailyRows.slice(0, 5).map((row, idx) => (
+                  <div className="am-order-list" style={{ maxHeight: showAllOrdersToggle ? 500 : 'auto', overflowY: showAllOrdersToggle ? 'auto' : 'visible' }}>
+                    {(showAllOrdersToggle ? dailyRows : dailyRows.slice(0, 5)).map((row, idx) => (
                       <div key={idx} className="am-order-row">
                         <div className="am-order-main">
                           <div className="am-order-tbl">Tbl {idx + 1}</div>
@@ -1187,6 +1233,110 @@ export default function Owner() {
                 </div>
               </div>
             </div>
+
+            {/* Production Variance Report */}
+            <div className="am-table-card" style={{ marginTop: 24, padding: 24 }}>
+              <div className="am-chart-header" style={{ marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Production Variance Report</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-muted)', fontWeight: 500 }}>
+                    Monitor planned vs actual production yields and storekeeper remarks
+                  </p>
+                </div>
+              </div>
+              <div className="am-order-list" style={{ overflowX: 'auto', margin: '0 -24px' }}>
+                <table className="am-modern-table" style={{ width: '100%', minWidth: 700 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ paddingLeft: 24 }}>PRODUCT & TIME</th>
+                      <th>STATUS</th>
+                      <th>PLANNED QTY/VALUE</th>
+                      <th>ACTUAL QTY/VALUE</th>
+                      <th>VARIANCE (FINANCIAL)</th>
+                      <th>STAFF</th>
+                      <th style={{ paddingRight: 24 }}>COMMENTS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productionLogs.slice(0, 15).map((log) => {
+                      const variance = log.variance || 0;
+                      const price = log.menu_items?.price || 0;
+                      const expectedValue = (log.planned_qty || 0) * price;
+                      const actualValue = (log.actual_qty || 0) * price;
+                      const varianceValue = variance * price;
+
+                      return (
+                        <tr key={log.id}>
+                          <td style={{ paddingLeft: 24 }}>
+                            <div style={{ fontWeight: 700, color: 'var(--admin-text)' }}>{log.menu_items?.name || 'Unknown'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{new Date(log.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                          </td>
+                          <td>
+                            <span style={{
+                              padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800,
+                              background: log.status === 'COMPLETED' ? 'rgba(76,175,80,0.1)' : 'rgba(255,152,0,0.1)',
+                              color: log.status === 'COMPLETED' ? '#2E7D32' : '#FF9800'
+                            }}>
+                              {log.status}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{log.planned_qty}</div>
+                            <div style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{expectedValue.toLocaleString()} RWF</div>
+                          </td>
+                          <td>
+                            {log.status === 'COMPLETED' ? (
+                              <>
+                                <div style={{ fontWeight: 600 }}>{log.actual_qty ?? '-'}</div>
+                                <div style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{actualValue.toLocaleString()} RWF</div>
+                              </>
+                            ) : <span style={{ opacity: 0.5 }}>-</span>}
+                          </td>
+                          <td>
+                            {log.status === 'COMPLETED' ? (
+                              <div style={{ 
+                                fontWeight: 800, 
+                                padding: '4px 8px', borderRadius: 6, display: 'inline-block',
+                                background: variance > 0 ? 'rgba(255,82,82,0.1)' : variance < 0 ? 'rgba(76,175,80,0.1)' : 'transparent',
+                                color: variance > 0 ? '#FF5252' : variance < 0 ? '#2E7D32' : 'var(--admin-text-muted)' 
+                              }}>
+                                <div>{variance > 0 ? `-${variance} (Short)` : variance < 0 ? `+${Math.abs(variance)} (Over)` : '0'}</div>
+                                {variance !== 0 && (
+                                  <div style={{ fontSize: 10, marginTop: 2 }}>
+                                    {variance > 0 ? `Loss: ${varianceValue.toLocaleString()} RWF` : `Extra: ${Math.abs(varianceValue).toLocaleString()} RWF`}
+                                  </div>
+                                )}
+                              </div>
+                            ) : <span style={{ opacity: 0.5 }}>-</span>}
+                          </td>
+                          <td style={{ fontSize: 12 }}>
+                            <div><span style={{ opacity: 0.6 }}>Start:</span> {log.recorded_by_user?.name || 'Unknown'}</div>
+                            {log.status === 'COMPLETED' && log.completed_by_user && (
+                              <div style={{ marginTop: 2 }}><span style={{ opacity: 0.6 }}>End:</span> {log.completed_by_user.name}</div>
+                            )}
+                          </td>
+                          <td style={{ fontSize: 12, maxWidth: 200, paddingRight: 24 }}>
+                            {log.variance_comment ? (
+                              <span style={{ color: '#E67E22', fontWeight: 500 }}>"{log.variance_comment}"</span>
+                            ) : (
+                              <span style={{ opacity: 0.3 }}>-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {productionLogs.length === 0 && (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: 'center', padding: '40px 24px', color: '#6B7280', fontSize: 14 }}>
+                          No production logs found. Storekeepers use their dashboard to log production.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <footer style={{ marginTop: 48, opacity: 0.3, textAlign: 'center', fontSize: 11, borderTop: '1px solid #E5E7EB', padding: '24px 0' }}>
                © 2026 Olitech Market POS. Midnight Espresso Premium Dashboard.
             </footer>
@@ -1586,8 +1736,9 @@ export default function Owner() {
             </button>
           </div>
 
-          <div className="stack" style={{ gap: 40 }}>
-            {Object.entries(
+          {(() => {
+            const CATEGORIES_PER_PAGE = 3;
+            const allCategoryEntries = Object.entries(
               menu.filter(m => !m.is_bakery).reduce((acc, m) => {
                 const cat = m.category || 'Uncategorized';
                 if (!acc[cat]) acc[cat] = [];
@@ -1596,8 +1747,21 @@ export default function Owner() {
               }, {})
             )
             .filter(([cat]) => !['Bakery', 'Bakery & Desserts'].includes(cat) && !cat.toLowerCase().includes('bakery'))
-            .filter(([cat]) => cat.toLowerCase().includes(menuSearch.toLowerCase()) || menuSearch === '')
-            .map(([cat, items]) => (
+            .filter(([cat, items]) => {
+              if (menuSearch === '') return true;
+              const catMatches = cat.toLowerCase().includes(menuSearch.toLowerCase());
+              const productMatches = items.some(i => i.name.toLowerCase().includes(menuSearch.toLowerCase()));
+              return catMatches || productMatches;
+            });
+
+            const totalPages = Math.max(1, Math.ceil(allCategoryEntries.length / CATEGORIES_PER_PAGE));
+            const safePage = Math.min(menuPage, totalPages);
+            const pagedEntries = allCategoryEntries.slice((safePage - 1) * CATEGORIES_PER_PAGE, safePage * CATEGORIES_PER_PAGE);
+
+            return (
+              <>
+          <div className="stack" style={{ gap: 40 }}>
+            {pagedEntries.map(([cat, items]) => (
               <div key={cat} className="am-category-group am-animate">
                 <div className="row-between" style={{ marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: '20px', color: '#111827', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
@@ -1759,6 +1923,55 @@ export default function Owner() {
                 </div>
               )}
             </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 32, flexWrap: 'wrap' }}>
+                <button
+                  className="btn ghost"
+                  disabled={safePage <= 1}
+                  onClick={() => { setMenuPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  style={{ minWidth: 90, opacity: safePage <= 1 ? 0.4 : 1 }}
+                >
+                  ← Previous
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => { setMenuPage(page); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    style={{
+                      width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer',
+                      fontWeight: page === safePage ? 800 : 500,
+                      fontSize: 14,
+                      background: page === safePage ? '#1D3557' : '#F3F4F6',
+                      color: page === safePage ? '#FFFFFF' : '#374151',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  className="btn ghost"
+                  disabled={safePage >= totalPages}
+                  onClick={() => { setMenuPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  style={{ minWidth: 90, opacity: safePage >= totalPages ? 0.4 : 1 }}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            {totalPages > 1 && (
+              <p style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 12, marginTop: 8 }}>
+                Page {safePage} of {totalPages} · {allCategoryEntries.length} categories total
+              </p>
+            )}
+              </>
+            );
+          })()}
           </>
         ) : null}
 
@@ -1818,7 +2031,7 @@ export default function Owner() {
                <h3 className="am-card-title">{staffForm.id ? 'Edit staff member' : 'Register new staff'}</h3>
 
                {!staffForm.id && (
-                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
+                 <div className="am-staff-type-picker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
                    <button
                      type="button"
                      className={`am-staff-type-card ${staffAddType === 'WAITER' ? 'active' : ''}`}
@@ -1909,6 +2122,24 @@ export default function Owner() {
                        Read-only access to reports and audit logs.
                      </div>
                    </button>
+                   <button
+                     type="button"
+                     className={`am-staff-type-card ${staffAddType === 'STOREKEEPER' ? 'active' : ''}`}
+                     onClick={() => {
+                       setStaffAddType('STOREKEEPER')
+                       setStaffForm(f => ({ ...f, role: 'STOREKEEPER' }))
+                     }}
+                     style={{
+                       textAlign: 'left', padding: 16, borderRadius: 12, cursor: 'pointer',
+                       border: staffAddType === 'STOREKEEPER' ? '2px solid #EAB308' : '1px solid #E5E7EB',
+                       background: staffAddType === 'STOREKEEPER' ? 'rgba(234,179,8,0.08)' : '#fff',
+                     }}
+                   >
+                     <div style={{ fontWeight: 800, fontSize: 15, color: '#92400E', marginBottom: 6 }}>📦 Storekeeper</div>
+                     <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+                       Records production & requests stock.
+                     </div>
+                   </button>
                  </div>
                )}
 
@@ -1919,7 +2150,7 @@ export default function Owner() {
                >
                   {!staffForm.id && (
                     <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F3F4F6', fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : staffAddType === 'CHEF' ? '#FF5722' : staffAddType === 'AUDITOR' ? '#00BCD4' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : staffAddType === 'CHEF' ? 'Chef' : staffAddType === 'AUDITOR' ? 'Auditor' : 'Waiter'}</span>
+                      Creating: <span style={{ color: staffAddType === 'CASHIER' ? '#2196F3' : staffAddType === 'MANAGER' ? '#9C27B0' : staffAddType === 'CHEF' ? '#FF5722' : staffAddType === 'AUDITOR' ? '#00BCD4' : staffAddType === 'STOREKEEPER' ? '#92400E' : '#2E7D32' }}>{staffAddType === 'CASHIER' ? 'Cashier' : staffAddType === 'MANAGER' ? 'Manager' : staffAddType === 'CHEF' ? 'Chef' : staffAddType === 'AUDITOR' ? 'Auditor' : staffAddType === 'STOREKEEPER' ? 'Storekeeper' : 'Waiter'}</span>
                     </div>
                   )}
                   <div className="grid-2" style={{ gap: 16 }}>
@@ -1946,6 +2177,7 @@ export default function Owner() {
                            <option value="MANAGER">Manager — reports & supervision</option>
                            <option value="CHEF">Chef — kitchen display</option>
                            <option value="AUDITOR">Auditor — read-only reports</option>
+                           <option value="STOREKEEPER">Storekeeper — inventory & production</option>
                            {staffForm.role === 'SHOP_ADMIN' && <option value="SHOP_ADMIN">Owner</option>}
                         </select>
                       </label>
@@ -1957,6 +2189,7 @@ export default function Owner() {
                           : staffAddType === 'MANAGER' ? 'Manager — reports, EOD & supervision'
                           : staffAddType === 'CHEF' ? 'Chef — kitchen display & order queue'
                           : staffAddType === 'AUDITOR' ? 'Auditor — read-only access to ops/reports'
+                          : staffAddType === 'STOREKEEPER' ? 'Storekeeper — production records & stock requests'
                           : 'Waiter — orders & tables'
                         } />
                       </label>
@@ -1972,7 +2205,7 @@ export default function Owner() {
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button className="btn success xl flex-1" type="submit" style={{ borderRadius: 12 }}>
-                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : staffAddType === 'CHEF' ? 'Register Chef' : staffAddType === 'AUDITOR' ? 'Register Auditor' : 'Register Waiter')}
+                      {staffForm.id ? 'Update member' : (staffAddType === 'CASHIER' ? 'Register Cashier' : staffAddType === 'MANAGER' ? 'Register Manager' : staffAddType === 'CHEF' ? 'Register Chef' : staffAddType === 'AUDITOR' ? 'Register Auditor' : staffAddType === 'STOREKEEPER' ? 'Register Storekeeper' : 'Register Waiter')}
                     </button>
                     <button
                       className="btn outline xl"
@@ -1991,7 +2224,7 @@ export default function Owner() {
             {/* List Group */}
             <div className="stack" style={{ gap: 24 }}>
                <div className="am-filter-pills" style={{ margin: 0 }}>
-                  {['ALL', 'OWNER', 'MANAGER', 'AUDITOR', 'WAITER', 'CASHIER', 'CHEF'].map(f => (
+                  {['ALL', 'OWNER', 'MANAGER', 'AUDITOR', 'WAITER', 'CASHIER', 'CHEF', 'STOREKEEPER'].map(f => (
                     <div 
                       key={f} 
                       className={`am-pill ${staffFilter === f ? 'active' : ''}`}
@@ -2004,7 +2237,8 @@ export default function Owner() {
                        {f === 'WAITER' && <HiOutlineUsers size={14} style={{ color: '#4CAF50' }} />}
                        {f === 'CASHIER' && <HiOutlineShoppingCart size={14} style={{ color: '#2196F3' }} />}
                        {f === 'CHEF' && <span style={{ color: '#FF5722', fontSize: 14 }}>🍳</span>}
-                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f === 'CHEF' ? 'Chef' : f === 'AUDITOR' ? 'Auditor' : f.charAt(0) + f.slice(1).toLowerCase()}
+                       {f === 'STOREKEEPER' && <span style={{ color: '#92400E', fontSize: 14 }}>📦</span>}
+                       {f === 'OWNER' ? 'Owner' : f === 'MANAGER' ? 'Manager' : f === 'CHEF' ? 'Chef' : f === 'AUDITOR' ? 'Auditor' : f === 'STOREKEEPER' ? 'Storekeeper' : f.charAt(0) + f.slice(1).toLowerCase()}
                     </div>
                   ))}
                </div>
@@ -2820,6 +3054,284 @@ export default function Owner() {
                    </tbody>
                 </table>
              </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* ══════════════════════════════════════════════════════
+          STOCK REQUESTS TAB — Owner reviews storekeeper requests
+         ══════════════════════════════════════════════════════ */}
+      {tab === 'stock_requests' && ownerAccess ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Stock Requests</h1>
+              <p>Review, approve, and send storekeeper replenishment requests</p>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+            {[
+              { label: 'PENDING',  key: 'PENDING',  color: '#FF9800' },
+              { label: 'APPROVED', key: 'APPROVED', color: '#1D3557' },
+              { label: 'SENT',     key: 'SENT',     color: '#9C27B0' },
+              { label: 'RECEIVED', key: 'RECEIVED', color: '#4CAF50' },
+            ].map(({ label, key, color }) => (
+              <div key={key} className="am-metric-card" onClick={() => setStockReqFilter(key)}
+                style={{ cursor: 'pointer', borderColor: stockReqFilter === key ? color : undefined }}>
+                <div className="am-metric-header">{label}</div>
+                <div className="am-metric-value" style={{ color }}>
+                  {stockRequests.filter(r => r.status === key).length}
+                </div>
+                <div className="am-metric-trend" style={{ color }}>requests</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="am-filter-pills" style={{ margin: '24px 0 16px' }}>
+            {['ALL','PENDING','APPROVED','SENT','RECEIVED','REJECTED'].map(f => (
+              <div key={f} className={`am-pill ${stockReqFilter === f ? 'active' : ''}`}
+                onClick={() => setStockReqFilter(f)}>{f}</div>
+            ))}
+          </div>
+
+          <div className="stack" style={{ gap: 16 }}>
+            {stockRequests
+              .filter(r => stockReqFilter === 'ALL' || r.status === stockReqFilter)
+              .map(req => {
+                const isPending  = req.status === 'PENDING'
+                const isApproved = req.status === 'APPROVED'
+                const items      = req.requisition_items || []
+                return (
+                  <div key={req.id} className="am-category-sales-card"
+                    style={{ padding: 20, border: isPending ? '1px solid rgba(255,152,0,0.4)' : '1px solid #E5E7EB' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: '#111827' }}>
+                          Request #{req.id.slice(0, 8)}
+                          <span style={{
+                            marginLeft: 10, padding: '2px 10px', borderRadius: 20,
+                            fontSize: 10, fontWeight: 800,
+                            background: req.status === 'PENDING'  ? 'rgba(255,152,0,0.12)'
+                                      : req.status === 'APPROVED' ? 'rgba(76,175,80,0.12)'
+                                      : req.status === 'SENT'     ? 'rgba(156,39,176,0.12)'
+                                      : req.status === 'RECEIVED' ? 'rgba(33,150,243,0.12)'
+                                      : 'rgba(239,68,68,0.12)',
+                            color: req.status === 'PENDING'  ? '#B45309'
+                                 : req.status === 'APPROVED' ? '#15803D'
+                                 : req.status === 'SENT'     ? '#7C3AED'
+                                 : req.status === 'RECEIVED' ? '#1565C0'
+                                 : '#B91C1C',
+                          }}>{req.status}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                          Requested by <strong>{req.requester?.name || 'Storekeeper'}</strong>
+                          {' · '}
+                          {new Date(req.created_at).toLocaleDateString('en-GB',
+                            { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kigali' })}
+                          {req.notes && <span style={{ marginLeft: 8, fontStyle: 'italic' }}>· {req.notes}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <table className="am-modern-table" style={{ fontSize: 13, marginBottom: 16 }}>
+                      <thead>
+                        <tr>
+                          <th>ITEM</th>
+                          <th>REQUESTED</th>
+                          <th>{isPending ? 'APPROVE QTY' : 'APPROVED'}</th>
+                          <th>SENT QTY</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map(it => (
+                          <tr key={it.id}>
+                            <td style={{ fontWeight: 600 }}>{it.item_name}</td>
+                            <td>{it.quantity} {it.unit}</td>
+                            <td>
+                              {isPending ? (
+                                <input type="number" className="am-input"
+                                  style={{ width: 90, padding: '4px 8px', fontSize: 13 }}
+                                  min="0" step="any" defaultValue={it.quantity}
+                                  onChange={e => setApproveQtys(prev => ({
+                                    ...prev,
+                                    [it.id]: { ...it, approvedQty: parseFloat(e.target.value) }
+                                  }))} />
+                              ) : (
+                                <span style={{ fontWeight: it.approved_qty ? 700 : 400 }}>
+                                  {it.approved_qty ?? '—'}{it.approved_qty ? ` ${it.unit}` : ''}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              {isApproved ? (
+                                <input type="number" className="am-input"
+                                  style={{ width: 90, padding: '4px 8px', fontSize: 13 }}
+                                  min="0" step="any"
+                                  defaultValue={it.approved_qty ?? it.quantity}
+                                  onChange={e => setApproveQtys(prev => ({
+                                    ...prev,
+                                    [it.id]: { ...prev[it.id], ...it, sentQty: parseFloat(e.target.value) }
+                                  }))} />
+                              ) : (
+                                <span style={{ color: '#6B7280' }}>
+                                  {it.sent_qty ?? '—'}{it.sent_qty ? ` ${it.unit}` : ''}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {(isPending || isApproved) && (
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {isPending && (
+                          <>
+                            <button className="btn primary" disabled={stockReqBusy}
+                              style={{ padding: '8px 20px', fontSize: 13, fontWeight: 700, borderRadius: 8 }}
+                              onClick={() => {
+                                const overrides = items.map(it => ({
+                                  id: it.id,
+                                  approvedQty: approveQtys[it.id]?.approvedQty ?? it.quantity,
+                                }))
+                                handleStockRequestAction(req.id, 'APPROVE', overrides)
+                              }}>
+                              ✅ Approve
+                            </button>
+                            <button className="btn ghost" disabled={stockReqBusy}
+                              style={{ padding: '8px 20px', fontSize: 13, fontWeight: 700,
+                                borderRadius: 8, border: '1px solid rgba(239,68,68,0.4)', color: '#B91C1C' }}
+                              onClick={() => handleStockRequestAction(req.id, 'REJECT', [])}>
+                              ✗ Reject
+                            </button>
+                          </>
+                        )}
+                        {isApproved && (
+                          <button className="btn primary" disabled={stockReqBusy}
+                            style={{ padding: '8px 20px', fontSize: 13, fontWeight: 700,
+                              borderRadius: 8, background: '#7C3AED', borderColor: '#7C3AED' }}
+                            onClick={() => {
+                              const overrides = items.map(it => ({
+                                id: it.id,
+                                sentQty: approveQtys[it.id]?.sentQty ?? it.approved_qty ?? it.quantity,
+                              }))
+                              handleStockRequestAction(req.id, 'SEND', overrides)
+                            }}>
+                            📦 Mark as Sent
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            {stockRequests.filter(r => stockReqFilter === 'ALL' || r.status === stockReqFilter).length === 0 && (
+              <div className="am-card" style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>
+                No stock requests found.
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {/* ══════════════════════════════════════════════════════
+          DELIVERIES TAB — Owner sees all delivery receipts
+         ══════════════════════════════════════════════════════ */}
+      {tab === 'deliveries' && ownerAccess ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Deliveries Received</h1>
+              <p>Full audit of every delivery confirmed by the storekeeper</p>
+            </div>
+          </header>
+
+          <div className="am-metrics-grid-top">
+            <div className="am-metric-card">
+              <div className="am-metric-header">TOTAL LINE ITEMS</div>
+              <div className="am-metric-value">{deliveries.length}</div>
+              <div className="am-metric-trend am-trend-neu">received items</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">WITH VARIANCE</div>
+              <div className="am-metric-value" style={{ color: '#B45309' }}>
+                {deliveries.filter(d => parseFloat(d.variance ?? 0) > 0.001).length}
+              </div>
+              <div className="am-metric-trend" style={{ color: '#B45309' }}>shortfalls</div>
+            </div>
+            <div className="am-metric-card">
+              <div className="am-metric-header">PERFECT</div>
+              <div className="am-metric-value" style={{ color: '#15803D' }}>
+                {deliveries.filter(d => parseFloat(d.variance ?? 0) <= 0.001).length}
+              </div>
+              <div className="am-metric-trend am-trend-pos">no variance</div>
+            </div>
+          </div>
+
+          <div className="am-category-sales-card" style={{ marginTop: 24 }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="am-modern-table">
+                <thead>
+                  <tr>
+                    <th>DATE</th>
+                    <th>ITEM</th>
+                    <th>SENT</th>
+                    <th>RECEIVED</th>
+                    <th>VARIANCE</th>
+                    <th>COMMENT</th>
+                    <th>RECEIVED BY</th>
+                    <th>REQUESTED BY</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '40px 0', color: '#9CA3AF' }}>
+                        No deliveries recorded yet.
+                      </td>
+                    </tr>
+                  ) : deliveries.map(d => {
+                    const variance = parseFloat(d.variance ?? 0)
+                    const hasVar   = variance > 0.001
+                    return (
+                      <tr key={d.id}
+                        style={{ background: hasVar ? 'rgba(234,179,8,0.04)' : 'transparent' }}>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: 12, color: '#6B7280' }}>
+                          {new Date(d.created_at).toLocaleDateString('en-GB',
+                            { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Kigali' })}
+                        </td>
+                        <td style={{ fontWeight: 700 }}>
+                          {d.item_name}
+                          <div style={{ fontSize: 10, color: '#9CA3AF' }}>{d.unit}</div>
+                        </td>
+                        <td>{d.sent_qty}</td>
+                        <td style={{ fontWeight: 700,
+                          color: hasVar ? '#B91C1C' : '#15803D' }}>
+                          {d.received_qty}
+                        </td>
+                        <td style={{ fontWeight: 700,
+                          color: hasVar ? '#B45309' : '#15803D' }}>
+                          {hasVar
+                            ? `-${variance.toFixed(3)}`
+                            : <span style={{ color: '#15803D' }}>✓ 0</span>}
+                        </td>
+                        <td style={{ fontSize: 11, color: '#6B7280', maxWidth: 200,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={d.variance_comment}>
+                          {d.variance_comment || '—'}
+                        </td>
+                        <td style={{ fontSize: 12 }}>{d.receiver?.name || '—'}</td>
+                        <td style={{ fontSize: 12 }}>
+                          {d.requisition?.requester?.name || '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       ) : null}

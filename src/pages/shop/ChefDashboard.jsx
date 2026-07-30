@@ -165,18 +165,24 @@ export default function ChefDashboard() {
                      </div>
                   </div>
 
-                  {/* Body: Items */}
+                  {/* Body: Kitchen items only */}
                   <div style={{ padding: 20, flex: 1 }}>
-                     {(o.lines || []).map((it, idx) => (
-                       <div key={idx} style={{ padding: '12px 0', borderBottom: idx < o.lines.length - 1 ? `1px solid ${styleTheme.hl}` : 'none', display: 'flex', gap: 16, alignItems: 'center' }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: styleTheme.title, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+                      🍳 To Prepare
+                    </div>
+                    {(o.lines || [])
+                      .filter(it => it.needsKitchen !== false) // show all lines (already filtered server-side)
+                      .map((it, idx, arr) => (
+                        <div key={idx} style={{ padding: '12px 0', borderBottom: idx < arr.length - 1 ? `1px solid ${styleTheme.hl}` : 'none', display: 'flex', gap: 16, alignItems: 'center' }}>
                           <div style={{ background: styleTheme.hl, color: styleTheme.text, padding: '4px 12px', borderRadius: 20, fontWeight: 800, fontSize: 18 }}>
                             {it.quantity}x
                           </div>
                           <div style={{ fontSize: 20, fontWeight: 600, color: styleTheme.text }}>
                             {it.itemName}
                           </div>
-                       </div>
-                     ))}
+                        </div>
+                      ))
+                    }
                   </div>
 
                   {/* Footer Action */}
@@ -191,7 +197,7 @@ export default function ChefDashboard() {
                          opacity: busy ? 0.7 : 1, transition: 'all 0.2s'
                        }}
                      >
-                       MARK READY
+                       ✅ READY
                      </button>
                   </div>
                 </div>
