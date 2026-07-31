@@ -419,7 +419,7 @@ export default function CashierDashboard() {
     void loadBilling()
   }, [loadMenu, loadBilling])
 
-  // Real-time subscriptions (Socket.io)
+  // Real-time subscriptions (Socket.io) + polling fallback
   useEffect(() => {
     const tenantId = getSession().tenantId;
     if (!tenantId) return;
@@ -444,12 +444,19 @@ export default function CashierDashboard() {
     socket.on('eodUpdate', onEodUpdate);
     socket.on('orderUpdate', onOrderUpdate);
 
+    // Polling fallback: refresh billing every 10 s in case a socket event
+    // was missed (e.g. during the initial join_tenant handshake).
+    const pollInterval = setInterval(() => {
+      loadBilling().catch(() => {});
+    }, 10_000);
+
     return () => {
       socket.off('menuUpdate', onMenuUpdate);
       socket.off('stockUpdate', onStockUpdate);
       socket.off('staffUpdate', onStaffUpdate);
       socket.off('eodUpdate', onEodUpdate);
       socket.off('orderUpdate', onOrderUpdate);
+      clearInterval(pollInterval);
     };
   }, [loadMenu, loadBilling, reloadShift])
 
@@ -556,6 +563,9 @@ export default function CashierDashboard() {
             waiterName: waiterLabel(),
           })
         }
+        // Fix 3: eagerly refresh billing so the edited order is visible
+        // immediately in the Pending tab without waiting for a socket event.
+        await loadBilling()
         setSearchParams({ tab: 'pending' })
         setQtyById({})
         setInitialQtyById({})
@@ -574,12 +584,15 @@ export default function CashierDashboard() {
             waiterName: waiterLabel(),
           })
         }
+        // Optimistically add the new order to pending state immediately
+        // so it appears in the tab without waiting for a server round-trip.
+        setPending(prev => [created, ...prev])
+        setTab('pending')                 // switch tab instantly
         setQtyById({})
         setInitialQtyById({})
         setTableNumber('1')
-        setTab('pending')
+        void loadBilling()                // refresh in background (no await)
       }
-      await loadBilling()
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
