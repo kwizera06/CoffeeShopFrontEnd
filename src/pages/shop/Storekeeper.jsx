@@ -392,7 +392,568 @@ function ProductionScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SCREEN 2 — Stock Request  (with autocomplete)
+   SCREEN 2 — Warehouse Inventory (view warehouse & floor stock)
+───────────────────────────────────────────────────────────── */
+function WarehouseInventoryScreen() {
+  const [inventory, setInventory] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all') // 'all', 'low_warehouse', 'low_floor'
+
+  useEffect(() => {
+    loadInventory()
+  }, [])
+
+  const loadInventory = async () => {
+    setLoading(true)
+    try {
+      const data = await api('/api/shop/warehouse/inventory')
+      setInventory(data || [])
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to load inventory')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = inventory.filter(item => {
+    if (filter === 'low_warehouse') return item.warehouseQty < item.warehouseQty * 0.2
+    if (filter === 'low_floor') return item.shopFloorQty < item.shopFloorQty * 0.2
+    return true
+  })
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      {error && (
+        <Card style={{ background: '#FEE2E2', borderLeft: '4px solid #DC2626' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <HiOutlineExclamationTriangle size={20} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: '#991B1B' }}>{error}</span>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Header ── */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Warehouse Inventory</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
+              Total items: {inventory.length}
+            </p>
+          </div>
+          <button
+            onClick={loadInventory}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              background: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+
+        {/* ── Filter Pills ── */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            onClick={() => setFilter('all')}
+            className={`cashier-cat-pill ${filter === 'all' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            All Items ({inventory.length})
+          </button>
+          <button
+            onClick={() => setFilter('low_warehouse')}
+            className={`cashier-cat-pill ${filter === 'low_warehouse' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            Low Warehouse
+          </button>
+          <button
+            onClick={() => setFilter('low_floor')}
+            className={`cashier-cat-pill ${filter === 'low_floor' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            Low Floor
+          </button>
+        </div>
+      </Card>
+
+      {/* ── Inventory Grid ── */}
+      {loading ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          Loading inventory...
+        </Card>
+      ) : filtered.length === 0 ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          No items to display
+        </Card>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          {filtered.map(item => {
+            const warehousePercent = item.totalQty > 0 ? (item.warehouseQty / item.totalQty) * 100 : 0
+            const floorPercent = item.totalQty > 0 ? (item.shopFloorQty / item.totalQty) * 100 : 0
+            
+            return (
+              <div
+                key={item.productId}
+                style={{
+                  padding: 16,
+                  background: '#FFFFFF',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                    {item.name}
+                  </h3>
+                </div>
+
+                {/* ── Warehouse Stock ── */}
+                <div style={{ background: 'rgba(234,179,8,0.08)', padding: 12, borderRadius: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Warehouse</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#B45309' }}>
+                      {item.warehouseQty} units
+                    </span>
+                  </div>
+                  <div style={{ background: '#FEF3C7', height: 6, borderRadius: 3, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        background: '#EA8208',
+                        width: `${warehousePercent}%`,
+                        transition: 'width 0.2s'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Floor Stock ── */}
+                <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Shop Floor</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>
+                      {item.shopFloorQty} units
+                    </span>
+                  </div>
+                  <div style={{ background: '#DCFCE7', height: 6, borderRadius: 3, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        background: '#22C55E',
+                        width: `${floorPercent}%`,
+                        transition: 'width 0.2s'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* ── Total ── */}
+                <div style={{ 
+                  padding: 8,
+                  background: '#F3F4F6',
+                  borderRadius: 6,
+                  textAlign: 'center',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#374151'
+                }}>
+                  Total: {item.totalQty} units
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SCREEN 3 — Cashier Requests (approve/reject/send)
+───────────────────────────────────────────────────────────── */
+function CashierRequestsScreen() {
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('PENDING')
+  const [actionInProgress, setActionInProgress] = useState({})
+  const [rejectReason, setRejectReason] = useState({})
+  const [showRejectForm, setShowRejectForm] = useState({})
+
+  useEffect(() => {
+    loadRequests()
+  }, [filter])
+
+  const loadRequests = async () => {
+    setLoading(true)
+    try {
+      let status = filter === 'all' ? null : filter
+      const data = await api(`/api/shop/warehouse/requests${status ? `?status=${status}` : ''}`)
+      setRequests(data || [])
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to load requests')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApprove = async (transferId) => {
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'approving' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
+        method: 'PUT'
+      })
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to approve request')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const handleReject = async (transferId) => {
+    const reason = rejectReason[transferId]?.trim()
+    if (!reason) {
+      setError('Rejection reason is required')
+      return
+    }
+    
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'rejecting' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/reject`, {
+        method: 'PUT',
+        body: { reason }
+      })
+      setRejectReason(prev => ({ ...prev, [transferId]: '' }))
+      setShowRejectForm(prev => ({ ...prev, [transferId]: false }))
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to reject request')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const handleSend = async (transferId) => {
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'sending' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/send`, {
+        method: 'PUT'
+      })
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to send items')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const statusGroups = {
+    PENDING: requests.filter(r => r.status === 'PENDING'),
+    APPROVED: requests.filter(r => r.status === 'APPROVED'),
+    COMPLETED: requests.filter(r => r.status === 'COMPLETED'),
+    REJECTED: requests.filter(r => r.status === 'REJECTED')
+  }
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      {error && (
+        <Card style={{ background: '#FEE2E2', borderLeft: '4px solid #DC2626' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <HiOutlineExclamationTriangle size={20} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: '#991B1B' }}>{error}</span>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Header ── */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Cashier Requests</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
+              Approve or reject warehouse requests from cashiers
+            </p>
+          </div>
+          <button
+            onClick={loadRequests}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              background: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
+
+        {/* ── Filter Pills ── */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setFilter('PENDING')}
+            className={`cashier-cat-pill ${filter === 'PENDING' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            Pending ({statusGroups.PENDING.length})
+          </button>
+          <button
+            onClick={() => setFilter('APPROVED')}
+            className={`cashier-cat-pill ${filter === 'APPROVED' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            Approved ({statusGroups.APPROVED.length})
+          </button>
+          <button
+            onClick={() => setFilter('COMPLETED')}
+            className={`cashier-cat-pill ${filter === 'COMPLETED' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            Completed ({statusGroups.COMPLETED.length})
+          </button>
+          <button
+            onClick={() => setFilter('all')}
+            className={`cashier-cat-pill ${filter === 'all' ? 'active' : ''}`}
+            style={{ padding: '6px 12px', fontSize: 13 }}
+          >
+            All
+          </button>
+        </div>
+      </Card>
+
+      {/* ── Requests List ── */}
+      {loading ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          Loading requests...
+        </Card>
+      ) : requests.length === 0 ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          No requests to display
+        </Card>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {requests.map(req => {
+            const isBusy = !!actionInProgress[req.transferId]
+            const isShowingRejectForm = showRejectForm[req.transferId]
+            
+            return (
+              <div
+                key={req.transferId}
+                style={{
+                  padding: 16,
+                  background: '#FFFFFF',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12
+                }}
+              >
+                {/* ── Header Row ── */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                      {req.productName}
+                    </h3>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
+                      Requested by: <strong>{req.requestedBy}</strong>
+                    </p>
+                  </div>
+                  <StatusBadge status={req.status} />
+                </div>
+
+                {/* ── Quantity Info ── */}
+                <div style={{ 
+                  background: '#F3F4F6',
+                  padding: 12,
+                  borderRadius: 8,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 12
+                }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Quantity Requested</span>
+                    <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                      {req.quantity} units
+                    </p>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Requested Date</span>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                      {new Date(req.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* ── Notes ── */}
+                {req.notes && (
+                  <div style={{ 
+                    background: '#F0F9FF',
+                    padding: 12,
+                    borderRadius: 8,
+                    borderLeft: '3px solid #3B82F6'
+                  }}>
+                    <p style={{ margin: 0, fontSize: 12, color: '#1E40AF', fontStyle: 'italic' }}>
+                      Notes: {req.notes}
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Rejection Reason (if rejected) ── */}
+                {req.status === 'REJECTED' && req.rejectionReason && (
+                  <div style={{ 
+                    background: '#FEE2E2',
+                    padding: 12,
+                    borderRadius: 8,
+                    borderLeft: '3px solid #DC2626'
+                  }}>
+                    <p style={{ margin: 0, fontSize: 12, color: '#991B1B', fontStyle: 'italic' }}>
+                      Rejection: {req.rejectionReason}
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Actions ── */}
+                {req.status === 'PENDING' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => handleApprove(req.transferId)}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1,
+                          padding: '10px 16px',
+                          background: isBusy ? '#D1D5DB' : '#10B981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 8,
+                          fontWeight: 600,
+                          cursor: isBusy ? 'not-allowed' : 'pointer',
+                          transition: '0.2s'
+                        }}
+                      >
+                        {actionInProgress[req.transferId] === 'approving' ? '✓ Approving...' : '✓ Approve'}
+                      </button>
+                      <button
+                        onClick={() => setShowRejectForm(prev => ({ ...prev, [req.transferId]: !isShowingRejectForm }))}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1,
+                          padding: '10px 16px',
+                          background: isShowingRejectForm ? '#EF4444' : '#F3F4F6',
+                          color: isShowingRejectForm ? 'white' : '#374151',
+                          border: '1px solid #D1D5DB',
+                          borderRadius: 8,
+                          fontWeight: 600,
+                          cursor: isBusy ? 'not-allowed' : 'pointer',
+                          transition: '0.2s'
+                        }}
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                    {isShowingRejectForm && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="text"
+                          placeholder="Reason for rejection..."
+                          value={rejectReason[req.transferId] || ''}
+                          onChange={(e) => setRejectReason(prev => ({ ...prev, [req.transferId]: e.target.value }))}
+                          style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            border: '1px solid #D1D5DB',
+                            borderRadius: 6,
+                            outline: 'none',
+                            fontSize: 13
+                          }}
+                        />
+                        <button
+                          onClick={() => handleReject(req.transferId)}
+                          disabled={isBusy || !rejectReason[req.transferId]?.trim()}
+                          style={{
+                            padding: '8px 16px',
+                            background: isBusy || !rejectReason[req.transferId]?.trim() ? '#D1D5DB' : '#DC2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            cursor: (isBusy || !rejectReason[req.transferId]?.trim()) ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          Confirm Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {req.status === 'APPROVED' && (
+                  <button
+                    onClick={() => handleSend(req.transferId)}
+                    disabled={isBusy}
+                    style={{
+                      padding: '10px 16px',
+                      background: isBusy ? '#D1D5DB' : '#7C3AED',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                      transition: '0.2s'
+                    }}
+                  >
+                    {actionInProgress[req.transferId] === 'sending' ? '→ Sending...' : '→ Send to Floor'}
+                  </button>
+                )}
+
+                {req.status === 'COMPLETED' && (
+                  <div style={{ 
+                    padding: 10,
+                    background: '#DCFCE7',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#15803D'
+                  }}>
+                    ✓ Items sent to shop floor
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SCREEN 4 — Stock Request  (with autocomplete)
 ───────────────────────────────────────────────────────────── */
 function StockRequestScreen() {
   const UNITS = ['kg', 'g', 'l', 'ml', 'pcs', 'bags', 'boxes', 'cups', 'shots']
@@ -584,7 +1145,7 @@ function StockRequestScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SCREEN 3 — Receive Delivery  (explicit destination per item)
+   SCREEN 5 — Receive Delivery  (explicit destination per item)
 ───────────────────────────────────────────────────────────── */
 function ReceiveDeliveryScreen() {
   const [requests, setRequests]       = useState([])
@@ -961,7 +1522,8 @@ function ReceiveDeliveryScreen() {
    ROOT — Storekeeper Dashboard (tab shell)
 ───────────────────────────────────────────────────────────── */
 const TABS = [
-  { key: 'production', label: 'Record Production', Icon: HiOutlineBeaker,              color: '#1D3557', desc: 'Log production runs & deduct ingredients' },
+  { key: 'inventory',  label: 'Warehouse Stock',   Icon: HiOutlineArchiveBox,           color: '#EA8208', desc: 'View warehouse & floor inventory'          },
+  { key: 'cashier',    label: 'Cashier Requests',  Icon: HiOutlineClipboardDocumentList, color: '#3B82F6', desc: 'Approve/reject cashier warehouse requests' },
   { key: 'request',    label: 'Request Stock',     Icon: HiOutlineClipboardDocumentList, color: '#7C3AED', desc: 'Submit stock requests to the owner'        },
   { key: 'receive',    label: 'Receive Delivery',  Icon: HiOutlineTruck,                color: '#047857', desc: 'Confirm and record arrived deliveries'     },
 ]
@@ -970,7 +1532,7 @@ export default function Storekeeper() {
   const nav = useNavigate()
   const { role, name } = getSession()
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') || 'production'
+  const tab = searchParams.get('tab') || 'inventory'
   const [stats, setStats] = useState({ ingredients: 0, inProgress: 0, pendingDeliveries: 0 })
 
   useEffect(() => {
@@ -1067,7 +1629,8 @@ export default function Storekeeper() {
 
       {/* ── Screen content ── */}
       <div className="sk-content">
-        {tab === 'production' && <ProductionScreen />}
+        {tab === 'inventory'  && <WarehouseInventoryScreen />}
+        {tab === 'cashier'    && <CashierRequestsScreen />}
         {tab === 'request'    && <StockRequestScreen />}
         {tab === 'receive'    && <ReceiveDeliveryScreen />}
       </div>

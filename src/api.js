@@ -85,30 +85,49 @@ export async function api(path, options = {}) {
   // Ensure we don't double up on /api/ if path already includes it
   const fullPath = path.startsWith('http') ? path : `${BASE_URL}${path}`
   
-  const res = await fetch(fullPath, { ...options, headers })
-  if (res.status === 401) {
-    clearSession()
-  }
-  if (!res.ok) {
-    const msg = await parseError(res)
-    const err = new Error(msg || `Request failed (${res.status})`)
-    err.status = res.status
-    throw err
-  }
-  if (res.status === 204) {
-    return null
-  }
-  const text = await res.text()
-  if (!text) return null;
+  // Mobile-friendly timeout handling: 30s for POST/PUT, 15s for GET
+  const timeout = (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') ? 30000 : 15000
+  
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+  
   try {
-    const data = JSON.parse(text)
-    const pathOnly = path.split('?')[0]
-    if (pathOnly === '/api/shop/context' && data?.name) {
-      const tenantId = getSession().tenantId
-      if (tenantId) setCachedShopContext(tenantId, data)
+    const res = await fetch(fullPath, { ...options, headers, signal: controller.signal })
+    clearTimeout(timeoutId)
+    
+    if (res.status === 401) {
+      clearSession()
     }
-    return data
-  } catch {
-    return text
+    if (!res.ok) {
+      const msg = await parseError(res)
+      const err = new Error(msg || `Request failed (${res.status})`)
+      err.status = res.status
+      throw err
+    }
+    if (res.status === 204) {
+      return null
+    }
+    const text = await res.text()
+    if (!text) return null;
+    try {
+      const data = JSON.parse(text)
+      const pathOnly = path.split('?')[0]
+      if (pathOnly === '/api/shop/context' && data?.name) {
+        const tenantId = getSession().tenantId
+        if (tenantId) setCachedShopContext(tenantId, data)
+      }
+      return data
+    } catch {
+      return text
+    }
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout/1000}s - check your network connection`)
+    }
+    if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
+      throw new Error('Network error - please check your connection')
+    }
+    throw e
   }
 }

@@ -513,12 +513,16 @@ export default function Owner() {
       return
     }
     try {
+      console.log(`📊 [EOD Report] Loading for date: ${reportDay}`);
+      
       const [d, moon, c, s] = await Promise.all([
         api(`/api/shop/owner/reports/daily?date=${reportDay}`),
         api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
         api(`/api/shop/owner/reports/charts?date=${reportDay}`),
         api(`/api/shop/shifts?date=${reportDay}`),
       ])
+      
+      console.log(`📊 [EOD Report] Loaded: ${d.length} daily rows, ${s.length} shifts`);
       
       setDailyRows(d)
       setMonthlyRows(moon)
@@ -3752,7 +3756,7 @@ export default function Owner() {
                </button>
              ))}
           </div>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
             <input
               type="date"
               className="am-input"
@@ -3767,6 +3771,32 @@ export default function Owner() {
               onChange={e => setReportDay(e.target.value)}
             />
             <span style={{ position: 'absolute', left: 16, color: '#64748B', pointerEvents: 'none' }}>📅</span>
+            
+            {/* Quick navigation button */}
+            <button 
+              onClick={() => {
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const dateStr = yesterday.toISOString().split('T')[0];
+                console.log('📅 Setting date to yesterday:', dateStr);
+                setReportDay(dateStr);
+              }}
+              style={{
+                padding: '10px 16px',
+                background: '#E0E7FF',
+                border: '1px solid #818CF8',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 13,
+                color: '#4F46E5',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+              title="Load yesterday's report"
+            >
+              📆 Yesterday
+            </button>
           </div>
         </div>
       </header>

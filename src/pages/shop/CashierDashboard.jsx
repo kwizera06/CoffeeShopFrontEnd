@@ -25,7 +25,9 @@ import {
   HiOutlineClock,
   HiOutlineCalendar,
   HiOutlineReceiptPercent,
-  HiOutlinePrinter
+  HiOutlinePrinter,
+  HiOutlineCube,
+  HiOutlineBeaker
 } from 'react-icons/hi2'
 import {
   IoCafeOutline,
@@ -115,6 +117,344 @@ function roleDisplayLabel(role) {
   return role || 'Staff'
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Production Recording Screen (from Storekeeper)
+───────────────────────────────────────────────────────────── */
+function ProductionRecordingScreen() {
+  const [products, setProducts]     = useState([])
+  const [recipe, setRecipe]         = useState(null)
+  const [plannedQty, setPlannedQty] = useState('')
+  const [busy, setBusy]             = useState(false)
+  const [error, setError]           = useState('')
+  const [logs, setLogs]             = useState([])
+  const [confirming, setConfirming]  = useState(null)
+  const [phase2Busy, setPhase2Busy]  = useState(false)
+
+  const loadLogs = useCallback(async () => {
+    try {
+      const data = await api('/api/shop/storekeeper/production')
+      setLogs(data || [])
+    } catch (e) { console.error(e) }
+  }, [])
+
+  useEffect(() => {
+    api('/api/shop/storekeeper/prepared-products')
+      .then(d => setProducts(d || []))
+      .catch(e => setError(e.message))
+    loadLogs()
+  }, [loadLogs])
+
+  async function onProductSelect(menuItemId) {
+    setRecipe(null)
+    setPlannedQty('')
+    setError('')
+    if (!menuItemId) return
+    try {
+      const r = await api(`/api/shop/storekeeper/recipe/${menuItemId}`)
+      setRecipe(r)
+    } catch (e) { setError(e.message) }
+  }
+
+  const scaledLines = recipe && plannedQty > 0
+    ? recipe.recipeLines.map(r => ({
+        ...r,
+        required: parseFloat(((r.quantityPerBatch / recipe.standardYield) * plannedQty).toFixed(4)),
+      }))
+    : (recipe?.recipeLines || []).map(r => ({ ...r, required: 0 }))
+
+  async function handleStartProduction(e) {
+    e.preventDefault()
+    setError('')
+    if (!recipe) return
+    const planned = parseFloat(plannedQty)
+    if (!planned || planned <= 0) { setError('Enter a valid planned quantity'); return }
+    setBusy(true)
+    try {
+      await api('/api/shop/storekeeper/production', {
+        method: 'POST',
+        body: JSON.stringify({ menuItemId: recipe.menuItemId, plannedQty: planned }),
+      })
+      setRecipe(null)
+      setPlannedQty('')
+      await loadLogs()
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  async function handleCompleteProduction(e) {
+    e.preventDefault()
+    setError('')
+    const actual   = parseFloat(confirming.actualQty)
+    const planned  = parseFloat(confirming.log.planned_qty)
+    const variance = planned - actual
+    if (Math.abs(variance) > 0.001 && !confirming.comment?.trim()) {
+      setError('A comment explaining the variance is required')
+      return
+    }
+    setPhase2Busy(true)
+    try {
+      await api(`/api/shop/storekeeper/production/${confirming.log.id}/complete`, {
+        method: 'PUT',
+        body: JSON.stringify({ actualQty: actual, varianceComment: confirming.comment }),
+      })
+      setConfirming(null)
+      await loadLogs()
+    } catch (e) { setError(e.message) }
+    finally { setPhase2Busy(false) }
+  }
+
+  const inProgress = logs.filter(l => l.status === 'IN_PROGRESS')
+  const completed  = logs.filter(l => l.status === 'COMPLETED')
+
+  return (
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+          color: '#B91C1C', padding: '12px 16px', borderRadius: 10, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Phase-2 modal */}
+      {confirming && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setConfirming(null)}>
+          <div style={{ background: '#FFFFFF', width: '100%', maxWidth: 440, padding: 28, borderRadius: 16 }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', color: '#111827', fontSize: 18, fontWeight: 800 }}>
+              Confirm Production Output
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
+              Planned: <strong>{confirming.log.planned_qty}</strong> units of{' '}
+              <strong>{confirming.log.menu_items?.name}</strong>
+            </p>
+            <form onSubmit={handleCompleteProduction} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Actual quantity produced</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  required
+                  value={confirming.actualQty}
+                  onChange={e => setConfirming(c => ({ ...c, actualQty: e.target.value }))}
+                  placeholder="e.g. 36"
+                  style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
+                />
+              </div>
+              {confirming.actualQty !== '' &&
+               Math.abs(parseFloat(confirming.log.planned_qty) - parseFloat(confirming.actualQty || 0)) > 0.001 && (
+                <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)',
+                  borderRadius: 10, padding: 12 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                    ⚠ Variance detected ({(parseFloat(confirming.log.planned_qty) - parseFloat(confirming.actualQty || 0)).toFixed(2)} units) — comment required
+                  </p>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Variance explanation</label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={confirming.comment}
+                      onChange={e => setConfirming(c => ({ ...c, comment: e.target.value }))}
+                      placeholder="e.g. 4 pieces burnt during cooking"
+                      style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="submit" disabled={phase2Busy} style={{
+                  flex: 1, padding: 12, background: '#10B981', color: 'white', border: 'none', 
+                  borderRadius: 8, fontWeight: 600, cursor: 'pointer'
+                }}>
+                  {phase2Busy ? 'Saving…' : '✓ Confirm & Add to Stock'}
+                </button>
+                <button type="button" onClick={() => { setConfirming(null); setError('') }} style={{
+                  flex: 1, padding: 12, background: '#F3F4F6', color: '#374151', border: 'none',
+                  borderRadius: 8, fontWeight: 600, cursor: 'pointer'
+                }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Start production form */}
+      <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+        <h3 style={{ margin: '0 0 4px', fontWeight: 800, color: '#1D3557', fontSize: 16 }}>
+          <HiOutlineBeaker style={{ verticalAlign: 'middle', marginRight: 8 }} />
+          Record New Production Run
+        </h3>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
+          Select a prepared product, enter the desired output quantity, and the system will calculate and immediately deduct the required ingredients.
+        </p>
+        <form onSubmit={handleStartProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Prepared Product</label>
+            <select onChange={e => onProductSelect(e.target.value)} required
+              style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}>
+              <option value="">— Select a product —</option>
+              {products.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · Std. yield: {p.recipe_reference_yield} pcs
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {recipe && (
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
+                Planned output quantity (units)
+              </label>
+              <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#9CA3AF' }}>
+                Standard recipe yield is {recipe.standardYield} units. Ingredients will be scaled proportionally.
+              </p>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required
+                value={plannedQty}
+                onChange={e => setPlannedQty(e.target.value)}
+                placeholder={`e.g. ${recipe.standardYield}`}
+                style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
+              />
+            </div>
+          )}
+
+          {recipe && scaledLines.length > 0 && (
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
+              <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, color: '#1D3557' }}>
+                Ingredients that will be deducted from stock
+              </p>
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>INGREDIENT</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>IN STOCK</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>WILL DEDUCT</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>REMAINING</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scaledLines.map(r => {
+                    const after    = r.currentStock - r.required
+                    const isLow    = after < 0
+                    const isWarn   = after >= 0 && after < r.currentStock * 0.1
+                    return (
+                      <tr key={r.ingredientId} style={{ background: isLow ? 'rgba(239,68,68,0.05)' : 'transparent', borderBottom: '1px solid #E2E8F0' }}>
+                        <td style={{ fontWeight: 600, padding: '8px 0' }}>{r.ingredientName}</td>
+                        <td style={{ padding: '8px 0' }}>{r.currentStock} {r.unit}</td>
+                        <td style={{ color: '#E8751A', fontWeight: 700, padding: '8px 0' }}>
+                          -{r.required} {r.unit}
+                        </td>
+                        <td style={{ fontWeight: 700, color: isLow ? '#B91C1C' : isWarn ? '#92400E' : '#15803D', padding: '8px 0' }}>
+                          {isLow && '⚠ '} {after.toFixed(3)} {r.unit}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {recipe && (
+            <button type="submit" disabled={busy || !plannedQty} style={{
+              borderRadius: 10, height: 48, fontSize: 15, fontWeight: 700,
+              background: busy ? '#D1D5DB' : '#3B82F6', color: 'white', border: 'none', cursor: 'pointer'
+            }}>
+              {busy ? 'Deducting ingredients…' : '🚀 Start Production & Deduct Ingredients'}
+            </button>
+          )}
+        </form>
+      </div>
+
+      {/* In Progress */}
+      {inProgress.length > 0 && (
+        <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 800, color: '#92400E', fontSize: 15 }}>
+            <HiOutlineClock style={{ verticalAlign: 'middle', marginRight: 8 }} />
+            Awaiting Actual Output ({inProgress.length})
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {inProgress.map(log => (
+              <div key={log.id} style={{ border: '1px solid rgba(234,179,8,0.4)',
+                borderRadius: 12, padding: 16, background: 'rgba(234,179,8,0.04)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {log.menu_items?.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                    Planned: <strong>{log.planned_qty}</strong> units · {new Date(log.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <button style={{
+                  padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+                  background: '#3B82F6', color: 'white', border: 'none', cursor: 'pointer'
+                }}
+                  onClick={() => { setError(''); setConfirming({ log, actualQty: log.planned_qty, comment: '' }) }}>
+                  ✅ Enter Actual Output
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Completed history */}
+      {completed.length > 0 && (
+        <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 800, color: '#1D3557', fontSize: 15 }}>
+            Production History
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>DATE</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PRODUCT</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PLANNED</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>ACTUAL</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>VARIANCE</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>COMMENT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completed.map(log => {
+                  const v = parseFloat(log.variance ?? 0)
+                  return (
+                    <tr key={log.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                      <td style={{ whiteSpace: 'nowrap', color: '#6B7280', fontSize: 11, padding: '8px 0' }}>
+                        {new Date(log.created_at).toLocaleDateString()}
+                      </td>
+                      <td style={{ fontWeight: 600, padding: '8px 0' }}>{log.menu_items?.name}</td>
+                      <td style={{ padding: '8px 0' }}>{log.planned_qty}</td>
+                      <td style={{ fontWeight: 700, padding: '8px 0' }}>{log.actual_qty}</td>
+                      <td style={{ fontWeight: 700, color: v === 0 ? '#15803D' : v > 0 ? '#B91C1C' : '#15803D', padding: '8px 0' }}>
+                        {v === 0 ? '✓ 0' : (v > 0 ? `-${v}` : `+${Math.abs(v)}`)}
+                      </td>
+                      <td style={{ fontSize: 11, color: '#6B7280', maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '8px 0' }}>
+                        {log.variance_comment || '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CashierDashboard() {
   const nav = useNavigate()
   const session = getSession()
@@ -198,6 +538,13 @@ export default function CashierDashboard() {
 
   // Which order cards have their billing section expanded
   const [expandedBilling, setExpandedBilling] = useState({})
+
+  // Warehouse Requests state
+  const [warehouseRequests, setWarehouseRequests] = useState([])
+  const [warehouseInventory, setWarehouseInventory] = useState([])
+  const [newWarehouseRequest, setNewWarehouseRequest] = useState({ productId: '', quantity: '', notes: '' })
+  const [warehouseLoading, setWarehouseLoading] = useState(false)
+  const [warehouseError, setWarehouseError] = useState('')
 
   const serviceStaff = useMemo(
     () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
@@ -414,6 +761,66 @@ export default function CashierDashboard() {
     } catch (e) { /* ignore */ }
   }, [])
 
+  // Load warehouse inventory for requests
+  const loadWarehouseInventory = useCallback(async () => {
+    try {
+      const inv = await api('/api/shop/warehouse/inventory')
+      setWarehouseInventory(inv)
+    } catch (e) {
+      console.error('Failed to load warehouse inventory:', e)
+    }
+  }, [])
+
+  // Load cashier's warehouse requests
+  const loadWarehouseRequests = useCallback(async () => {
+    setWarehouseLoading(true)
+    try {
+      const reqs = await api('/api/shop/warehouse/requests')
+      setWarehouseRequests(reqs)
+      setWarehouseError('')
+    } catch (e) {
+      setWarehouseError(e.message || 'Failed to load requests')
+    } finally {
+      setWarehouseLoading(false)
+    }
+  }, [])
+
+  // Create a new warehouse request
+  const handleCreateWarehouseRequest = useCallback(async (e) => {
+    e.preventDefault()
+    if (!newWarehouseRequest.productId || !newWarehouseRequest.quantity) {
+      setWarehouseError('Product and quantity required')
+      return
+    }
+    
+    setBusy(true)
+    try {
+      await api('/api/shop/warehouse/requests', {
+        method: 'POST',
+        body: {
+          productId: newWarehouseRequest.productId,
+          quantity: parseFloat(newWarehouseRequest.quantity),
+          notes: newWarehouseRequest.notes
+        }
+      })
+      setNewWarehouseRequest({ productId: '', quantity: '', notes: '' })
+      setWarehouseError('')
+      await loadWarehouseRequests()
+    } catch (e) {
+      setWarehouseError(e.message || 'Failed to create request')
+    } finally {
+      setBusy(false)
+    }
+  }, [newWarehouseRequest, loadWarehouseRequests])
+
+  // Load warehouse data when tab changes
+  useEffect(() => {
+    if (tab === 'warehouse') {
+      void loadWarehouseInventory()
+      void loadWarehouseRequests()
+    }
+  }, [tab, loadWarehouseInventory, loadWarehouseRequests])
+
   useEffect(() => {
     void loadMenu()
     void loadBilling()
@@ -431,7 +838,11 @@ export default function CashierDashboard() {
     const onStaffUpdate = () => { loadMenu().catch(()=>{}) };
     const onEodUpdate = () => { reloadShift().catch(()=>{}) };
     const onOrderUpdate = (data) => { 
-      loadBilling().catch(()=>{})
+      // Add 100ms delay to allow Supabase replication to complete
+      // This ensures the order is visible when we query the database
+      setTimeout(() => {
+        loadBilling().catch(()=>{})
+      }, 100)
       // Beep for cashier/waiter when chef marks an order ready
       if (data && data.action === 'MARK_READY') {
         playBeep()
@@ -444,11 +855,11 @@ export default function CashierDashboard() {
     socket.on('eodUpdate', onEodUpdate);
     socket.on('orderUpdate', onOrderUpdate);
 
-    // Polling fallback: refresh billing every 10 s in case a socket event
-    // was missed (e.g. during the initial join_tenant handshake).
+    // Polling fallback: refresh billing every 5s (more frequent for mobile sync)
+    // This ensures all devices see new orders within 5 seconds
     const pollInterval = setInterval(() => {
       loadBilling().catch(() => {});
-    }, 10_000);
+    }, 5_000);
 
     return () => {
       socket.off('menuUpdate', onMenuUpdate);
@@ -542,10 +953,16 @@ export default function CashierDashboard() {
   // Checkout (New Order) — printKitchen=false skips kitchen ticket
   async function submitOrder(printKitchen = false) {
     if (!shift) { alert("Please open a shift first."); return; }
-    if (!editId && !selectedWaiter) { alert("Select Waiter"); return; }
+    
+    // FIX: Better waiter validation for mobile
+    if (!editId && !selectedWaiter) { 
+      alert("⚠️ Please select a waiter/cashier before posting"); 
+      return; 
+    }
+    
     const tn = Number(tableNumber)
-    if (!tn || tn < 1) { alert("Invalid table"); return; }
-    if (cartLines.length === 0) return;
+    if (!tn || tn < 1) { alert("Invalid table number"); return; }
+    if (cartLines.length === 0) { alert("Cart is empty"); return; }
     
     setBusy(true)
     try {
@@ -563,18 +980,20 @@ export default function CashierDashboard() {
             waiterName: waiterLabel(),
           })
         }
-        // Fix 3: eagerly refresh billing so the edited order is visible
-        // immediately in the Pending tab without waiting for a socket event.
         await loadBilling()
         setSearchParams({ tab: 'pending' })
         setQtyById({})
         setInitialQtyById({})
         setTableNumber('1')
+        setSelectedWaiter('')
       } else {
         const created = await api('/api/shop/orders', {
           method: 'POST',
           body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter, submitToKitchen: printKitchen })
         })
+        
+        console.log('✅ Order created:', created.id, 'Status:', created.status, 'Locked:', created.locked)
+        
         if (printKitchen) {
           printKitchenTicket({
             orderId: created.id,
@@ -584,16 +1003,19 @@ export default function CashierDashboard() {
             waiterName: waiterLabel(),
           })
         }
-        // Optimistically add the new order to pending state immediately
-        // so it appears in the tab without waiting for a server round-trip.
+        // Optimistically add the new order
         setPending(prev => [created, ...prev])
-        setTab('pending')                 // switch tab instantly
+        setTab('pending')
         setQtyById({})
         setInitialQtyById({})
         setTableNumber('1')
-        void loadBilling()                // refresh in background (no await)
+        setSelectedWaiter('')
+        void loadBilling()
       }
-    } catch(e) { alert(e.message) }
+    } catch(e) { 
+      console.error('Order submission error:', e)
+      alert('❌ Failed to submit order: ' + (e.message || 'Unknown error')) 
+    }
     finally { setBusy(false) }
   }
 
@@ -810,6 +1232,13 @@ export default function CashierDashboard() {
           <IoCafeOutline /> Awaiting Payment
           <span className="cashier-tab-badge blue">{ready.length}</span>
         </button>
+        <button className={`cashier-tab ${tab==='production'?'active':''}`} onClick={()=>setTab('production')}>
+          <HiOutlineBeaker /> Record Production
+        </button>
+        <button className={`cashier-tab ${tab==='warehouse'?'active':''}`} onClick={()=>setTab('warehouse')}>
+          <HiOutlineCube /> Warehouse Requests
+          <span className="cashier-tab-badge">{warehouseRequests.filter(r => r.status === 'PENDING').length}</span>
+        </button>
         <button className={`cashier-tab ${tab==='history'?'active':''}`} onClick={()=>setTab('history')}>
           <HiOutlineClock /> History
         </button>
@@ -832,7 +1261,18 @@ export default function CashierDashboard() {
                   <IoCafeOutline /> Tbl
                   <input type="number" min="1" className="cashier-table-val" value={tableNumber} onChange={e=>setTableNumber(e.target.value)} />
                 </div>
-                <select className="cashier-waiter-sel" value={selectedWaiter} disabled={!!editId} onChange={(e) => handleWaiterSelect(e.target.value)}>
+                <select 
+                  className="cashier-waiter-sel" 
+                  value={selectedWaiter} 
+                  disabled={!!editId} 
+                  onChange={(e) => handleWaiterSelect(e.target.value)}
+                  onBlur={(e) => {
+                    // Ensure mobile touch selection registers properly
+                    if (e.target.value && e.target.value !== selectedWaiter) {
+                      handleWaiterSelect(e.target.value)
+                    }
+                  }}
+                >
                    <option value="">Waiter / Cashier...</option>
                    {serviceStaff.map(s => (
                      <option key={s.id} value={s.id}>
@@ -1214,6 +1654,153 @@ export default function CashierDashboard() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* PRODUCTION TAB */}
+        {tab === 'production' && (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="cashier-main-area">
+              {/* Production Entry Form & History - Full Component */}
+              <ProductionRecordingScreen />
+            </div>
+          </div>
+        )}
+
+        {/* WAREHOUSE REQUESTS TAB */}
+        {tab === 'warehouse' && (
+          <div style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+            <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 24px', color: '#111827' }}>
+                <HiOutlineCube style={{ marginRight: 8, verticalAlign: 'middle' }} />
+                Warehouse Requests
+              </h2>
+
+              {/* New Request Form */}
+              <div style={{ background: '#F9FAFB', padding: 16, borderRadius: 12, marginBottom: 24, border: '1px solid #E5E7EB' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', color: '#374151' }}>
+                  Request Items from Warehouse
+                </h3>
+                <form onSubmit={handleCreateWarehouseRequest} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Product</label>
+                    <select
+                      value={newWarehouseRequest.productId}
+                      onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, productId: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8, marginTop: 4, outline: 'none', background: '#FFFFFF' }}
+                    >
+                      <option value="">Select product...</option>
+                      {warehouseInventory.map(item => (
+                        <option key={item.productId} value={item.productId}>
+                          {item.name} (W: {item.warehouseQty}, F: {item.shopFloorQty})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: 0.5, minWidth: 100 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Qty</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newWarehouseRequest.quantity}
+                      onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, quantity: e.target.value }))}
+                      min="0.1"
+                      step="0.1"
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8, marginTop: 4, outline: 'none', background: '#FFFFFF' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 150 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Notes</label>
+                    <input
+                      type="text"
+                      placeholder="Optional notes..."
+                      value={newWarehouseRequest.notes}
+                      onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, notes: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8, marginTop: 4, outline: 'none', background: '#FFFFFF' }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={busy || !newWarehouseRequest.productId || !newWarehouseRequest.quantity}
+                    style={{
+                      padding: '8px 16px',
+                      background: busy ? '#D1D5DB' : '#3B82F6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                      transition: '0.2s'
+                    }}
+                  >
+                    {busy ? 'Sending...' : 'Request'}
+                  </button>
+                </form>
+                {warehouseError && (
+                  <div style={{ marginTop: 12, padding: 12, background: '#FEE2E2', borderRadius: 8, color: '#991B1B', fontSize: 13 }}>
+                    {warehouseError}
+                  </div>
+                )}
+              </div>
+
+              {/* Requests List */}
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', color: '#374151' }}>
+                  My Requests
+                </h3>
+                {warehouseLoading ? (
+                  <p style={{ textAlign: 'center', color: '#6B7280', padding: 24 }}>Loading requests...</p>
+                ) : warehouseRequests.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#6B7280', padding: 24 }}>No warehouse requests yet.</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {warehouseRequests.map(req => (
+                      <div
+                        key={req.transferId}
+                        style={{
+                          padding: 16,
+                          border: '1px solid #E5E7EB',
+                          borderRadius: 12,
+                          background: req.status === 'PENDING' ? '#F0F9FF' : req.status === 'APPROVED' ? '#F0FDF4' : req.status === 'REJECTED' ? '#FEF2F2' : '#F9FAFB'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                          <div>
+                            <p style={{ margin: 0, fontWeight: 700, color: '#111827' }}>{req.productName}</p>
+                            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
+                              Qty: {req.quantity} units
+                            </p>
+                          </div>
+                          <span style={{
+                            padding: '4px 12px',
+                            borderRadius: 20,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: req.status === 'PENDING' ? '#DBEAFE' : req.status === 'APPROVED' ? '#DCFCE7' : req.status === 'REJECTED' ? '#FECACA' : '#E5E7EB',
+                            color: req.status === 'PENDING' ? '#0369A1' : req.status === 'APPROVED' ? '#15803D' : req.status === 'REJECTED' ? '#DC2626' : '#374151'
+                          }}>
+                            {req.status}
+                          </span>
+                        </div>
+                        {req.rejectionReason && (
+                          <p style={{ margin: '8px 0 0', fontSize: 13, color: '#DC2626', fontStyle: 'italic' }}>
+                            Reason: {req.rejectionReason}
+                          </p>
+                        )}
+                        <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6B7280' }}>
+                          Requested: {new Date(req.createdAt).toLocaleString()}
+                        </p>
+                        {req.notes && (
+                          <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6B7280', fontStyle: 'italic' }}>
+                            Notes: {req.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
