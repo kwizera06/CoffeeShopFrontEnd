@@ -72,6 +72,7 @@ const CATEGORY_THEMES = {
   'Fast Food':            { bg: '#FBE9E7', border: '#FF8A65', text: '#BF360C' },
   'Snacks':               { bg: '#F9FBE7', border: '#DCE775', text: '#827717' },
   'Accompaniments':       { bg: '#EFEBE9', border: '#A1887F', text: '#4E342E' },
+  'Gift Shop':            { bg: '#FCE4EC', border: '#EC407A', text: '#C2185B' },
 };
 
 function getCategoryColors(category) {
@@ -546,49 +547,35 @@ export default function CashierDashboard() {
   const [warehouseLoading, setWarehouseLoading] = useState(false)
   const [warehouseError, setWarehouseError] = useState('')
 
-  const serviceStaff = useMemo(
-    () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
-    [staff],
-  )
-
-  // Dynamic Categories from available menu items
-  const dynamicCategories = useMemo(() => {
-    const cats = new Set(menu.map(m => m.category).filter(Boolean))
-    return ['All', ...Array.from(cats)].sort()
-  }, [menu])
-
-  const handleWaiterSelect = (waiterId) => {
-    if (!waiterId) {
-      setSelectedWaiter('')
-      return
-    }
-    const staffMember = serviceStaff.find(s => s.id === waiterId)
-    if (staffMember && staffMember.security_key) {
-      setPendingWaiterId(waiterId)
-      setPinInput('')
-      setPinError('')
-      setShowPinModal(true)
-    } else {
-      setSelectedWaiter(waiterId)
-    }
-  }
-
-  const confirmWaiterPin = (e) => {
-    e.preventDefault()
-    const staffMember = serviceStaff.find(s => s.id === pendingWaiterId)
-    if (staffMember && staffMember.security_key === pinInput.trim()) {
-      setSelectedWaiter(pendingWaiterId)
-      setShowPinModal(false)
-      setPendingWaiterId(null)
-    } else {
-      setPinError('Incorrect PIN')
-      setPinInput('')
-    }
-  };
-
   // Billing (Pending & Ready) states
   const [pending, setPending] = useState([])
   const [ready, setReady] = useState([])
+
+  // Filter ready orders to show ONLY current shift orders
+  // Hide orders when shift is closed - ONLY show orders from current shift
+  const filteredReadyOrders = (ready || []).filter(o => {
+    if (!shift) {
+      console.log('🔍 No active shift - hiding all ready orders');
+      return false;
+    }
+    
+    // Check if order was created during current shift
+    const orderCreatedTime = new Date(o.createdAt).getTime();
+    const shiftOpenedTime = new Date(shift.opened_at).getTime();
+    const orderIsFromCurrentShift = orderCreatedTime >= shiftOpenedTime;
+    
+    if (!orderIsFromCurrentShift) {
+      console.log(`🔍 Order ${o.id} FILTERED OUT - created before shift opened`);
+      console.log(`   Order time: ${new Date(o.createdAt).toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}`);
+      console.log(`   Shift time: ${new Date(shift.opened_at).toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}`);
+    }
+    
+    return orderIsFromCurrentShift;
+  });
+  
+  if (ready.length > 0 || !shift) {
+    console.log(`📊 [Refund] ready.length=${ready.length}, shift=${shift ? '✓ active' : '✗ closed'}, filtered=${filteredReadyOrders.length}`);
+  }
 
   // History states (closed shifts only)
   const [historyDate, setHistoryDate] = useState(() => getKigaliToday())
@@ -942,6 +929,16 @@ export default function CashierDashboard() {
   }, [qtyById, menu])
   const cartTotal = cartLines.reduce((acc, l) => acc + (l.quantity * l.price), 0)
 
+  const serviceStaff = useMemo(
+    () => staff.filter(s => s.role === 'WAITER' || s.role === 'CASHIER' || s.role === 'MANAGER'),
+    [staff],
+  )
+
+  const dynamicCategories = useMemo(() => {
+    const cats = ['All', ...new Set(menu.map(m => m.category).filter(Boolean))]
+    return cats
+  }, [menu])
+
   const kitchenTicketLines = () => cartLines.map(l => ({
     quantity: l.quantity,
     itemName: l.name,
@@ -949,6 +946,50 @@ export default function CashierDashboard() {
   }))
 
   const waiterLabel = () => staff.find(x => x.id === selectedWaiter)?.name || 'Staff'
+
+  // Waiter Selection with PIN authentication
+  async function handleWaiterSelect(waiterId) {
+    if (!waiterId) {
+      setSelectedWaiter('')
+      return
+    }
+
+    // Check if waiter requires PIN
+    const waiter = staff.find(s => s.id === waiterId)
+    if (waiter && waiter.security_pin) {
+      setPendingWaiterId(waiterId)
+      setShowPinModal(true)
+      setPinInput('')
+      setPinError('')
+    } else {
+      setSelectedWaiter(waiterId)
+    }
+  }
+
+  async function confirmWaiterPin(e) {
+    e.preventDefault()
+    if (!pinInput) {
+      setPinError('Enter PIN')
+      return
+    }
+
+    try {
+      // Verify PIN
+      const waiter = staff.find(s => s.id === pendingWaiterId)
+      if (waiter.security_pin !== pinInput) {
+        setPinError('Incorrect PIN')
+        return
+      }
+
+      setSelectedWaiter(pendingWaiterId)
+      setShowPinModal(false)
+      setPinInput('')
+      setPinError('')
+      setPendingWaiterId(null)
+    } catch (err) {
+      setPinError(err.message)
+    }
+  }
 
   // Checkout (New Order) — printKitchen=false skips kitchen ticket
   async function submitOrder(printKitchen = false) {
@@ -1230,7 +1271,7 @@ export default function CashierDashboard() {
         </button>
         <button className={`cashier-tab ${tab==='ready'?'active':''}`} onClick={()=>setTab('ready')}>
           <IoCafeOutline /> Awaiting Payment
-          <span className="cashier-tab-badge blue">{ready.length}</span>
+          <span className="cashier-tab-badge blue">{filteredReadyOrders.length}</span>
         </button>
         <button className={`cashier-tab ${tab==='production'?'active':''}`} onClick={()=>setTab('production')}>
           <HiOutlineBeaker /> Record Production
@@ -1510,22 +1551,27 @@ export default function CashierDashboard() {
         {tab === 'ready' && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <div className="cashier-billing-grid">
-              {ready.length === 0 && <p className="muted" style={{padding: 24}}>No orders waiting for payment.</p>}
-              {ready.map(o => (
-                <div key={o.id} className="cashier-order-card" style={{borderColor: '#E6CCB2'}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
+              {filteredReadyOrders.length === 0 && <p className="muted" style={{padding: 24}}>{!shift ? 'No active shift. Open a shift to see orders.' : 'No orders waiting for payment in current shift.'}</p>}
+              {filteredReadyOrders.map(o => (
+                <div key={o.id} className="cashier-order-card" style={{borderColor: '#E6CCB2', display: 'flex', flexDirection: 'column'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '8px'}}>
                     <div className="table-badge" style={{background: '#3A3022', color: '#E6CCB2'}}>Table {o.tableNumber}</div>
                     <div style={{fontWeight: 700, fontSize: 15}}>{Number(o.total).toLocaleString()} RWF</div>
                   </div>
-                  <div style={{fontSize: 12, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
                   
-                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 8, borderRadius: 6, fontSize: 12}}>
+                  {/* Time and Waiter — mobile responsive */}
+                  <div style={{fontSize: 12, color:'#8C9993', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px'}}>
+                    <div>⏰ {new Date(o.createdAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali'})}</div>
+                    <div>👤 {o.waiterName}</div>
+                  </div>
+                  
+                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 8, borderRadius: 6, fontSize: 12, marginBottom: '8px'}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{ marginBottom: 3, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                       <div key={i} style={{ marginBottom: 3, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                          <strong style={{ color: l.needsKitchen ? '#FB923C' : '#4ADE80', minWidth: 24 }}>
                            {l.quantity}x
                          </strong>
-                         <span style={{ flex: 1 }}>{l.itemName}</span>
+                         <span style={{ flex: 1, minWidth: '100px' }}>{l.itemName}</span>
                          {l.needsKitchen && (
                            <span style={{ fontSize: 9, fontWeight: 800, color: '#FB923C', background: 'rgba(251,146,60,0.15)', padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
                              🍳
