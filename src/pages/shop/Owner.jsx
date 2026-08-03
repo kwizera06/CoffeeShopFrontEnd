@@ -1819,7 +1819,7 @@ export default function Owner() {
                             const isRecipeCategory = ['Hot Coffee', 'Iced Coffee', 'Tea & Hot Drinks', 'Fast Food', 'Main Food / Meals', 'Juice & Smoothies', 'Bakery & Desserts'].includes(m.category);
                             
                             // Categories that MUST be simple stock (bottles/cans)
-                            const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water'].includes(m.category);
+                            const isSimpleCategory = ['Beer & Alcohol', 'Soft Drinks', 'Wines', 'Soda & Water','Cups&Takeaway'].includes(m.category);
                             
                             const isRecipeBased = (m.is_recipe || hasRecipeArray || isRecipeCategory) && !isSimpleCategory;
 
