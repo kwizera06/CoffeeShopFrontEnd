@@ -93,7 +93,7 @@ export default function Owner() {
     'Accompaniments','breakFast','whisky','Cold Starter','Hot Starter',
     'Boiled and Dishes','Egg Dish','Sandwich','Big Hot Dishes','Local Dishes(East Africa Dishes)',
     'Chicken','Fish','Pork','Meat of Langue','Skewers','Mix Platter Grilled','Meat Challenged',
-    'Pizza','Pasta','Side Dish','Sauce','Dessert','Rabbit', 'Gift Shop'
+    'Pizza','Pasta','Side Dish','Sauce','Dessert','Rabbit', 'Gift Shop', 'Cups&Takeaway'
   ]
 
   const CATEGORY_MAP = {

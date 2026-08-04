@@ -73,6 +73,7 @@ const CATEGORY_THEMES = {
   'Snacks':               { bg: '#F9FBE7', border: '#DCE775', text: '#827717' },
   'Accompaniments':       { bg: '#EFEBE9', border: '#A1887F', text: '#4E342E' },
   'Gift Shop':            { bg: '#FCE4EC', border: '#EC407A', text: '#C2185B' },
+  'Cups&Takeaway':        { bg: '#E0F2F1', border: '#4DB6AC', text: '#004D40' },
 };
 
 function getCategoryColors(category) {
@@ -782,13 +783,16 @@ export default function CashierDashboard() {
     
     setBusy(true)
     try {
+      const selectedItem = warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)
+
       await api('/api/shop/warehouse/requests', {
         method: 'POST',
-        body: {
+        body: JSON.stringify({
           productId: newWarehouseRequest.productId,
+          itemType: selectedItem ? selectedItem.itemType : 'MENU_ITEM',
           quantity: parseFloat(newWarehouseRequest.quantity),
           notes: newWarehouseRequest.notes
-        }
+        })
       })
       setNewWarehouseRequest({ productId: '', quantity: '', notes: '' })
       setWarehouseError('')
@@ -1276,10 +1280,12 @@ export default function CashierDashboard() {
         <button className={`cashier-tab ${tab==='production'?'active':''}`} onClick={()=>setTab('production')}>
           <HiOutlineBeaker /> Record Production
         </button>
+        {(role === 'CASHIER' || role === 'MANAGER' || role === 'STOREKEEPER') && (
         <button className={`cashier-tab ${tab==='warehouse'?'active':''}`} onClick={()=>setTab('warehouse')}>
           <HiOutlineCube /> Warehouse Requests
           <span className="cashier-tab-badge">{warehouseRequests.filter(r => r.status === 'PENDING').length}</span>
         </button>
+        )}
         <button className={`cashier-tab ${tab==='history'?'active':''}`} onClick={()=>setTab('history')}>
           <HiOutlineClock /> History
         </button>
@@ -1808,7 +1814,7 @@ export default function CashierDashboard() {
                           padding: 16,
                           border: '1px solid #E5E7EB',
                           borderRadius: 12,
-                          background: req.status === 'PENDING' ? '#F0F9FF' : req.status === 'APPROVED' ? '#F0FDF4' : req.status === 'REJECTED' ? '#FEF2F2' : '#F9FAFB'
+                          background: req.status === 'PENDING' ? '#F0F9FF' : req.status === 'APPROVED' ? '#F0FDF4' : req.status === 'COMPLETED' ? '#FEF3C7' : req.status === 'REJECTED' ? '#FEF2F2' : '#F9FAFB'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -1823,10 +1829,10 @@ export default function CashierDashboard() {
                             borderRadius: 20,
                             fontSize: 12,
                             fontWeight: 600,
-                            background: req.status === 'PENDING' ? '#DBEAFE' : req.status === 'APPROVED' ? '#DCFCE7' : req.status === 'REJECTED' ? '#FECACA' : '#E5E7EB',
-                            color: req.status === 'PENDING' ? '#0369A1' : req.status === 'APPROVED' ? '#15803D' : req.status === 'REJECTED' ? '#DC2626' : '#374151'
+                            background: req.status === 'PENDING' ? '#DBEAFE' : req.status === 'APPROVED' ? '#DCFCE7' : req.status === 'COMPLETED' ? '#FCD34D' : req.status === 'REJECTED' ? '#FECACA' : '#E5E7EB',
+                            color: req.status === 'PENDING' ? '#0369A1' : req.status === 'APPROVED' ? '#15803D' : req.status === 'COMPLETED' ? '#92400E' : req.status === 'REJECTED' ? '#DC2626' : '#374151'
                           }}>
-                            {req.status}
+                            {req.status === 'COMPLETED' ? 'READY FOR PICKUP' : req.status}
                           </span>
                         </div>
                         {req.rejectionReason && (
@@ -1841,6 +1847,32 @@ export default function CashierDashboard() {
                           <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6B7280', fontStyle: 'italic' }}>
                             Notes: {req.notes}
                           </p>
+                        )}
+                        {req.status === 'COMPLETED' && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api(`/api/shop/warehouse/requests/${req.transferId}/receive`, { method: 'PUT' })
+                                setWarehouseError('')
+                                await loadWarehouseRequests()
+                              } catch (e) {
+                                setWarehouseError(e.message || 'Failed to confirm receipt')
+                              }
+                            }}
+                            style={{
+                              marginTop: 12,
+                              padding: '8px 16px',
+                              background: '#10B981',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              fontSize: 13
+                            }}
+                          >
+                            ✓ Confirm Receipt & Add to Stock
+                          </button>
                         )}
                       </div>
                     ))}

@@ -603,7 +603,12 @@ function CashierRequestsScreen() {
     try {
       let status = filter === 'all' ? null : filter
       const data = await api(`/api/shop/warehouse/requests${status ? `?status=${status}` : ''}`)
-      setRequests(data || [])
+      // Filter to show CASHIER and CHEF requests
+      const storeRequests = (data || []).filter(r => 
+        r.requested_by_user?.role === 'CASHIER' || 
+        r.requested_by_user?.role === 'CHEF'
+      )
+      setRequests(storeRequests)
       setError('')
     } catch (e) {
       setError(e.message || 'Failed to load requests')
@@ -638,7 +643,7 @@ function CashierRequestsScreen() {
     try {
       await api(`/api/shop/warehouse/requests/${transferId}/reject`, {
         method: 'PUT',
-        body: { reason }
+        body: JSON.stringify({ reason })
       })
       setRejectReason(prev => ({ ...prev, [transferId]: '' }))
       setShowRejectForm(prev => ({ ...prev, [transferId]: false }))
@@ -688,9 +693,9 @@ function CashierRequestsScreen() {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Cashier Requests</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Store Requests</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
-              Approve or reject warehouse requests from cashiers
+              Approve or reject warehouse requests from cashiers and chefs
             </p>
           </div>
           <button
@@ -953,11 +958,221 @@ function CashierRequestsScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   SCREEN 3B — Chef Requests (approve/reject/send)
+───────────────────────────────────────────────────────────── */
+function ChefRequestsScreen() {
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('PENDING')
+  const [actionInProgress, setActionInProgress] = useState({})
+  const [rejectReason, setRejectReason] = useState({})
+  const [showRejectForm, setShowRejectForm] = useState({})
+
+  useEffect(() => {
+    loadRequests()
+  }, [filter])
+
+  const loadRequests = async () => {
+    setLoading(true)
+    try {
+      let status = filter === 'all' ? null : filter
+      const data = await api(`/api/shop/warehouse/requests${status ? `?status=${status}` : ''}`)
+      // Filter to only show CHEF requests
+      const chefRequests = (data || []).filter(r => r.requested_by_user?.role === 'CHEF')
+      setRequests(chefRequests)
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to load requests')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApprove = async (transferId) => {
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'approving' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
+        method: 'PUT'
+      })
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to approve request')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const handleReject = async (transferId) => {
+    const reason = rejectReason[transferId]?.trim()
+    if (!reason) {
+      setError('Rejection reason is required')
+      return
+    }
+    
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'rejecting' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason })
+      })
+      setRejectReason(prev => ({ ...prev, [transferId]: '' }))
+      setShowRejectForm(prev => ({ ...prev, [transferId]: false }))
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to reject request')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const handleSend = async (transferId) => {
+    setActionInProgress(prev => ({ ...prev, [transferId]: 'sending' }))
+    try {
+      await api(`/api/shop/warehouse/requests/${transferId}/send`, {
+        method: 'PUT'
+      })
+      await loadRequests()
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to send items')
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
+    }
+  }
+
+  const statusGroups = {
+    PENDING: requests.filter(r => r.status === 'PENDING'),
+    APPROVED: requests.filter(r => r.status === 'APPROVED'),
+    COMPLETED: requests.filter(r => r.status === 'COMPLETED'),
+    REJECTED: requests.filter(r => r.status === 'REJECTED')
+  }
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      {error && (
+        <Card style={{ background: '#FEE2E2', borderLeft: '4px solid #DC2626' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <HiOutlineExclamationTriangle size={20} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: '#991B1B' }}>{error}</span>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Header ── */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Chef Requests</h2>
+            <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#6B7280' }}>Approved or reject warehouse requests from chefs</p>
+          </div>
+          <button onClick={loadRequests} style={{ background: '#3B82F6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }} disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+
+        {/* ── Filter Tabs ── */}
+        <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
+          {['PENDING', 'APPROVED', 'COMPLETED', 'all'].map(s => (
+            <button key={s}
+              onClick={() => setFilter(s)}
+              style={{
+                padding: '6px 12px',
+                background: filter === s ? '#F3F4F6' : 'transparent',
+                border: filter === s ? '1px solid #D1D5DB' : '1px solid transparent',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: filter === s ? 600 : 400,
+                cursor: 'pointer',
+                color: '#374151'
+              }}>
+              {s === 'all' ? 'All' : s} ({statusGroups[s]?.length || 0})
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {/* ── Requests List ── */}
+      <Card>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>Loading requests...</div>
+        ) : requests.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>No chef requests found</div>
+        ) : (
+          <div className="stack" style={{ gap: 16 }}>
+            {requests.map(req => (
+              <div key={req.id} style={{ borderLeft: `4px solid ${req.status === 'PENDING' ? '#F59E0B' : req.status === 'APPROVED' ? '#3B82F6' : req.status === 'COMPLETED' ? '#10B981' : '#EF4444'}`, padding: 16, background: '#FAFAFA', borderRadius: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{req.productName || 'Product'}</div>
+                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Requested by: <strong>{req.waiterName || req.requesterName || 'Chef'}</strong></div>
+                  </div>
+                  <StatusBadge status={req.status} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 13, marginBottom: 12, padding: '12px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+                  <Field label="Quantity Requested">
+                    <strong>{req.quantity} units</strong>
+                  </Field>
+                  <Field label="Requested Date">
+                    <strong>{new Date(req.created_at).toLocaleDateString()}</strong>
+                  </Field>
+                </div>
+
+                {req.notes && (
+                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12, padding: '8px 12px', background: '#fff', borderLeft: '2px solid #D1D5DB', borderRadius: 4 }}>
+                    <strong>Notes:</strong> {req.notes}
+                  </div>
+                )}
+
+                {/* ── Actions ── */}
+                {req.status === 'PENDING' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button onClick={() => handleApprove(req.id)} disabled={actionInProgress[req.id]} style={{ padding: '10px 16px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      {actionInProgress[req.id] === 'approving' ? 'Approving...' : '✓ Approve'}
+                    </button>
+                    <button onClick={() => setShowRejectForm(prev => ({ ...prev, [req.id]: !prev[req.id] }))} style={{ padding: '10px 16px', background: '#EF4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      ✕ Reject
+                    </button>
+                  </div>
+                )}
+
+                {req.status === 'APPROVED' && (
+                  <button onClick={() => handleSend(req.id)} disabled={actionInProgress[req.id]} style={{ width: '100%', padding: '10px 16px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    {actionInProgress[req.id] === 'sending' ? 'Sending...' : '→ Send to Chef'}
+                  </button>
+                )}
+
+                {showRejectForm[req.id] && (
+                  <div style={{ marginTop: 12, padding: 12, background: '#FEF2F2', borderRadius: 6, display: 'grid', gap: 8 }}>
+                    <textarea
+                      value={rejectReason[req.id] || ''}
+                      onChange={e => setRejectReason(prev => ({ ...prev, [req.id]: e.target.value }))}
+                      placeholder="Enter rejection reason..."
+                      style={{ padding: 8, borderRadius: 4, border: '1px solid #FECACA', fontSize: 13, fontFamily: 'inherit', minHeight: 60 }}
+                    />
+                    <button onClick={() => handleReject(req.id)} disabled={actionInProgress[req.id]} style={{ padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      {actionInProgress[req.id] === 'rejecting' ? 'Rejecting...' : 'Confirm Rejection'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    SCREEN 4 — Stock Request  (with autocomplete)
 ───────────────────────────────────────────────────────────── */
 function StockRequestScreen() {
   const UNITS = ['kg', 'g', 'l', 'ml', 'pcs', 'bags', 'boxes', 'cups', 'shots']
-  const emptyItem = () => ({ itemName: '', unit: 'kg', qtyRequested: '', estimatedPrice: '' })
+  const emptyItem = () => ({ itemName: '', unit: 'kg', qtyRequested: '' })
 
   const [items, setItems]       = useState([emptyItem()])
   const [notes, setNotes]       = useState('')
@@ -1043,7 +1258,7 @@ function StockRequestScreen() {
           <div className="stack" style={{ gap: 10 }}>
             {items.map((it, idx) => (
               <div key={idx} style={{ display: 'grid',
-                gridTemplateColumns: '2fr 80px 100px 120px 36px',
+                gridTemplateColumns: '2fr 80px 100px 36px',
                 gap: 8, alignItems: 'end' }}>
                 <Field label={idx === 0 ? 'Item name' : ''}>
                   <input
@@ -1065,11 +1280,6 @@ function StockRequestScreen() {
                   <input className="am-input" type="number" min="0.01" step="any"
                     placeholder="0" value={it.qtyRequested} required
                     onChange={e => setItem(idx, 'qtyRequested', e.target.value)} />
-                </Field>
-                <Field label={idx === 0 ? 'Est. price (RWF)' : ''}>
-                  <input className="am-input" type="number" min="0" step="any"
-                    placeholder="0" value={it.estimatedPrice}
-                    onChange={e => setItem(idx, 'estimatedPrice', e.target.value)} />
                 </Field>
                 <button type="button" style={{ background: 'rgba(239,68,68,0.1)',
                   border: '1px solid rgba(239,68,68,0.3)', color: '#B91C1C',
@@ -1178,18 +1388,24 @@ function ReceiveDeliveryScreen() {
     setError(''); setSuccess('')
     setSelected(req)
     setReceiptItems(
-      (req.requisition_items || []).map(it => ({
-        ...it,
-        sentQty:         it.sent_qty ?? it.approved_qty ?? it.quantity,
-        receivedQty:     it.sent_qty ?? it.approved_qty ?? it.quantity,
-        varianceComment: '',
-        // destination
-        targetType: 'INGREDIENT',  // default
-        targetId:   '',
-        newItemName: it.item_name,
-        newItemUnit: it.unit || 'kg',
-        newItemCategory: '',
-      }))
+      (req.requisition_items || []).map(it => {
+        // Auto-match: find an ingredient whose name matches the requested item_name
+        const matched = ingredients.find(
+          ing => ing.name.toLowerCase().trim() === it.item_name.toLowerCase().trim()
+        )
+        return {
+          ...it,
+          sentQty:         it.sent_qty ?? it.approved_qty ?? it.quantity,
+          receivedQty:     it.sent_qty ?? it.approved_qty ?? it.quantity,
+          varianceComment: '',
+          // Auto-resolved destination (no manual selection needed)
+          targetType: matched ? 'INGREDIENT' : 'NEW_INGREDIENT',
+          targetId:   matched ? matched.id : '',
+          newItemName: it.item_name,
+          newItemUnit: it.unit || 'kg',
+          newItemCategory: '',
+        }
+      })
     )
   }
 
@@ -1208,38 +1424,9 @@ function ReceiveDeliveryScreen() {
   async function handleReceive(e) {
     e.preventDefault()
     setError('')
-    // Validate destination selection
+    // Validate only variance comments
     for (const it of receiptItems) {
-      if ((it.targetType === 'INGREDIENT' || it.targetType === 'MENU_ITEM') && !it.targetId) {
-        setError(`Please select a destination for "${it.item_name}"`)
-        return
-      }
-      if (it.targetType === 'INGREDIENT' && it.targetId) {
-        const target = ingredients.find(ing => ing.id === it.targetId);
-        if (target && target.name.toLowerCase().trim() !== it.item_name.toLowerCase().trim() && !it.confirmNameMismatch) {
-          setError(`Please confirm the name mismatch for requested item "${it.item_name}"`)
-          return
-        }
-      }
-      if (it.targetType === 'MENU_ITEM' && it.targetId) {
-        const target = menuItems.find(mi => mi.id === it.targetId);
-        if (target && target.name.toLowerCase().trim() !== it.item_name.toLowerCase().trim() && !it.confirmNameMismatch) {
-          setError(`Please confirm the name mismatch for requested item "${it.item_name}"`)
-          return
-        }
-      }
-      if (it.targetType === 'NEW_INGREDIENT') {
-        if (!it.newItemName?.trim()) {
-          setError(`Please enter a name for the new ingredient for "${it.item_name}"`)
-          return
-        }
-        if (!it.newItemCategory?.trim()) {
-          setError(`Please select a category for the new ingredient "${it.item_name}"`)
-          return
-        }
-      }
-
-      const sent = parseFloat(it.sentQty || 0)
+      const sent     = parseFloat(it.sentQty || 0)
       const received = parseFloat(it.receivedQty || 0)
       if (Math.abs(sent - received) > 0.001 && !it.varianceComment?.trim()) {
         setError(`Comment required for "${it.item_name}" — received ${received} vs sent ${sent}`)
@@ -1272,135 +1459,6 @@ function ReceiveDeliveryScreen() {
     finally { setBusy(false) }
   }
 
-  // ── sub-component: destination picker for one receipt item
-  function DestinationPicker({ it, idx }) {
-    const typeLabel = {
-      INGREDIENT:     '📦 Existing Ingredient',
-      MENU_ITEM:      '🍽️ Existing Menu Item',
-      NEW_INGREDIENT: '✨ Create New Ingredient',
-    }
-
-    return (
-      <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0',
-        borderRadius: 10, padding: 14, marginTop: 10 }}>
-        <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: '#374151' }}>
-          📍 Where should this stock be added?
-        </p>
-
-        {/* Type selector — 3 pills */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
-          {Object.entries(typeLabel).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => handleTargetTypeChange(idx, key)}
-              style={{
-                padding: '8px 10px',
-                border: it.targetType === key ? '2px solid #1D3557' : '1px solid #D1D5DB',
-                borderRadius: 8,
-                background: it.targetType === key ? '#EFF6FF' : '#fff',
-                color: it.targetType === key ? '#1D3557' : '#6B7280',
-                fontWeight: it.targetType === key ? 800 : 500,
-                fontSize: 12,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Existing ingredient picker */}
-        {it.targetType === 'INGREDIENT' && (
-          <div className="stack" style={{ gap: 8 }}>
-            <Field label="Select ingredient">
-              <select className="am-input" required
-                value={it.targetId}
-                onChange={e => {
-                  setRI(idx, 'targetId', e.target.value);
-                  setRI(idx, 'confirmNameMismatch', false);
-                }}>
-                <option value="">— Choose an ingredient —</option>
-                {ingredients.map(ing => (
-                  <option key={ing.id} value={ing.id}>
-                    {ing.name} ({ing.unit}) · Stock: {ing.stock_level}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {it.targetId && ingredients.find(ing => ing.id === it.targetId)?.name.toLowerCase().trim() !== it.item_name.toLowerCase().trim() && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#92400E', background: 'rgba(234,179,8,0.1)', padding: 10, borderRadius: 8 }}>
-                <input type="checkbox" required checked={!!it.confirmNameMismatch}
-                  onChange={e => setRI(idx, 'confirmNameMismatch', e.target.checked)} />
-                <b>Warning:</b> Confirm you are adding "{it.item_name}" to "{ingredients.find(ing => ing.id === it.targetId)?.name}".
-              </label>
-            )}
-          </div>
-        )}
-
-        {/* Existing menu item picker */}
-        {it.targetType === 'MENU_ITEM' && (
-          <div className="stack" style={{ gap: 8 }}>
-            <Field label="Select menu item">
-              <select className="am-input" required
-                value={it.targetId}
-                onChange={e => {
-                  setRI(idx, 'targetId', e.target.value);
-                  setRI(idx, 'confirmNameMismatch', false);
-                }}>
-                <option value="">— Choose a menu item —</option>
-                {menuItems.map(mi => (
-                  <option key={mi.id} value={mi.id}>
-                    {mi.name} · Stock: {mi.stock_level ?? 0}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {it.targetId && menuItems.find(mi => mi.id === it.targetId)?.name.toLowerCase().trim() !== it.item_name.toLowerCase().trim() && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#92400E', background: 'rgba(234,179,8,0.1)', padding: 10, borderRadius: 8 }}>
-                <input type="checkbox" required checked={!!it.confirmNameMismatch}
-                  onChange={e => setRI(idx, 'confirmNameMismatch', e.target.checked)} />
-                <b>Warning:</b> Confirm you are adding "{it.item_name}" to "{menuItems.find(mi => mi.id === it.targetId)?.name}".
-              </label>
-            )}
-          </div>
-        )}
-
-        {/* Create new ingredient */}
-        {it.targetType === 'NEW_INGREDIENT' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
-            <Field label="New ingredient name">
-              <input className="am-input" required
-                value={it.newItemName}
-                onChange={e => setRI(idx, 'newItemName', e.target.value)}
-                placeholder="e.g. Oat Flour" />
-            </Field>
-            <Field label="Unit">
-              <select className="am-input"
-                value={it.newItemUnit}
-                onChange={e => setRI(idx, 'newItemUnit', e.target.value)}>
-                {['kg','g','l','ml','pcs','bags','boxes'].map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </Field>
-            <Field label="Category">
-              <select className="am-input" required
-                value={it.newItemCategory}
-                onChange={e => setRI(idx, 'newItemCategory', e.target.value)}
-              >
-                <option value="">— Select Category —</option>
-                {[...new Set(ingredients.map(ing => ing.category).filter(Boolean))].map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        )}
-
-
-      </div>
-    )
-  }
 
   return (
     <div className="stack" style={{ gap: 24 }}>
@@ -1418,8 +1476,7 @@ function ReceiveDeliveryScreen() {
                 Confirm Delivery — Request #{selected.id.slice(0, 8)}
               </h3>
               <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-                For each item: enter the actual quantity received, then select exactly
-                where the stock should be added.
+                For each item: enter the actual quantity received. Stock will be updated automatically.
               </p>
             </div>
             <button className="btn ghost" onClick={() => { setSelected(null); setError('') }}>
@@ -1433,17 +1490,35 @@ function ReceiveDeliveryScreen() {
               const received = parseFloat(it.receivedQty || 0)
               const variance = sent - received
               const hasVariance = Math.abs(variance) > 0.001
+              const matchedIng = it.targetType === 'INGREDIENT' && it.targetId
+                ? ingredients.find(ing => ing.id === it.targetId)
+                : null
               return (
                 <div key={it.id || idx} style={{
                   border: `1px solid ${hasVariance ? 'rgba(234,179,8,0.5)' : '#E5E7EB'}`,
                   borderRadius: 12, padding: 18,
                   background: hasVariance ? 'rgba(234,179,8,0.04)' : '#FAFAFA' }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, color: '#111827' }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, color: '#111827' }}>
                     {it.item_name}
                     <span style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 8, fontWeight: 400 }}>
                       Sent: {sent} {it.unit}
                     </span>
                   </div>
+
+                  {/* Auto-matched destination indicator */}
+                  {matchedIng ? (
+                    <div style={{ fontSize: 12, color: '#15803D', marginBottom: 12,
+                      background: 'rgba(34,197,94,0.08)', padding: '4px 10px',
+                      borderRadius: 6, display: 'inline-block' }}>
+                      ✓ Will update: <strong>{matchedIng.name}</strong> (current stock: {matchedIng.stock_level} {matchedIng.unit})
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#B45309', marginBottom: 12,
+                      background: 'rgba(234,179,8,0.1)', padding: '4px 10px',
+                      borderRadius: 6, display: 'inline-block' }}>
+                      ⚠ New ingredient will be created: <strong>{it.item_name}</strong>
+                    </div>
+                  )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
                     <Field label="Received qty">
@@ -1461,9 +1536,6 @@ function ReceiveDeliveryScreen() {
                       </Field>
                     )}
                   </div>
-
-                  {/* Destination picker */}
-                  <DestinationPicker it={it} idx={idx} />
                 </div>
               )
             })}
@@ -1524,6 +1596,7 @@ function ReceiveDeliveryScreen() {
 const TABS = [
   { key: 'inventory',  label: 'Warehouse Stock',   Icon: HiOutlineArchiveBox,           color: '#EA8208', desc: 'View warehouse & floor inventory'          },
   { key: 'cashier',    label: 'Cashier Requests',  Icon: HiOutlineClipboardDocumentList, color: '#3B82F6', desc: 'Approve/reject cashier warehouse requests' },
+  { key: 'chef',       label: 'Chef Requests',     Icon: HiOutlineClipboardDocumentList, color: '#F59E0B', desc: 'Approve/reject chef warehouse requests'    },
   { key: 'request',    label: 'Request Stock',     Icon: HiOutlineClipboardDocumentList, color: '#7C3AED', desc: 'Submit stock requests to the owner'        },
   { key: 'receive',    label: 'Receive Delivery',  Icon: HiOutlineTruck,                color: '#047857', desc: 'Confirm and record arrived deliveries'     },
 ]
@@ -1631,6 +1704,7 @@ export default function Storekeeper() {
       <div className="sk-content">
         {tab === 'inventory'  && <WarehouseInventoryScreen />}
         {tab === 'cashier'    && <CashierRequestsScreen />}
+        {tab === 'chef'       && <ChefRequestsScreen />}
         {tab === 'request'    && <StockRequestScreen />}
         {tab === 'receive'    && <ReceiveDeliveryScreen />}
       </div>
