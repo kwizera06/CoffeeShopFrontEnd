@@ -581,14 +581,15 @@
   }
   .cashier-tab { 
     padding: 12px 14px; 
-    font-size: 12px; 
+    font-size: 13px; 
     white-space: nowrap;
     flex-shrink: 0;
     gap: 4px;
+    font-weight: 700;
   }
   .cashier-tab-badge {
-    font-size: 10px;
-    padding: 1px 6px;
+    font-size: 11px;
+    padding: 2px 8px;
   }
   
   /* Filters */
@@ -603,13 +604,18 @@
     height: 38px;
     border-radius: 10px;
     padding: 0 12px;
+    font-size: 14px;
+  }
+  .cashier-search input {
+    font-size: 14px;
   }
   .cashier-table-input {
     height: 38px;
     border-radius: 10px;
     padding: 0 10px;
     gap: 6px;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 700;
   }
   .cashier-table-val {
     font-size: 16px;
@@ -618,20 +624,22 @@
   .cashier-waiter-sel {
     height: 38px;
     border-radius: 10px;
-    font-size: 12px;
-    width: 100px;
+    font-size: 13px;
+    width: 110px;
     padding: 0 8px;
+    font-weight: 600;
   }
   
   /* Categories: Scrollable pills */
   .cashier-categories { 
-    padding: 6px 12px; 
-    gap: 6px;
+    padding: 8px 12px; 
+    gap: 8px;
   }
   .cashier-cat-pill { 
-    padding: 6px 12px; 
-    font-size: 11px; 
+    padding: 8px 14px; 
+    font-size: 12px; 
     border-radius: 10px;
+    font-weight: 700;
   }
   
   /* Product Grid */
@@ -642,41 +650,48 @@
     padding-bottom: 80px;
   }
   .cashier-card { 
-    min-height: 100px; 
-    padding: 12px; 
+    min-height: 110px; 
+    padding: 14px; 
     border-radius: 14px;
-    gap: 8px;
+    gap: 10px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     align-items: center;
   }
-  .cashier-card-icon { font-size: 18px; }
-  .cashier-card-title { font-size: 11px; line-height: 1.3; }
-  .cashier-card-price { font-size: 11px; }
-  .cashier-card-qty { width: 20px; height: 20px; font-size: 10px; right: 8px; top: 8px; }
+  .cashier-card-icon { font-size: 20px; }
+  .cashier-card-title { font-size: 12px; line-height: 1.4; font-weight: 700; }
+  .cashier-card-price { font-size: 12px; font-weight: 700; }
+  .cashier-card-qty { width: 22px; height: 22px; font-size: 11px; right: 8px; top: 8px; }
   
   /* Ticket (Cart Panel) */
-  .cashier-ticket-header { padding: 12px 16px; }
-  .cashier-ticket-title { font-size: 16px; margin-bottom: 8px; }
-  .cashier-ticket-body { padding: 12px 16px; }
-  .cashier-ticket-footer { padding: 12px 16px; }
-  .cashier-ticket-item { padding: 10px; border-radius: 10px; }
-  .cashier-meta-pill { font-size: 10px; padding: 4px 10px; }
+  .cashier-ticket-header { padding: 14px 18px; }
+  .cashier-ticket-title { font-size: 18px; margin-bottom: 10px; font-weight: 800; }
+  .cashier-ticket-body { padding: 14px 18px; }
+  .cashier-ticket-footer { padding: 14px 18px; }
+  .cashier-ticket-item { padding: 12px; border-radius: 10px; font-size: 14px; }
+  .cashier-ticket-item-qty { font-size: 14px; font-weight: 800; }
+  .cashier-meta-pill { font-size: 11px; padding: 5px 12px; font-weight: 700; }
   
-  .cashier-total-row { font-size: 12px; }
-  .cashier-total-row.grand { font-size: 16px; margin-bottom: 16px; margin-top: 8px; }
-  .cashier-btn-submit { padding: 14px; font-size: 13px; border-radius: 12px; }
+  .cashier-total-row { font-size: 13px; font-weight: 700; }
+  .cashier-total-row.grand { font-size: 18px; margin-bottom: 18px; margin-top: 10px; font-weight: 800; }
+  .cashier-btn-submit { padding: 16px; font-size: 14px; border-radius: 12px; font-weight: 800; }
   
   /* Billing Grid */
   .cashier-billing-grid { 
     grid-template-columns: 1fr; 
-    padding: 8px; 
-    gap: 8px;
+    padding: 10px; 
+    gap: 10px;
     align-items: start;
   }
   .cashier-order-card {
-    padding: 10px;
+    padding: 12px;
     border-radius: 10px;
-    gap: 7px;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .cashier-order-card .table-badge {
+    font-size: 12px;
+    padding: 4px 12px;
   }
 
   /* Modal */
@@ -686,6 +701,21 @@
   .cashier-modal {
     padding: 24px;
     border-radius: 16px;
+    font-size: 14px;
+  }
+  .cashier-modal h3 {
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .cashier-modal label {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .cashier-modal input,
+  .cashier-modal select,
+  .cashier-modal textarea {
+    font-size: 14px;
+    padding: 12px;
   }
 }
 
@@ -699,15 +729,53 @@
     gap: 8px; 
     padding: 10px; 
   }
-  .cashier-card { padding: 10px; min-height: 85px; border-radius: 12px; align-items: center; }
-  .cashier-card-title { font-size: 10px; }
-  .cashier-card-price { font-size: 10px; }
-  .cashier-card-icon { font-size: 16px; }
+  .cashier-card { 
+    padding: 10px; 
+    min-height: 95px; 
+    border-radius: 12px; 
+    align-items: center; 
+  }
+  .cashier-card-title { 
+    font-size: 11px; 
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .cashier-card-price { 
+    font-size: 11px; 
+    font-weight: 700;
+  }
+  .cashier-card-icon { font-size: 18px; }
   
-  .cashier-tab { padding: 10px 12px; font-size: 11px; }
+  .cashier-tab { 
+    padding: 10px 12px; 
+    font-size: 12px; 
+    font-weight: 700;
+  }
+  .cashier-tab-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
   
-  .cashier-btn-submit { padding: 12px; font-size: 12px; }
-  .cashier-total-row.grand { font-size: 16px; }
+  .cashier-btn-submit { 
+    padding: 14px; 
+    font-size: 13px; 
+    font-weight: 800;
+  }
+  .cashier-total-row.grand { 
+    font-size: 16px; 
+    font-weight: 800;
+  }
   
-  .cashier-filters-top { padding: 8px 10px; gap: 6px; }
+  .cashier-ticket-title {
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .cashier-ticket-item {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .cashier-total-row {
+    font-size: 12px;
+    font-weight: 700;
+  }
 }

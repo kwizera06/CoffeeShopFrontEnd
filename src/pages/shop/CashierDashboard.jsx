@@ -547,6 +547,8 @@ export default function CashierDashboard() {
   const [newWarehouseRequest, setNewWarehouseRequest] = useState({ productId: '', quantity: '', notes: '' })
   const [warehouseLoading, setWarehouseLoading] = useState(false)
   const [warehouseError, setWarehouseError] = useState('')
+  const [warehouseSearchOpen, setWarehouseSearchOpen] = useState(false)
+  const [warehouseSearchInput, setWarehouseSearchInput] = useState('')
 
   // Billing (Pending & Ready) states
   const [pending, setPending] = useState([])
@@ -1737,18 +1739,51 @@ export default function CashierDashboard() {
                 <form onSubmit={handleCreateWarehouseRequest} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div style={{ flex: 1, minWidth: 150 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Product</label>
-                    <select
-                      value={newWarehouseRequest.productId}
-                      onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, productId: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8, marginTop: 4, outline: 'none', background: '#FFFFFF' }}
-                    >
-                      <option value="">Select product...</option>
-                      {warehouseInventory.map(item => (
-                        <option key={item.productId} value={item.productId}>
-                          {item.name} (W: {item.warehouseQty}, F: {item.shopFloorQty})
-                        </option>
-                      ))}
-                    </select>
+                    {/* Desktop: Dropdown | Mobile: Search button + hidden select */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <select
+                        value={newWarehouseRequest.productId}
+                        onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, productId: e.target.value }))}
+                        style={{ 
+                          flex: 1,
+                          padding: '8px 12px', 
+                          border: '1px solid #D1D5DB', 
+                          borderRadius: 8, 
+                          marginTop: 4, 
+                          outline: 'none', 
+                          background: '#FFFFFF',
+                          display: window.innerWidth > 768 ? 'block' : 'none'
+                        }}
+                      >
+                        <option value="">Select product...</option>
+                        {warehouseInventory.map(item => (
+                          <option key={item.productId} value={item.productId}>
+                            {item.name} (W: {item.warehouseQty}, F: {item.shopFloorQty})
+                          </option>
+                        ))}
+                      </select>
+                      {window.innerWidth <= 768 && (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="Search items..."
+                            value={newWarehouseRequest.productId ? warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)?.name : ''}
+                            readOnly
+                            onClick={() => setWarehouseSearchOpen(true)}
+                            style={{ 
+                              flex: 1,
+                              padding: '8px 12px', 
+                              border: '1px solid #D1D5DB', 
+                              borderRadius: 8, 
+                              marginTop: 4, 
+                              outline: 'none', 
+                              background: '#FFFFFF',
+                              cursor: 'pointer'
+                            }}
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div style={{ flex: 0.5, minWidth: 100 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Qty</label>
@@ -1792,6 +1827,102 @@ export default function CashierDashboard() {
                 {warehouseError && (
                   <div style={{ marginTop: 12, padding: 12, background: '#FEE2E2', borderRadius: 8, color: '#991B1B', fontSize: 13 }}>
                     {warehouseError}
+                  </div>
+                )}
+
+                {/* Mobile Search Modal */}
+                {warehouseSearchOpen && (
+                  <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.4)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    zIndex: 2000
+                  }}>
+                    <div style={{
+                      background: '#FFFFFF',
+                      borderRadius: '20px 20px 0 0',
+                      width: '100%',
+                      maxHeight: '80vh',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      maxWidth: '100%'
+                    }}>
+                      <div style={{ padding: '16px 16px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>Search Items</h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWarehouseSearchOpen(false)
+                            setWarehouseSearchInput('')
+                          }}
+                          style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#6B7280' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB' }}>
+                        <input
+                          type="text"
+                          placeholder="Search item name..."
+                          autoFocus
+                          value={warehouseSearchInput}
+                          onChange={(e) => setWarehouseSearchInput(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            border: '1px solid #D1D5DB',
+                            borderRadius: 8,
+                            outline: 'none',
+                            fontSize: 16,
+                            fontWeight: 600
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+                        {warehouseInventory
+                          .filter(item => item.name.toLowerCase().includes(warehouseSearchInput.toLowerCase()))
+                          .map(item => (
+                            <button
+                              key={item.productId}
+                              type="button"
+                              onClick={() => {
+                                setNewWarehouseRequest(prev => ({ ...prev, productId: item.productId }))
+                                setWarehouseSearchOpen(false)
+                                setWarehouseSearchInput('')
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '16px',
+                                textAlign: 'left',
+                                border: 'none',
+                                background: 'none',
+                                borderBottom: '1px solid #F3F4F6',
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: '#111827',
+                                transition: 'background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#F9FAFB'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                            >
+                              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{item.name}</div>
+                              <div style={{ fontSize: 12, color: '#6B7280' }}>
+                                Warehouse: {item.warehouseQty} | Floor: {item.shopFloorQty}
+                              </div>
+                            </button>
+                          ))}
+                        {warehouseInventory.filter(item => item.name.toLowerCase().includes(warehouseSearchInput.toLowerCase())).length === 0 && (
+                          <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 14 }}>
+                            No items found
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
