@@ -53,15 +53,20 @@ export default function ChefDashboard() {
       return
     }
     
+    // Validate that the selected product exists in the system
+    const selectedItem = warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)
+    if (!selectedItem) {
+      setWarehouseError('Selected product is not in the system. Please select from available items only.')
+      return
+    }
+    
     setBusy(true)
     try {
-      const selectedItem = warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)
-      
       await api('/api/shop/warehouse/requests', {
         method: 'POST',
         body: JSON.stringify({
           productId: newWarehouseRequest.productId,
-          itemType: selectedItem ? selectedItem.itemType : 'MENU_ITEM',
+          itemType: selectedItem.itemType,
           quantity: parseFloat(newWarehouseRequest.quantity),
           notes: newWarehouseRequest.notes
         })

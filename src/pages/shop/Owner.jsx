@@ -241,6 +241,29 @@ export default function Owner() {
     }
   }
 
+  async function restockWarehouse(itemId, itemType, currentQty) {
+    const qty = prompt(`How many units to add to warehouse?\n(Currently: ${currentQty || 0})`, '');
+    if (!qty || isNaN(qty) || parseFloat(qty) <= 0) return;
+    
+    setError('')
+    try {
+      await api('/api/shop/warehouse/add-to-warehouse', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: itemId,
+          itemType: itemType,
+          quantity: parseFloat(qty),
+          notes: `Manually added to warehouse by Owner`
+        })
+      })
+      await reloadCore()
+      setSuccess(`✓ Added ${qty} units to warehouse`)
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (e) { 
+      setError(e.message || 'Failed to add to warehouse') 
+    }
+  }
+
   async function deleteProduction(id) {
     if (!window.confirm('Revert this production run? This will restore ingredients and remove produced items from stock.')) return;
     setError('')
@@ -331,6 +354,7 @@ export default function Owner() {
         unit: 'pcs',
         stock: Number(m.stock_level ?? m.stockLevel ?? 0),
         minThreshold: MENU_LOW_THRESHOLD,
+        warehouse_qty: Number(m.warehouse_qty ?? 0),
       }))
     const ings = ingredients.map(ing => ({
       id: ing.id,
@@ -340,8 +364,31 @@ export default function Owner() {
       unit: ing.unit,
       stock: Number(ing.stock_level ?? 0),
       minThreshold: Number(ing.min_threshold ?? 0),
+      warehouse_qty: Number(ing.warehouse_qty ?? 0),
     }))
-    return [...products, ...ings].sort((a, b) => {
+    
+    // Merge duplicates by name
+    const allItems = [...products, ...ings]
+    const nameMap = {}
+    
+    allItems.forEach(item => {
+      const nameKey = item.name.toLowerCase().trim()
+      if (!nameMap[nameKey]) {
+        nameMap[nameKey] = {
+          ...item,
+          duplicateIds: [item.id], // Track all IDs that were merged
+          isDuplicate: false
+        }
+      } else {
+        // Merge: combine stock levels
+        nameMap[nameKey].stock += item.stock
+        nameMap[nameKey].warehouse_qty += item.warehouse_qty
+        nameMap[nameKey].duplicateIds.push(item.id)
+        nameMap[nameKey].isDuplicate = true
+      }
+    })
+    
+    return Object.values(nameMap).sort((a, b) => {
       const order = { CRITICAL: 0, LOW: 1, HEALTHY: 2 }
       const sa = getItemStockStatus(a)
       const sb = getItemStockStatus(b)
@@ -2795,6 +2842,8 @@ export default function Owner() {
             ))}
           </div>
 
+
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {filteredStockItems.length === 0 ? (
               <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#6B7280', background: 'var(--admin-card-bg)', borderRadius: 16, border: '1px solid var(--admin-border)' }}>
@@ -2831,23 +2880,21 @@ export default function Owner() {
                     }}>{status}</span>
                   </div>
 
-                  {/* Stock bar */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                      <span style={{ color: 'var(--admin-text-muted)' }}>Stock</span>
-                      <span style={{ fontWeight: 700, color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#1D3557' }}>
-                        {item.stock} {item.unit}
-                      </span>
+                  {/* Stock - Show only Floor Stock (Shop) */}
+                  <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8, border: '1px solid rgba(34,197,94,0.2)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 4, fontWeight: 700 }}>FLOOR STOCK</div>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#22C55E', marginBottom: 8 }}>
+                      {item.stock} {item.unit}
                     </div>
-                    <div style={{ background: '#E5E7EB', borderRadius: 4, height: 6 }}>
+                    <div style={{ background: '#E5E7EB', borderRadius: 3, height: 6 }}>
                       <div style={{
-                        height: 6, borderRadius: 4,
+                        height: 6, borderRadius: 3,
                         width: `${Math.max(4, Math.min(100, item.minThreshold > 0 ? (item.stock / item.minThreshold) * 60 : Math.min(100, item.stock * 2)))}%`,
-                        background: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#2E7D32',
+                        background: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#22C55E',
                         transition: 'width 0.3s'
                       }} />
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--admin-text-muted)', marginTop: 4 }}>Min: {item.minThreshold} {item.unit}</div>
+                    <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginTop: 6 }}>Minimum threshold: {item.minThreshold}</div>
                   </div>
 
                   {/* Type badge */}
@@ -2859,6 +2906,34 @@ export default function Owner() {
                     }}>{isIng ? 'Ingredient' : 'Product'}</span>
                   </div>
 
+                  {/* Prices */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '8px 0', borderTop: '1px solid var(--admin-border)', borderBottom: '1px solid var(--admin-border)' }}>
+                    {isIng && ing && (
+                      <>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Buying Price</div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--admin-text)' }}>{Number(ing.buying_price || 0).toLocaleString()} RWF</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Unit</div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--admin-text)' }}>{ing.unit}</div>
+                        </div>
+                      </>
+                    )}
+                    {!isIng && menuItem && (
+                      <>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Selling Price</div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--admin-text)' }}>{Number(menuItem.price || 0).toLocaleString()} RWF</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Unit</div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--admin-text)' }}>pcs</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   {/* Action buttons */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                     <button
@@ -2867,6 +2942,13 @@ export default function Owner() {
                       style={{ flex: 1, minWidth: 70 }}
                       onClick={() => openStockItemHistory(item)}
                     >📜 History</button>
+
+                    <button
+                      type="button"
+                      className="btn tiny"
+                      style={{ flex: 1, minWidth: 70, background: 'rgba(251,146,60,0.1)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.3)' }}
+                      onClick={() => restockWarehouse(item.id, isIng ? 'INGREDIENT' : 'MENU_ITEM', item.warehouse_qty || 0)}
+                    >📦 Restock Warehouse</button>
 
                     {canEdit && isIng && ing && (
                       <button

@@ -14,6 +14,7 @@ import {
   HiOutlineCubeTransparent,
   HiOutlineArrowPathRoundedSquare,
   HiOutlineShieldCheck,
+  HiOutlineArrowRightOnRectangle,
 } from 'react-icons/hi2'
 import './OwnerModern.css'
 import './Storekeeper.css'
@@ -399,6 +400,7 @@ function WarehouseInventoryScreen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all') // 'all', 'low_warehouse', 'low_floor'
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     loadInventory()
@@ -408,7 +410,36 @@ function WarehouseInventoryScreen() {
     setLoading(true)
     try {
       const data = await api('/api/shop/warehouse/inventory')
-      setInventory(data || [])
+      
+      // Merge duplicates by name (e.g., "Amstel" and "Amstel (pcs)" become one)
+      const nameMap = {}
+      const rawData = data || []
+      
+      rawData.forEach(item => {
+        // Normalize name: remove "(pcs)" and extra spaces
+        const nameKey = item.name
+          .replace(/\s*\(pcs\)\s*$/i, '') // Remove (pcs) at end
+          .toLowerCase()
+          .trim()
+        
+        if (!nameMap[nameKey]) {
+          nameMap[nameKey] = {
+            ...item,
+            duplicateIds: [item.productId],
+            isDuplicate: false
+          }
+        } else {
+          // Merge: sum the quantities
+          nameMap[nameKey].warehouseQty += item.warehouseQty
+          nameMap[nameKey].shopFloorQty += item.shopFloorQty
+          nameMap[nameKey].totalQty += item.totalQty
+          nameMap[nameKey].duplicateIds.push(item.productId)
+          nameMap[nameKey].isDuplicate = true
+        }
+      })
+      
+      const mergedData = Object.values(nameMap)
+      setInventory(mergedData)
       setError('')
     } catch (e) {
       setError(e.message || 'Failed to load inventory')
@@ -418,8 +449,15 @@ function WarehouseInventoryScreen() {
   }
 
   const filtered = inventory.filter(item => {
+    // Filter by status
     if (filter === 'low_warehouse') return item.warehouseQty < item.warehouseQty * 0.2
     if (filter === 'low_floor') return item.shopFloorQty < item.shopFloorQty * 0.2
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      return item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    }
+    
     return true
   })
 
@@ -440,7 +478,7 @@ function WarehouseInventoryScreen() {
           <div>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Warehouse Inventory</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
-              Total items: {inventory.length}
+              Total items: {filtered.length} {searchQuery && `(filtered from ${inventory.length})`}
             </p>
           </div>
           <button
@@ -459,6 +497,33 @@ function WarehouseInventoryScreen() {
           >
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
+        </div>
+
+        {/* ── Search Bar ── */}
+        <div style={{ marginBottom: 16 }}>
+          <input
+            type="text"
+            placeholder="🔍 Search items..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: 13,
+              border: '1px solid #E5E7EB',
+              borderRadius: 8,
+              fontFamily: 'inherit',
+              transition: 'all 0.2s'
+            }}
+            onFocus={e => {
+              e.target.style.borderColor = '#3B82F6'
+              e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+            }}
+            onBlur={e => {
+              e.target.style.borderColor = '#E5E7EB'
+              e.target.style.boxShadow = 'none'
+            }}
+          />
         </div>
 
         {/* ── Filter Pills ── */}
@@ -499,8 +564,7 @@ function WarehouseInventoryScreen() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
           {filtered.map(item => {
-            const warehousePercent = item.totalQty > 0 ? (item.warehouseQty / item.totalQty) * 100 : 0
-            const floorPercent = item.totalQty > 0 ? (item.shopFloorQty / item.totalQty) * 100 : 0
+            const warehousePercent = item.warehouseQty > 0 ? 100 : 0
             
             return (
               <div
@@ -521,10 +585,10 @@ function WarehouseInventoryScreen() {
                   </h3>
                 </div>
 
-                {/* ── Warehouse Stock ── */}
+                {/* ── Warehouse Stock Only ── */}
                 <div style={{ background: 'rgba(234,179,8,0.08)', padding: 12, borderRadius: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Warehouse</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Warehouse Stock</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: '#B45309' }}>
                       {item.warehouseQty} units
                     </span>
@@ -540,39 +604,6 @@ function WarehouseInventoryScreen() {
                     />
                   </div>
                 </div>
-
-                {/* ── Floor Stock ── */}
-                <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Shop Floor</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>
-                      {item.shopFloorQty} units
-                    </span>
-                  </div>
-                  <div style={{ background: '#DCFCE7', height: 6, borderRadius: 3, overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        height: '100%',
-                        background: '#22C55E',
-                        width: `${floorPercent}%`,
-                        transition: 'width 0.2s'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* ── Total ── */}
-                <div style={{ 
-                  padding: 8,
-                  background: '#F3F4F6',
-                  borderRadius: 6,
-                  textAlign: 'center',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#374151'
-                }}>
-                  Total: {item.totalQty} units
-                </div>
               </div>
             )
           })}
@@ -583,9 +614,9 @@ function WarehouseInventoryScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SCREEN 3 — Cashier Requests (approve/reject/send)
+   SCREEN 3 — All Warehouse Requests (Cashier, Chef, Manager)
 ───────────────────────────────────────────────────────────── */
-function CashierRequestsScreen() {
+function WarehouseRequestsScreen() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -603,12 +634,10 @@ function CashierRequestsScreen() {
     try {
       let status = filter === 'all' ? null : filter
       const data = await api(`/api/shop/warehouse/requests${status ? `?status=${status}` : ''}`)
-      // Filter to show CASHIER and CHEF requests
-      const storeRequests = (data || []).filter(r => 
-        r.requested_by_user?.role === 'CASHIER' || 
-        r.requested_by_user?.role === 'CHEF'
-      )
-      setRequests(storeRequests)
+      // Backend already handles role-based filtering:
+      // - STOREKEEPER sees ALL requests  
+      // - CASHIER/CHEF/MANAGER see only their own
+      setRequests(data || [])
       setError('')
     } catch (e) {
       setError(e.message || 'Failed to load requests')
@@ -693,9 +722,9 @@ function CashierRequestsScreen() {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Store Requests</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827' }}>Warehouse Requests</h2>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6B7280' }}>
-              Approve or reject warehouse requests from cashiers and chefs
+              Approve or reject warehouse requests from cashiers, chefs, and managers
             </p>
           </div>
           <button
@@ -958,216 +987,6 @@ function CashierRequestsScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SCREEN 3B — Chef Requests (approve/reject/send)
-───────────────────────────────────────────────────────────── */
-function ChefRequestsScreen() {
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [filter, setFilter] = useState('PENDING')
-  const [actionInProgress, setActionInProgress] = useState({})
-  const [rejectReason, setRejectReason] = useState({})
-  const [showRejectForm, setShowRejectForm] = useState({})
-
-  useEffect(() => {
-    loadRequests()
-  }, [filter])
-
-  const loadRequests = async () => {
-    setLoading(true)
-    try {
-      let status = filter === 'all' ? null : filter
-      const data = await api(`/api/shop/warehouse/requests${status ? `?status=${status}` : ''}`)
-      // Filter to only show CHEF requests
-      const chefRequests = (data || []).filter(r => r.requested_by_user?.role === 'CHEF')
-      setRequests(chefRequests)
-      setError('')
-    } catch (e) {
-      setError(e.message || 'Failed to load requests')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleApprove = async (transferId) => {
-    setActionInProgress(prev => ({ ...prev, [transferId]: 'approving' }))
-    try {
-      await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
-        method: 'PUT'
-      })
-      await loadRequests()
-      setError('')
-    } catch (e) {
-      setError(e.message || 'Failed to approve request')
-    } finally {
-      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
-    }
-  }
-
-  const handleReject = async (transferId) => {
-    const reason = rejectReason[transferId]?.trim()
-    if (!reason) {
-      setError('Rejection reason is required')
-      return
-    }
-    
-    setActionInProgress(prev => ({ ...prev, [transferId]: 'rejecting' }))
-    try {
-      await api(`/api/shop/warehouse/requests/${transferId}/reject`, {
-        method: 'PUT',
-        body: JSON.stringify({ reason })
-      })
-      setRejectReason(prev => ({ ...prev, [transferId]: '' }))
-      setShowRejectForm(prev => ({ ...prev, [transferId]: false }))
-      await loadRequests()
-      setError('')
-    } catch (e) {
-      setError(e.message || 'Failed to reject request')
-    } finally {
-      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
-    }
-  }
-
-  const handleSend = async (transferId) => {
-    setActionInProgress(prev => ({ ...prev, [transferId]: 'sending' }))
-    try {
-      await api(`/api/shop/warehouse/requests/${transferId}/send`, {
-        method: 'PUT'
-      })
-      await loadRequests()
-      setError('')
-    } catch (e) {
-      setError(e.message || 'Failed to send items')
-    } finally {
-      setActionInProgress(prev => ({ ...prev, [transferId]: null }))
-    }
-  }
-
-  const statusGroups = {
-    PENDING: requests.filter(r => r.status === 'PENDING'),
-    APPROVED: requests.filter(r => r.status === 'APPROVED'),
-    COMPLETED: requests.filter(r => r.status === 'COMPLETED'),
-    REJECTED: requests.filter(r => r.status === 'REJECTED')
-  }
-
-  return (
-    <div className="stack" style={{ gap: 24 }}>
-      {error && (
-        <Card style={{ background: '#FEE2E2', borderLeft: '4px solid #DC2626' }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <HiOutlineExclamationTriangle size={20} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
-            <span style={{ color: '#991B1B' }}>{error}</span>
-          </div>
-        </Card>
-      )}
-
-      {/* ── Header ── */}
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Chef Requests</h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: 13, color: '#6B7280' }}>Approved or reject warehouse requests from chefs</p>
-          </div>
-          <button onClick={loadRequests} style={{ background: '#3B82F6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
-
-        {/* ── Filter Tabs ── */}
-        <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
-          {['PENDING', 'APPROVED', 'COMPLETED', 'all'].map(s => (
-            <button key={s}
-              onClick={() => setFilter(s)}
-              style={{
-                padding: '6px 12px',
-                background: filter === s ? '#F3F4F6' : 'transparent',
-                border: filter === s ? '1px solid #D1D5DB' : '1px solid transparent',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: filter === s ? 600 : 400,
-                cursor: 'pointer',
-                color: '#374151'
-              }}>
-              {s === 'all' ? 'All' : s} ({statusGroups[s]?.length || 0})
-            </button>
-          ))}
-        </div>
-      </Card>
-
-      {/* ── Requests List ── */}
-      <Card>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>Loading requests...</div>
-        ) : requests.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF' }}>No chef requests found</div>
-        ) : (
-          <div className="stack" style={{ gap: 16 }}>
-            {requests.map(req => (
-              <div key={req.id} style={{ borderLeft: `4px solid ${req.status === 'PENDING' ? '#F59E0B' : req.status === 'APPROVED' ? '#3B82F6' : req.status === 'COMPLETED' ? '#10B981' : '#EF4444'}`, padding: 16, background: '#FAFAFA', borderRadius: 8 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1F2937' }}>{req.productName || 'Product'}</div>
-                    <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>Requested by: <strong>{req.waiterName || req.requesterName || 'Chef'}</strong></div>
-                  </div>
-                  <StatusBadge status={req.status} />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 13, marginBottom: 12, padding: '12px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
-                  <Field label="Quantity Requested">
-                    <strong>{req.quantity} units</strong>
-                  </Field>
-                  <Field label="Requested Date">
-                    <strong>{new Date(req.created_at).toLocaleDateString()}</strong>
-                  </Field>
-                </div>
-
-                {req.notes && (
-                  <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12, padding: '8px 12px', background: '#fff', borderLeft: '2px solid #D1D5DB', borderRadius: 4 }}>
-                    <strong>Notes:</strong> {req.notes}
-                  </div>
-                )}
-
-                {/* ── Actions ── */}
-                {req.status === 'PENDING' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <button onClick={() => handleApprove(req.id)} disabled={actionInProgress[req.id]} style={{ padding: '10px 16px', background: '#10B981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      {actionInProgress[req.id] === 'approving' ? 'Approving...' : '✓ Approve'}
-                    </button>
-                    <button onClick={() => setShowRejectForm(prev => ({ ...prev, [req.id]: !prev[req.id] }))} style={{ padding: '10px 16px', background: '#EF4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      ✕ Reject
-                    </button>
-                  </div>
-                )}
-
-                {req.status === 'APPROVED' && (
-                  <button onClick={() => handleSend(req.id)} disabled={actionInProgress[req.id]} style={{ width: '100%', padding: '10px 16px', background: '#3B82F6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    {actionInProgress[req.id] === 'sending' ? 'Sending...' : '→ Send to Chef'}
-                  </button>
-                )}
-
-                {showRejectForm[req.id] && (
-                  <div style={{ marginTop: 12, padding: 12, background: '#FEF2F2', borderRadius: 6, display: 'grid', gap: 8 }}>
-                    <textarea
-                      value={rejectReason[req.id] || ''}
-                      onChange={e => setRejectReason(prev => ({ ...prev, [req.id]: e.target.value }))}
-                      placeholder="Enter rejection reason..."
-                      style={{ padding: 8, borderRadius: 4, border: '1px solid #FECACA', fontSize: 13, fontFamily: 'inherit', minHeight: 60 }}
-                    />
-                    <button onClick={() => handleReject(req.id)} disabled={actionInProgress[req.id]} style={{ padding: '8px 16px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                      {actionInProgress[req.id] === 'rejecting' ? 'Rejecting...' : 'Confirm Rejection'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────
    SCREEN 4 — Stock Request  (with autocomplete)
 ───────────────────────────────────────────────────────────── */
 function StockRequestScreen() {
@@ -1219,6 +1038,16 @@ function StockRequestScreen() {
     setError(''); setSuccess('')
     const valid = items.filter(it => it.itemName.trim() && parseFloat(it.qtyRequested) > 0)
     if (!valid.length) { setError('Add at least one item with a name and quantity'); return }
+    
+    // Validate that all items exist in the catalogue
+    for (const item of valid) {
+      const exists = catalogue.find(c => c.name.toLowerCase() === item.itemName.toLowerCase())
+      if (!exists) {
+        setError(`"${item.itemName}" is not in the system. Please select from existing items only.`)
+        return
+      }
+    }
+    
     setBusy(true)
     try {
       await api('/api/shop/storekeeper/stock-requests', {
@@ -1251,7 +1080,7 @@ function StockRequestScreen() {
           New Stock Request
         </h3>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
-          Start typing to find existing inventory or menu items — or enter a custom item name for new products.
+          Start typing to find and select from existing inventory or menu items.
         </p>
 
         <form onSubmit={handleSubmit} className="stack" style={{ gap: 20 }}>
@@ -1390,17 +1219,24 @@ function ReceiveDeliveryScreen() {
     setReceiptItems(
       (req.requisition_items || []).map(it => {
         // Auto-match: find an ingredient whose name matches the requested item_name
-        const matched = ingredients.find(
+        const matchedIng = ingredients.find(
           ing => ing.name.toLowerCase().trim() === it.item_name.toLowerCase().trim()
         )
+        // Also check menu items
+        const matchedMenu = menuItems.find(
+          m => m.name.toLowerCase().trim() === it.item_name.toLowerCase().trim()
+        )
+        
+        const matched = matchedIng || matchedMenu
+        
         return {
           ...it,
           sentQty:         it.sent_qty ?? it.approved_qty ?? it.quantity,
           receivedQty:     it.sent_qty ?? it.approved_qty ?? it.quantity,
           varianceComment: '',
           // Auto-resolved destination (no manual selection needed)
-          targetType: matched ? 'INGREDIENT' : 'NEW_INGREDIENT',
-          targetId:   matched ? matched.id : '',
+          targetType: matchedIng ? 'INGREDIENT' : (matchedMenu ? 'MENU_ITEM' : 'NEW_INGREDIENT'),
+          targetId:   matched ? (matchedIng ? matchedIng.id : matchedMenu.id) : '',
           newItemName: it.item_name,
           newItemUnit: it.unit || 'kg',
           newItemCategory: '',
@@ -1594,11 +1430,10 @@ function ReceiveDeliveryScreen() {
    ROOT — Storekeeper Dashboard (tab shell)
 ───────────────────────────────────────────────────────────── */
 const TABS = [
-  { key: 'inventory',  label: 'Warehouse Stock',   Icon: HiOutlineArchiveBox,           color: '#EA8208', desc: 'View warehouse & floor inventory'          },
-  { key: 'cashier',    label: 'Cashier Requests',  Icon: HiOutlineClipboardDocumentList, color: '#3B82F6', desc: 'Approve/reject cashier warehouse requests' },
-  { key: 'chef',       label: 'Chef Requests',     Icon: HiOutlineClipboardDocumentList, color: '#F59E0B', desc: 'Approve/reject chef warehouse requests'    },
-  { key: 'request',    label: 'Request Stock',     Icon: HiOutlineClipboardDocumentList, color: '#7C3AED', desc: 'Submit stock requests to the owner'        },
-  { key: 'receive',    label: 'Receive Delivery',  Icon: HiOutlineTruck,                color: '#047857', desc: 'Confirm and record arrived deliveries'     },
+  { key: 'inventory',  label: 'Warehouse Stock',    Icon: HiOutlineArchiveBox,           color: '#EA8208', desc: 'View warehouse & floor inventory'          },
+  { key: 'requests',   label: 'Warehouse Requests', Icon: HiOutlineClipboardDocumentList, color: '#3B82F6', desc: 'Approve/reject requests from staff'          },
+  { key: 'request',    label: 'Request Stock',      Icon: HiOutlineClipboardDocumentList, color: '#7C3AED', desc: 'Submit stock requests to the owner'        },
+  { key: 'receive',    label: 'Receive Delivery',   Icon: HiOutlineTruck,                color: '#047857', desc: 'Confirm and record arrived deliveries'     },
 ]
 
 export default function Storekeeper() {
@@ -1632,6 +1467,13 @@ export default function Storekeeper() {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      sessionStorage.clear()
+      nav('/login', { replace: true })
+    }
+  }
+
   return (
     <div className="sk-page am-animate">
 
@@ -1645,9 +1487,39 @@ export default function Storekeeper() {
             <p className="sk-hero-sub">Manage production · stock requests · deliveries</p>
           </div>
         </div>
-        <div className="sk-hero-badge">
-          <HiOutlineShieldCheck size={18} />
-          Active Session
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="sk-hero-badge">
+            <HiOutlineShieldCheck size={18} />
+            Active Session
+          </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              background: '#FEE2E2',
+              color: '#DC2626',
+              border: '1px solid #FECACA',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={e => {
+              e.target.style.background = '#FCA5A5'
+              e.target.style.borderColor = '#F87171'
+            }}
+            onMouseOut={e => {
+              e.target.style.background = '#FEE2E2'
+              e.target.style.borderColor = '#FECACA'
+            }}
+          >
+            <HiOutlineArrowRightOnRectangle size={18} />
+            Logout
+          </button>
         </div>
       </div>
 
@@ -1703,8 +1575,7 @@ export default function Storekeeper() {
       {/* ── Screen content ── */}
       <div className="sk-content">
         {tab === 'inventory'  && <WarehouseInventoryScreen />}
-        {tab === 'cashier'    && <CashierRequestsScreen />}
-        {tab === 'chef'       && <ChefRequestsScreen />}
+        {tab === 'requests'   && <WarehouseRequestsScreen />}
         {tab === 'request'    && <StockRequestScreen />}
         {tab === 'receive'    && <ReceiveDeliveryScreen />}
       </div>

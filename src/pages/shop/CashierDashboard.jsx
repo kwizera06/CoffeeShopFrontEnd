@@ -783,15 +783,20 @@ export default function CashierDashboard() {
       return
     }
     
+    // Validate that the selected product exists in the system
+    const selectedItem = warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)
+    if (!selectedItem) {
+      setWarehouseError('Selected product is not in the system. Please select from available items only.')
+      return
+    }
+    
     setBusy(true)
     try {
-      const selectedItem = warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)
-
       await api('/api/shop/warehouse/requests', {
         method: 'POST',
         body: JSON.stringify({
           productId: newWarehouseRequest.productId,
-          itemType: selectedItem ? selectedItem.itemType : 'MENU_ITEM',
+          itemType: selectedItem.itemType,
           quantity: parseFloat(newWarehouseRequest.quantity),
           notes: newWarehouseRequest.notes
         })
@@ -831,11 +836,12 @@ export default function CashierDashboard() {
     const onStaffUpdate = () => { loadMenu().catch(()=>{}) };
     const onEodUpdate = () => { reloadShift().catch(()=>{}) };
     const onOrderUpdate = (data) => { 
-      // Add 100ms delay to allow Supabase replication to complete
+      // Add 500ms delay to allow Supabase replication to complete
       // This ensures the order is visible when we query the database
+      // 100ms was too short for multi-machine scenarios with network latency
       setTimeout(() => {
         loadBilling().catch(()=>{})
-      }, 100)
+      }, 500)
       // Beep for cashier/waiter when chef marks an order ready
       if (data && data.action === 'MARK_READY') {
         playBeep()
@@ -848,11 +854,11 @@ export default function CashierDashboard() {
     socket.on('eodUpdate', onEodUpdate);
     socket.on('orderUpdate', onOrderUpdate);
 
-    // Polling fallback: refresh billing every 5s (more frequent for mobile sync)
-    // This ensures all devices see new orders within 5 seconds
+    // Polling fallback: refresh billing every 2s (more aggressive polling for multi-machine sync)
+    // This ensures all devices see new orders within 2 seconds
     const pollInterval = setInterval(() => {
       loadBilling().catch(() => {});
-    }, 5_000);
+    }, 2_000);
 
     return () => {
       socket.off('menuUpdate', onMenuUpdate);
