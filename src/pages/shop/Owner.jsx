@@ -115,6 +115,7 @@ export default function Owner() {
     password: '',
     role: 'WAITER',
     security_key: '',
+    pin: ''
   })
   const [ingForm, setIngForm] = useState({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })
   const [productionForm, setProductionForm] = useState({ 
@@ -327,6 +328,7 @@ export default function Owner() {
   const [staffFilter, setStaffFilter] = useState('ALL')
   const [staffAddType, setStaffAddType] = useState('WAITER')
   const [showAllOrdersModal, setShowAllOrdersModal] = useState(false)
+  const [selectedLoanForReview, setSelectedLoanForReview] = useState(null)
   const [stockFilter, setStockFilter] = useState('ALL')
   const [stockSearch, setStockSearch] = useState('')
 
@@ -476,6 +478,17 @@ export default function Owner() {
       void reloadManagerAdditions().catch(() => {})
     }
   }, [tab, role, reloadManagerAdditions])
+
+  const deleteLoan = useCallback(async () => {
+    if (!selectedLoanForReview?.id) return
+    try {
+      await api(`/api/shop/loans/${selectedLoanForReview.id}`, { method: 'DELETE' })
+      setSelectedLoanForReview(null)
+      await reloadCore()
+    } catch (e) {
+      alert('Error deleting loan: ' + e.message)
+    }
+  }, [selectedLoanForReview])
 
   const reloadOverview = useCallback(async () => {
     try {
@@ -968,10 +981,20 @@ export default function Owner() {
     try {
       if (staffForm.id) {
         await api(`/api/shop/staff/${staffForm.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+        // If PIN was set, also call PIN endpoint
+        if (staffForm.pin && staffForm.pin.length >= 4) {
+          await api(`/api/shop/staff/${staffForm.id}/pin`, { method: 'POST', body: JSON.stringify({ pin: staffForm.pin }) })
+        }
       } else {
         await api('/api/shop/staff', { method: 'POST', body: JSON.stringify(payload) })
+        // If PIN was set on creation, also set it
+        const newStaffRes = await api('/api/shop/staff')
+        const newStaff = newStaffRes[newStaffRes.length - 1]
+        if (staffForm.pin && staffForm.pin.length >= 4 && newStaff?.id) {
+          await api(`/api/shop/staff/${newStaff.id}/pin`, { method: 'POST', body: JSON.stringify({ pin: staffForm.pin }) })
+        }
       }
-      setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType, security_key: '' })
+      setStaffForm({ id: '', name: '', email: '', password: '', role: staffAddType, security_key: '', pin: '' })
       await reloadCore()
     } catch (err) {
       setError(err.message)
@@ -990,7 +1013,8 @@ export default function Owner() {
       email: staffMember.email,
       password: '',
       role: staffMember.role,
-      security_key: staffMember.security_key || ''
+      security_key: staffMember.security_key || '',
+      pin: ''
     })
   }
 
@@ -2252,6 +2276,14 @@ export default function Owner() {
                       <input className="am-input" type="text" maxLength="12" value={staffForm.security_key || ''} onChange={e => setStaffForm(f => ({...f, security_key: e.target.value}))} placeholder="e.g. 12345678" />
                       <span style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Used by waiters to authenticate on POS</span>
                     </label>
+                    <label className="am-field">
+                      <span>Table Service PIN (4-6 digits)</span>
+                      <input className="am-input" type="password" inputMode="numeric" maxLength="6" value={staffForm.pin || ''} onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '')
+                        setStaffForm(f => ({...f, pin: val}))
+                      }} placeholder="e.g. 1234" />
+                      <span style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Required PIN when selecting self to serve tables</span>
+                    </label>
                   </div>
                   
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
@@ -2301,6 +2333,7 @@ export default function Owner() {
                            <th>NAME</th>
                            <th>EMAIL</th>
                            <th>ROLE</th>
+                           <th>PIN</th>
                            <th>STATUS</th>
                            <th></th>
                         </tr>
@@ -2347,6 +2380,13 @@ export default function Owner() {
                                      }}>
                                        {staffRoleLabel(staffMember.role)}
                                      </span>
+                                  </td>
+                                  <td>
+                                     {staffMember.has_pin ? (
+                                       <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: 'rgba(76,175,80,0.1)', color: '#2E7D32' }}>🔐 Set</span>
+                                     ) : (
+                                       <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: 'rgba(200,200,200,0.1)', color: '#666' }}>Not set</span>
+                                     )}
                                   </td>
                                   <td>
                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
@@ -5003,7 +5043,10 @@ export default function Owner() {
                                             }}
                                           >💸</button>
                                         )}
-                                        <button className="btn ghost tiny">👁️</button>
+                                        <button 
+                                          className="btn ghost tiny"
+                                          onClick={() => setSelectedLoanForReview(loan)}
+                                        >👁️</button>
                                      </div>
                                   </td>
                                </tr>
@@ -5248,6 +5291,102 @@ export default function Owner() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Loan Review Modal */}
+      {selectedLoanForReview && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }} onClick={() => setSelectedLoanForReview(null)}>
+          <div className="am-animate" style={{ background: '#FFF', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ margin: 0, fontSize: 18, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedLoanForReview.client_name}</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>Loan Details & Payment History</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                {(ownerAccess || isManagerRole(role)) && (
+                  <button type="button" onClick={() => { if (window.confirm(`Delete loan for ${selectedLoanForReview.client_name}?`)) deleteLoan() }} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#DC2626', padding: '4px 8px' }}>🗑️</button>
+                )}
+                <button type="button" onClick={() => setSelectedLoanForReview(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>×</button>
+              </div>
+            </div>
+            <div style={{ padding: 20, overflowY: 'auto' }}>
+              {(() => {
+                const loan = selectedLoanForReview
+                const totalPaid = (loan.loan_payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0)
+                const balance = parseFloat(loan.amount) - totalPaid
+                const percent = Math.min(100, Math.round((totalPaid / parseFloat(loan.amount)) * 100))
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+                      <div style={{ background: '#F3F4F6', border: '1px solid #E5E7EB', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: '#6B7280', textTransform: 'uppercase', fontWeight: 700 }}>Total Loan</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#1D3557', marginTop: 8 }}>{Number(loan.amount).toLocaleString()} RWF</div>
+                      </div>
+                      <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: '#DC2626', textTransform: 'uppercase', fontWeight: 700 }}>Balance</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#DC2626', marginTop: 8 }}>{Number(balance).toLocaleString()} RWF</div>
+                      </div>
+                      <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: '#15803D', textTransform: 'uppercase', fontWeight: 700 }}>Paid</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A', marginTop: 8 }}>{Number(totalPaid).toLocaleString()} RWF</div>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>Payment Progress</span><span style={{ fontSize: 12, fontWeight: 700 }}>{percent}%</span></div>
+                      <div style={{ background: '#E5E7EB', borderRadius: 8, height: 12, overflow: 'hidden' }}><div style={{ background: percent === 100 ? '#16A34A' : '#FF9800', height: '100%', width: `${percent}%` }} /></div>
+                    </div>
+                    <div style={{ background: '#F9FAFB', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700 }}>Created</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{new Date(loan.created_at).toLocaleDateString('en-GB')}</div>
+                          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{new Date(loan.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700 }}>Due Date</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{loan.due_date ? new Date(loan.due_date).toLocaleDateString('en-GB') : 'No due date'}</div>
+                        </div>
+                      </div>
+                      {loan.notes && <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E5E7EB', fontSize: 13 }}>{loan.notes}</div>}
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>Items Purchased</h4>
+                      {!loan.order_id ? <div style={{ background: '#F3F4F6', borderRadius: 12, padding: 12, textAlign: 'center', color: '#6B7280', fontSize: 13 }}>No order linked</div> : (() => {
+                        const items = loan.order_items || []
+                        if (!items || items.length === 0) return <div style={{ background: '#F3F4F6', borderRadius: 12, padding: 12, textAlign: 'center', color: '#6B7280', fontSize: 13 }}>No items found</div>
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {items.map((item, idx) => (
+                              <div key={idx} style={{ background: '#F9FAFB', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between' }}>
+                                <div><div style={{ fontSize: 13, fontWeight: 600 }}>{item.item_name}</div><div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Qty: {item.quantity}</div></div>
+                                <div style={{ textAlign: 'right' }}><div style={{ fontSize: 13, fontWeight: 600 }}>{Number(item.price * item.quantity).toLocaleString()} RWF</div></div>
+                              </div>
+                            ))}
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #E5E7EB', fontSize: 12, fontWeight: 600, textAlign: 'right' }}>Total: {Number(items.reduce((sum, i) => sum + (i.price * i.quantity), 0)).toLocaleString()} RWF</div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                    <div>
+                      <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>Payment History ({(loan.loan_payments || []).length})</h4>
+                      {(!loan.loan_payments || loan.loan_payments.length === 0) ? <div style={{ background: '#F3F4F6', borderRadius: 12, padding: 20, textAlign: 'center', color: '#6B7280' }}>No payments yet</div> : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {[...(loan.loan_payments || [])].reverse().map((payment, idx) => (
+                            <div key={idx} style={{ background: '#F9FAFB', borderRadius: 8, padding: 12 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{Number(payment.amount).toLocaleString()} RWF</div>
+                              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{payment.method || 'CASH'} • {new Date(payment.paid_at).toLocaleDateString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -873,7 +873,7 @@ export default function CashierDashboard() {
   // Load Order to edit (and switch to tab if needed)
   useEffect(() => {
     if (editId) {
-      if (tab !== 'new') setTab('new');
+      // Don't auto-switch tabs - user can stay on pending/waiting to edit in context
       api(`/api/shop/orders/${editId}`).then(order => {
         setTableNumber(String(order.tableNumber))
         setSelectedWaiter(order.waiterId || '')
@@ -1058,7 +1058,7 @@ export default function CashierDashboard() {
         }
         // Optimistically add the new order
         setPending(prev => [created, ...prev])
-        setTab('pending')
+        // Don't auto-switch tabs - user stays on current tab
         setQtyById({})
         setInitialQtyById({})
         setTableNumber('1')
@@ -1078,8 +1078,7 @@ export default function CashierDashboard() {
     try {
       await api(`/api/shop/orders/${id}/mark-ready`, { method: 'POST' })
       await loadBilling()
-      // Navigate to ready tab directly (system action, bypass PIN gate)
-      setSearchParams(prev => { const n = new URLSearchParams(prev); n.set('tab', 'ready'); return n })
+      // Don't auto-switch tabs - user stays on current tab
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }
@@ -1089,7 +1088,7 @@ export default function CashierDashboard() {
     try {
       await api(`/api/shop/orders/${id}/revert-pending`, { method: 'POST' })
       await loadBilling()
-      setTab('pending')
+      // Don't auto-switch tabs - user stays on current tab
     } catch(e) { alert(e.message) }
     finally { setBusy(false) }
   }

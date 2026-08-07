@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { api, getSession } from '../../api'
 import { printKitchenTicket, printReceipt } from '../../printUtil'
 import { useShopContext } from '../../shop/ShopContext'
@@ -37,9 +38,65 @@ export default function Orders() {
   const [search, setSearch] = useState('')
   const [staff, setStaff] = useState([])
   const [selectedWaiter, setSelectedWaiter] = useState('')
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinBusy, setPinBusy] = useState(false)
+  const [pendingWaiterId, setPendingWaiterId] = useState('')
 
   const allowed = role === 'CASHIER' || role === 'WAITER' || role === 'SHOP_ADMIN'
   const shopName = context?.name
+
+  const handleWaiterSelect = async (waiterId) => {
+    if (!waiterId) return
+    
+    setPinError('')
+    setPinInput('')
+    
+    const selectedStaff = staff.find(s => s.id === waiterId)
+    console.log('📋 Waiter selected:', selectedStaff)
+
+    // Require PIN verification for any selected waiter who has one set
+    if (selectedStaff?.has_pin) {
+      console.log('🔐 PIN required for:', selectedStaff.name)
+      setPendingWaiterId(waiterId)
+      setShowPinModal(true)
+      return
+    }
+
+    console.log('✅ No PIN needed, selecting directly')
+    // If no PIN is set, just select them
+    setSelectedWaiter(waiterId)
+  }
+
+  const verifyPin = async () => {
+    setPinError('')
+    if (!pinInput || pinInput.length < 4) {
+      setPinError('PIN must be at least 4 digits')
+      return
+    }
+
+    setPinBusy(true)
+    console.log('🔐 Verifying PIN for waiter:', pendingWaiterId)
+    try {
+      const response = await api(`/api/shop/staff/${pendingWaiterId}/verify-pin`, {
+        method: 'POST',
+        body: JSON.stringify({ pin: pinInput })
+      })
+      console.log('✅ PIN verified:', response)
+      
+      // PIN verified successfully
+      setSelectedWaiter(pendingWaiterId)
+      setShowPinModal(false)
+      setPinInput('')
+      setPendingWaiterId('')
+    } catch (e) {
+      console.error('❌ PIN verification failed:', e)
+      setPinError(e.message || 'PIN verification failed')
+    } finally {
+      setPinBusy(false)
+    }
+  }
 
   const reloadMenu = useCallback(async () => {
     const [items, staffData] = await Promise.all([
@@ -48,12 +105,10 @@ export default function Orders() {
     ])
     setMenu(items.filter((m) => m.available))
     setStaff(staffData || [])
+    console.log('📋 Staff loaded:', staffData)
     
-    // Default to self if current user is a waiter
-    const myId = getSession().userId
-    if (staffData?.some(s => s.id === myId)) {
-       setSelectedWaiter(myId)
-    }
+    // Don't auto-select waiter - let user choose
+    // (removed auto-selection that was causing PIN modal on page load)
   }, [])
 
   useEffect(() => {
@@ -237,7 +292,7 @@ export default function Orders() {
               style={{ cursor: editId ? 'not-allowed' : 'pointer' }}
               value={selectedWaiter}
               disabled={!!editId}
-              onChange={(e) => setSelectedWaiter(e.target.value)}
+              onChange={(e) => handleWaiterSelect(e.target.value)}
             >
               <option value="">Select...</option>
               {staff.map(s => (
@@ -378,6 +433,58 @@ export default function Orders() {
           )}
         </aside>
       </div>
+
+      {/* PIN Verification Modal */}
+      {showPinModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPinModal(false)}>
+          <div style={{ background: '#FFF', borderRadius: 16, padding: 32, maxWidth: 400, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 800, color: '#1D3557' }}>🔐 Verify PIN</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 13, color: '#6B7280' }}>
+              Enter PIN for <strong>{staff.find(s => s.id === pendingWaiterId)?.name || 'Waiter'}</strong>
+            </p>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              placeholder="Enter PIN"
+              maxLength="6"
+              value={pinInput}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '')
+                setPinInput(val)
+              }}
+              onKeyPress={(e) => e.key === 'Enter' && verifyPin()}
+              style={{ width: '100%', padding: '12px 16px', border: '2px solid #E5E7EB', borderRadius: 8, fontSize: 18, fontWeight: 700, textAlign: 'center', letterSpacing: 4, marginBottom: pinError ? 8 : 24, boxSizing: 'border-box', transition: 'border-color 0.2s' }}
+              autoFocus
+            />
+
+            {pinError && (
+              <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 12px', borderRadius: 8, fontSize: 12, marginBottom: 24 }}>
+                {pinError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setShowPinModal(false)}
+                style={{ flex: 1, padding: '12px', border: '1px solid #E5E7EB', background: '#F9FAFB', borderRadius: 8, fontWeight: 600, cursor: 'pointer', color: '#6B7280' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={verifyPin}
+                disabled={pinBusy || pinInput.length < 4}
+                style={{ flex: 1, padding: '12px', background: pinBusy || pinInput.length < 4 ? '#D1D5DB' : '#1D3557', color: '#FFF', border: 'none', borderRadius: 8, fontWeight: 600, cursor: pinBusy || pinInput.length < 4 ? 'not-allowed' : 'pointer' }}
+              >
+                {pinBusy ? 'Verifying...' : 'Verify'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

@@ -936,3 +936,65 @@ h4 { font-size: 15px; }
   border-radius: 999px;
   pointer-events: none;
 }
+
+
+/* ── Loans Tab Mobile Responsiveness ──────────────────────── */
+@media (max-width: 768px) {
+  .am-modern-table-desktop {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .am-modern-table-desktop {
+    display: block !important;
+  }
+  
+  /* Hide mobile card layout on desktop */
+  .am-category-sales-card > div:last-child {
+    display: none;
+  }
+}
+
+/* Mobile loan cards optimization */
+@media (max-width: 768px) {
+  .am-metric-card {
+    min-height: 100px;
+  }
+  
+  .am-metric-value {
+    font-size: 18px !important;
+  }
+  
+  .am-filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .am-pill {
+    flex: 0 1 calc(50% - 4px);
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .am-metric-card {
+    padding: 12px;
+  }
+  
+  .am-metric-header {
+    font-size: 10px;
+  }
+  
+  .am-metric-value {
+    font-size: 16px !important;
+  }
+  
+  .am-pill {
+    flex: 0 1 calc(50% - 4px);
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+}
