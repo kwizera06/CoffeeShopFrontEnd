@@ -58,6 +58,7 @@ export default function Owner() {
   const tab = searchParams.get('tab') || 'overview'
   const setTab = (t) => setSearchParams({ tab: t })
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [search, setSearch] = useState('')
   const [eodProductPage, setEodProductPage] = useState(1)
   const [isExporting, setIsExporting] = useState(false)
@@ -93,7 +94,7 @@ export default function Owner() {
     'Accompaniments','breakFast','whisky','Cold Starter','Hot Starter',
     'Boiled and Dishes','Egg Dish','Sandwich','Big Hot Dishes','Local Dishes(East Africa Dishes)',
     'Chicken','Fish','Pork','Meat of Langue','Skewers','Mix Platter Grilled','Meat Challenged',
-    'Pizza','Pasta','Side Dish','Sauce','Dessert','Rabbit', 'Gift Shop', 'Cups&Takeaway'
+    'Pizza','Pasta','Side Dish','Sauce','Dessert','Rabbit', 'Gift Shop', 'Cups&Takeaway', 'Others'
   ]
 
   const CATEGORY_MAP = {
@@ -106,7 +107,8 @@ export default function Owner() {
     'Fast Food': 'FOOD',
     'Main Food / Meals': 'FOOD',
     'Bakery & Desserts': 'FOOD',
-    'Snacks': 'FOOD'
+    'Snacks': 'FOOD',
+    'Others': 'OTHER'
   }
   const [staffForm, setStaffForm] = useState({
     id: '',
@@ -243,25 +245,52 @@ export default function Owner() {
   }
 
   async function restockWarehouse(itemId, itemType, currentQty) {
-    const qty = prompt(`How many units to add to warehouse?\n(Currently: ${currentQty || 0})`, '');
-    if (!qty || isNaN(qty) || parseFloat(qty) <= 0) return;
+    const qty = prompt(`SET warehouse quantity to exact amount:\n(Currently: ${currentQty || 0})\n\nEnter the exact quantity you want (e.g., 20)\nThis will REPLACE the current quantity, not add to it.`, '');
+    if (!qty || isNaN(qty) || parseFloat(qty) < 0) return;
+    
+    const qtyNum = parseFloat(qty);
     
     setError('')
     try {
-      await api('/api/shop/warehouse/add-to-warehouse', {
-        method: 'POST',
+      await api('/api/shop/warehouse/set-warehouse-quantity', {
+        method: 'PUT',
         body: JSON.stringify({
           productId: itemId,
           itemType: itemType,
-          quantity: parseFloat(qty),
-          notes: `Manually added to warehouse by Owner`
+          quantity: qtyNum,
+          notes: `Owner set warehouse quantity to ${qtyNum} units`
         })
       })
       await reloadCore()
-      setSuccess(`✓ Added ${qty} units to warehouse`)
+      setSuccess(`✓ Set warehouse quantity to ${qtyNum} units`)
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) { 
-      setError(e.message || 'Failed to add to warehouse') 
+      setError(e.message || 'Failed to update warehouse stock') 
+    }
+  }
+
+  async function restoreShopFloorStock(itemId, itemType, currentStockLevel) {
+    const qty = prompt(`How many units to add to SHOP FLOOR stock?\n(Current shop floor: ${currentStockLevel || 0})\n\nThis restores available stock for sale.\nIf negative, this will offset the debt first.`, '');
+    if (!qty || isNaN(qty) || parseFloat(qty) <= 0) return;
+    
+    const qtyNum = parseFloat(qty);
+    
+    setError('')
+    try {
+      await api('/api/shop/warehouse/restore-stock-level', {
+        method: 'PUT',
+        body: JSON.stringify({
+          productId: itemId,
+          itemType: itemType,
+          quantity: qtyNum,
+          notes: `Owner restored ${qtyNum} units to shop floor stock`
+        })
+      })
+      await reloadCore()
+      setSuccess(`✓ Restored ${qtyNum} units to shop floor stock`)
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (e) { 
+      setError(e.message || 'Failed to restore shop floor stock') 
     }
   }
 
@@ -1034,6 +1063,7 @@ export default function Owner() {
     <div className="panel owner am-content-wrapper" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
       <div className="am-dashboard-content owner-modern-page am-animate">
         {error ? <div className="error" style={{ marginBottom: 20 }}>{error}</div> : null}
+        {success ? <div className="success" style={{ marginBottom: 20, padding: 12, background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: 6, color: '#22C55E', fontWeight: 500 }}>{success}</div> : null}
 
       {tab === 'overview' && canAccessTab(role, 'overview') ? (
         overview ? (
@@ -3135,12 +3165,27 @@ export default function Owner() {
                     }}>{status}</span>
                   </div>
 
-                  {/* Stock - Show only Floor Stock (Shop) */}
-                  <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8, border: '1px solid rgba(34,197,94,0.2)' }}>
-                    <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 4, fontWeight: 700 }}>FLOOR STOCK</div>
-                    <div style={{ fontWeight: 700, fontSize: 18, color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#22C55E', marginBottom: 8 }}>
-                      {item.stock} {item.unit}
+                  {/* Stock levels */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {/* Warehouse Stock */}
+                    <div style={{ background: 'rgba(251,146,60,0.08)', padding: 10, borderRadius: 8, border: '1px solid rgba(251,146,60,0.2)' }}>
+                      <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2, fontWeight: 700 }}>WAREHOUSE</div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: '#FB923C', marginBottom: 4 }}>
+                        {item.warehouse_qty || 0} {item.unit}
+                      </div>
                     </div>
+                    
+                    {/* Floor Stock */}
+                    <div style={{ background: 'rgba(34,197,94,0.08)', padding: 10, borderRadius: 8, border: '1px solid rgba(34,197,94,0.2)' }}>
+                      <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2, fontWeight: 700 }}>FLOOR STOCK</div>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : '#22C55E', marginBottom: 4 }}>
+                        {item.stock} {item.unit}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ background: 'rgba(34,197,94,0.08)', padding: 12, borderRadius: 8, border: '1px solid rgba(34,197,94,0.2)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 4, fontWeight: 700 }}>FLOOR STOCK LEVEL</div>
                     <div style={{ background: '#E5E7EB', borderRadius: 3, height: 6 }}>
                       <div style={{
                         height: 6, borderRadius: 3,
@@ -3204,6 +3249,13 @@ export default function Owner() {
                       style={{ flex: 1, minWidth: 70, background: 'rgba(251,146,60,0.1)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.3)' }}
                       onClick={() => restockWarehouse(item.id, isIng ? 'INGREDIENT' : 'MENU_ITEM', item.warehouse_qty || 0)}
                     >📦 Restock Warehouse</button>
+
+                    <button
+                      type="button"
+                      className="btn tiny"
+                      style={{ flex: 1, minWidth: 70, background: 'rgba(34,197,94,0.1)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.3)' }}
+                      onClick={() => restoreShopFloorStock(item.id, isIng ? 'INGREDIENT' : 'MENU_ITEM', item.stock || 0)}
+                    >🏪 Restore Floor Stock</button>
 
                     {canEdit && isIng && ing && (
                       <button

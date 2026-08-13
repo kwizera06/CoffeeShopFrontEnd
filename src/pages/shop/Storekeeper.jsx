@@ -624,6 +624,8 @@ function WarehouseRequestsScreen() {
   const [actionInProgress, setActionInProgress] = useState({})
   const [rejectReason, setRejectReason] = useState({})
   const [showRejectForm, setShowRejectForm] = useState({})
+  const [editingQuantity, setEditingQuantity] = useState({})
+  const [isEditMode, setIsEditMode] = useState({})
 
   useEffect(() => {
     loadRequests()
@@ -649,10 +651,16 @@ function WarehouseRequestsScreen() {
   const handleApprove = async (transferId) => {
     setActionInProgress(prev => ({ ...prev, [transferId]: 'approving' }))
     try {
+      const editedQty = editingQuantity[transferId]
+      const approveData = editedQty ? { quantity: parseFloat(editedQty) } : {}
+      
       await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
-        method: 'PUT'
+        method: 'PUT',
+        body: approveData && Object.keys(approveData).length > 0 ? JSON.stringify(approveData) : undefined
       })
       await loadRequests()
+      setEditingQuantity(prev => ({ ...prev, [transferId]: '' }))
+      setIsEditMode(prev => ({ ...prev, [transferId]: false }))
       setError('')
     } catch (e) {
       setError(e.message || 'Failed to approve request')
@@ -829,10 +837,34 @@ function WarehouseRequestsScreen() {
                   gap: 12
                 }}>
                   <div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Quantity Requested</span>
-                    <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                      {req.quantity} units
-                    </p>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>
+                      {req.status === 'PENDING' && isEditMode[req.transferId] ? 'New Quantity' : 'Quantity Requested'}
+                    </span>
+                    {req.status === 'PENDING' && isEditMode[req.transferId] ? (
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editingQuantity[req.transferId] !== undefined ? editingQuantity[req.transferId] : req.quantity}
+                        onChange={(e) => setEditingQuantity(prev => ({ ...prev, [req.transferId]: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          marginTop: 4,
+                          padding: '8px 12px',
+                          border: '2px solid #3B82F6',
+                          borderRadius: 6,
+                          outline: 'none',
+                          fontSize: 16,
+                          fontWeight: 700,
+                          color: '#111827'
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                        {editingQuantity[req.transferId] ? `${editingQuantity[req.transferId]} units` : `${req.quantity} units`}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Requested Date</span>
@@ -873,6 +905,35 @@ function WarehouseRequestsScreen() {
                 {/* ── Actions ── */}
                 {req.status === 'PENDING' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* ── Edit Toggle ── */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          if (isEditMode[req.transferId]) {
+                            setEditingQuantity(prev => ({ ...prev, [req.transferId]: '' }))
+                          } else {
+                            setEditingQuantity(prev => ({ ...prev, [req.transferId]: req.quantity }))
+                          }
+                          setIsEditMode(prev => ({ ...prev, [req.transferId]: !isEditMode[req.transferId] }))
+                        }}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1,
+                          padding: '10px 16px',
+                          background: isEditMode[req.transferId] ? '#F59E0B' : '#F3F4F6',
+                          color: isEditMode[req.transferId] ? 'white' : '#374151',
+                          border: '1px solid #D1D5DB',
+                          borderRadius: 8,
+                          fontWeight: 600,
+                          cursor: isBusy ? 'not-allowed' : 'pointer',
+                          transition: '0.2s'
+                        }}
+                      >
+                        {isEditMode[req.transferId] ? '✎ Editing...' : '✎ Edit Qty'}
+                      </button>
+                    </div>
+                    
+                    {/* ── Approve/Reject Buttons ── */}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={() => handleApprove(req.transferId)}
@@ -1427,12 +1488,251 @@ function ReceiveDeliveryScreen() {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   SCREEN 6 — Personal Stock (Storekeeper's own stock account)
+───────────────────────────────────────────────────────────── */
+function PersonalStockScreen() {
+  const [stockItems, setStockItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editQty, setEditQty] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const loadPersonalStock = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await api('/api/shop/storekeeper/personal-stock')
+      setStockItems(data || [])
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to load personal stock')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadPersonalStock()
+  }, [loadPersonalStock])
+
+  const handleEditQuantity = async (itemId, currentQty) => {
+    const newQty = parseFloat(editQty)
+    if (isNaN(newQty) || newQty < 0) {
+      setError('Quantity must be a valid number ≥ 0')
+      return
+    }
+
+    setBusy(true)
+    try {
+      await api(`/api/shop/storekeeper/personal-stock/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ quantity: newQty })
+      })
+      await loadPersonalStock()
+      setEditingId(null)
+      setEditQty('')
+      setError('')
+    } catch (e) {
+      setError(e.message || 'Failed to update stock quantity')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="stack" style={{ gap: 24 }}>
+      {error && (
+        <Card style={{ background: '#FEE2E2', borderLeft: '4px solid #DC2626' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <HiOutlineExclamationTriangle size={20} style={{ color: '#DC2626', marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: '#991B1B' }}>{error}</span>
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 12 }}>
+          <HiOutlineBeaker style={{ marginRight: 8, verticalAlign: 'middle' }} />
+          My Stock Account
+        </h2>
+        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          Manage your personal stock quantities and adjustments
+        </p>
+      </Card>
+
+      {loading ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          Loading your stock items...
+        </Card>
+      ) : stockItems.length === 0 ? (
+        <Card style={{ textAlign: 'center', color: '#9CA3AF' }}>
+          No stock items assigned to your account
+        </Card>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {stockItems.map(item => (
+            <div key={item.id} style={{
+              padding: 16,
+              background: '#FFFFFF',
+              border: '1px solid #E5E7EB',
+              borderRadius: 12,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              transition: 'all 0.2s',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              ':hover': {
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }
+            }}>
+              {/* Left: Item Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                  {item.itemName || item.name || 'Unknown'}
+                </h3>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#9CA3AF', background: '#F3F4F6', padding: '2px 8px', borderRadius: 4 }}>
+                    {item.category || 'Uncategorized'}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#6B7280' }}>
+                    Unit: {item.unit || 'pcs'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Middle: Quantity Display or Input */}
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'flex-end' }}>
+                {editingId === item.id ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <label style={{ fontSize: 11, color: '#6B7280', marginBottom: 4, fontWeight: 600 }}>
+                        New Quantity:
+                      </label>
+                      <input
+                        type="number"
+                        value={editQty}
+                        onChange={(e) => setEditQty(e.target.value)}
+                        min="0"
+                        step="0.1"
+                        style={{
+                          padding: '10px 12px',
+                          border: '2px solid #3B82F6',
+                          borderRadius: 6,
+                          outline: 'none',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          width: 100,
+                          textAlign: 'right',
+                          background: '#F0F9FF'
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleEditQuantity(item.id, item.quantity)}
+                      disabled={busy}
+                      style={{
+                        padding: '8px 14px',
+                        background: busy ? '#D1D5DB' : '#10B981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                        fontSize: 12,
+                        whiteSpace: 'nowrap',
+                        height: 'fit-content'
+                      }}
+                    >
+                      {busy ? 'Saving...' : '✓ Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(null)
+                        setEditQty('')
+                      }}
+                      disabled={busy}
+                      style={{
+                        padding: '8px 14px',
+                        background: '#FEE2E2',
+                        color: '#991B1B',
+                        border: '1px solid #FECACA',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        whiteSpace: 'nowrap',
+                        height: 'fit-content'
+                      }}
+                    >
+                      ✕ Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Quantity Display */}
+                    <div style={{ textAlign: 'right', paddingRight: 12, borderRight: '1px solid #E5E7EB' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                        {item.quantity || 0}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                        {item.unit || 'units'}
+                      </div>
+                    </div>
+
+                    {/* Edit Button - PROMINENT */}
+                    <button
+                      onClick={() => {
+                        setEditingId(item.id)
+                        setEditQty(item.quantity || 0)
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#3B82F6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        whiteSpace: 'nowrap'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = '#2563EB'
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(59, 130, 246, 0.3)'
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = '#3B82F6'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      ✎ Edit Qty
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    ROOT — Storekeeper Dashboard (tab shell)
 ───────────────────────────────────────────────────────────── */
 const TABS = [
   { key: 'inventory',  label: 'Warehouse Stock',    Icon: HiOutlineArchiveBox,           color: '#EA8208', desc: 'View warehouse & floor inventory'          },
   { key: 'requests',   label: 'Warehouse Requests', Icon: HiOutlineClipboardDocumentList, color: '#3B82F6', desc: 'Approve/reject requests from staff'          },
   { key: 'request',    label: 'Request Stock',      Icon: HiOutlineClipboardDocumentList, color: '#7C3AED', desc: 'Submit stock requests to the owner'        },
+  { key: 'personal',   label: 'My Stock',           Icon: HiOutlineBeaker,               color: '#8B5CF6', desc: 'Manage your personal stock account'        },
   { key: 'receive',    label: 'Receive Delivery',   Icon: HiOutlineTruck,                color: '#047857', desc: 'Confirm and record arrived deliveries'     },
 ]
 
@@ -1577,6 +1877,7 @@ export default function Storekeeper() {
         {tab === 'inventory'  && <WarehouseInventoryScreen />}
         {tab === 'requests'   && <WarehouseRequestsScreen />}
         {tab === 'request'    && <StockRequestScreen />}
+        {tab === 'personal'   && <PersonalStockScreen />}
         {tab === 'receive'    && <ReceiveDeliveryScreen />}
       </div>
     </div>
