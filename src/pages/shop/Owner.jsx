@@ -312,6 +312,7 @@ export default function Owner() {
   const [loanSearch, setLoanSearch] = useState('')
   const [loanFilter, setLoanFilter] = useState('ALL')
   const [loanForm, setLoanForm] = useState({ client_name: '', amount: '', amount_paid: 0, notes: '', status: 'UNPAID' })
+  const [selectedRequisitionForReview, setSelectedRequisitionForReview] = useState(null)
 
   const [reqSearch, setReqSearch] = useState('')
   const [reqFilter, setReqFilter] = useState('ALL')
@@ -1875,9 +1876,10 @@ export default function Owner() {
                         <thead>
                           <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                             <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Product Name</th>
-                            {isSimpleListing && <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Quantity</th>}
+                            <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Stock Level</th>
                             {isSimpleListing && <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Buying Price</th>}
                             <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>{isSimpleListing ? 'Selling Price' : 'Price'}</th>
+                            <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Stock Value</th>
                             <th style={{ padding: '16px 24px', color: '#6B7280', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
                           </tr>
                         </thead>
@@ -1949,11 +1951,14 @@ export default function Owner() {
                                     )}
                                   </div>
                                 </td>
-                                {isSimpleListing && (
-                                  <td style={{ padding: '16px 24px', color: 'rgba(52, 152, 219, 1)', fontWeight: 600 }}>
-                                    {m.stock_level !== undefined && m.stock_level !== null ? m.stock_level : 0}
-                                  </td>
-                                )}
+                                <td style={{ padding: '16px 24px' }}>
+                                  <div style={{ fontWeight: 700, color: (Number(m.stock_level || 0) <= 0 ? '#FF5252' : Number(m.stock_level || 0) < 10 ? '#FF9800' : '#1D3557') }}>
+                                    {Number(m.stock_level || 0)} pcs
+                                  </div>
+                                  <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>
+                                    {Number(m.stock_level || 0) <= 0 ? '🔴 Out of Stock' : Number(m.stock_level || 0) < 10 ? '🟠 Low Stock' : '🟢 In Stock'}
+                                  </div>
+                                </td>
                                 {isSimpleListing && (
                                   <td style={{ padding: '16px 24px', color: '#6B7280' }}>
                                     {m.buying_price !== undefined && m.buying_price !== null ? Number(m.buying_price).toLocaleString() : 0} RWF
@@ -1961,6 +1966,9 @@ export default function Owner() {
                                 )}
                                 <td style={{ padding: '16px 24px', color: '#1D3557', fontWeight: 700 }}>
                                   {Number(m.price).toLocaleString()} RWF
+                                </td>
+                                <td style={{ padding: '16px 24px', fontWeight: 700, color: '#16A34A' }}>
+                                  {(Number(m.stock_level || 0) * Number(m.price || 0)).toLocaleString()} RWF
                                 </td>
                                 <td style={{ padding: '16px 24px' }}>
                                   <span className={`badge ${m.available ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '10px' }}>
@@ -2419,6 +2427,213 @@ export default function Owner() {
         </>
       ) : null}
 
+
+      {tab === 'menu_stock' && ownerAccess ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Menu & Stock Levels</h1>
+              <p>Products grouped by category with current stock information</p>
+            </div>
+            <div className="am-report-selectors" style={{ background: 'transparent', padding: 0 }}>
+               <div className="am-report-sel-item">
+                  <label>Search Products</label>
+                  <div style={{ position: 'relative' }}>
+                    <HiOutlineMagnifyingGlass style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input 
+                      type="text" 
+                      className="am-input" 
+                      style={{ paddingLeft: 40, height: 40 }}
+                      placeholder="Find a product..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+               </div>
+            </div>
+          </header>
+
+          {(() => {
+            // Group menu items by category
+            const categorizedProducts = menu.reduce((acc, product) => {
+              const category = product.category || 'Uncategorized';
+              if (!acc[category]) {
+                acc[category] = [];
+              }
+              acc[category].push(product);
+              return acc;
+            }, {});
+
+            // Filter categories and products based on search
+            const normalizeSearch = (str) => str.toLowerCase().replace(/\s+/g, '').replace(/&/g, 'and');
+            const filteredCategories = Object.entries(categorizedProducts)
+              .filter(([category, products]) => {
+                const categoryMatches = 
+                  category.toLowerCase().includes(search.toLowerCase()) ||
+                  normalizeSearch(category).includes(normalizeSearch(search));
+                const productsMatch = products.some(p => 
+                  p.name.toLowerCase().includes(search.toLowerCase()) ||
+                  normalizeSearch(p.name).includes(normalizeSearch(search))
+                );
+                return categoryMatches || productsMatch || search === '';
+              })
+              .sort(([catA], [catB]) => catA.localeCompare(catB));
+
+            return (
+              <div className="stack" style={{ gap: 32 }}>
+                {filteredCategories.length === 0 ? (
+                  <div className="am-card" style={{ padding: 48, textAlign: 'center', background: '#F9FAFB', borderRadius: 16 }}>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+                    <h3 style={{ color: '#1D3557', marginBottom: 8 }}>No products found</h3>
+                    <p style={{ color: '#6B7280' }}>Try adjusting your search or browse all categories below.</p>
+                  </div>
+                ) : (
+                  filteredCategories.map(([category, products]) => {
+                    const normalizeSearch = (str) => str.toLowerCase().replace(/\s+/g, '').replace(/&/g, 'and');
+                    const filteredProducts = products.filter(p => 
+                      p.name.toLowerCase().includes(search.toLowerCase()) ||
+                      normalizeSearch(p.name).includes(normalizeSearch(search)) ||
+                      search === ''
+                    );
+
+                    if (filteredProducts.length === 0) return null;
+
+                    return (
+                      <div key={category} className="am-category-group am-animate">
+                        <div className="row-between" style={{ marginBottom: 20 }}>
+                          <h3 style={{ margin: 0, fontSize: '20px', color: '#111827', display: 'flex', alignItems: 'center', gap: 12, fontWeight: 800 }}>
+                            <span style={{ color: '#1D3557' }}>•</span> {category}
+                            <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 400 }}>{filteredProducts.length} items</span>
+                          </h3>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                          {filteredProducts.map(product => {
+                            const stockLevel = Number(product.stock_level || 0);
+                            const price = Number(product.price || 0);
+                            const status = stockLevel <= 0 ? 'OUT_OF_STOCK' : stockLevel < 10 ? 'LOW_STOCK' : 'HEALTHY';
+                            const stockColor = status === 'OUT_OF_STOCK' ? '#FF5252' : status === 'LOW_STOCK' ? '#FF9800' : '#1D3557';
+                            const stockBg = status === 'OUT_OF_STOCK' ? '#FEE2E2' : status === 'LOW_STOCK' ? '#FFF8E1' : '#F0FDF4';
+
+                            return (
+                              <div 
+                                key={product.id}
+                                style={{
+                                  background: '#FFFFFF',
+                                  borderRadius: 14,
+                                  border: `1.5px solid ${status === 'OUT_OF_STOCK' ? '#FF5252' : status === 'LOW_STOCK' ? '#FF9800' : '#E5E7EB'}`,
+                                  padding: 16,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 12,
+                                  transition: 'all 0.2s',
+                                  cursor: 'pointer',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                  '&:hover': {
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                  }
+                                }}
+                              >
+                                {/* Product name and status */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 4 }}>
+                                      {product.name}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#6B7280' }}>
+                                      {product.available ? '✓ Available' : '✗ Unavailable'}
+                                    </div>
+                                  </div>
+                                  <span style={{
+                                    padding: '4px 12px', 
+                                    borderRadius: 20, 
+                                    fontSize: 11, 
+                                    fontWeight: 800,
+                                    background: stockBg,
+                                    color: stockColor
+                                  }}>
+                                    {status === 'OUT_OF_STOCK' ? 'OUT OF STOCK' : status === 'LOW_STOCK' ? 'LOW STOCK' : 'IN STOCK'}
+                                  </span>
+                                </div>
+
+                                {/* Stock level bar */}
+                                <div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111827 ' }}>
+                                      {stockLevel} pcs
+                                    </span>
+                                    <span style={{ fontSize: 11, color: '#6B7280' }}>
+                                      {status === 'OUT_OF_STOCK' ? 'Reorder needed' : status === 'LOW_STOCK' ? 'Below threshold (10)' : 'Sufficient'}
+                                    </span>
+                                  </div>
+                                  <div style={{ background: '#E5E7EB', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+                                    <div 
+                                      style={{
+                                        height: '100%',
+                                        width: `${Math.max(5, Math.min(100, stockLevel > 20 ? 100 : (stockLevel / 20) * 100))}%`,
+                                        background: stockColor,
+                                        transition: 'width 0.3s',
+                                        borderRadius: 6
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Pricing */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '8px 0', borderTop: '1px solid #E5E7EB' }}>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 4 }}>Price</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1D3557' }}>
+                                      {price.toLocaleString()} RWF
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 4 }}>Value</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#16A34A' }}>
+                                      {(stockLevel * price).toLocaleString()} RWF
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
+                                  {product.is_recipe ? (
+                                    <button 
+                                      className="btn primary tiny" 
+                                      style={{ flex: 1 }}
+                                      onClick={() => { setTab('menu'); editMenu(product); }}
+                                    >📖 Recipe</button>
+                                  ) : (
+                                    <button 
+                                      className="btn ghost tiny" 
+                                      style={{ flex: 1 }}
+                                      onClick={() => { setTab('menu'); editMenu(product); }}
+                                    >✏️ Edit</button>
+                                  )}
+                                  <button 
+                                    className="btn outline tiny" 
+                                    style={{ flex: 1 }}
+                                    onClick={() => openStockItemHistory({ 
+                                      id: product.id, 
+                                      name: product.name, 
+                                      itemType: 'MENU_ITEM',
+                                      unit: 'pcs'
+                                    })}
+                                  >📜 History</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })()}
+        </>
+      ) : null}
 
       {tab === 'inventory' && canAccessTab(role, 'inventory') ? (
         <>
@@ -3118,59 +3333,72 @@ export default function Owner() {
                           r.users?.name?.toLowerCase().includes(reqSearch.toLowerCase()) ||
                           r.requisition_items?.some(i => i.item_name.toLowerCase().includes(reqSearch.toLowerCase()))
                         ))
-                        .map(req => {
+                        .flatMap(req => {
                            const initials = (req.users?.name || 'Staff').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                           const mainItem = req.requisition_items?.[0] || { item_name: 'Unknown', quantity: 0, unit: '' }
+                           const items = req.requisition_items || [{ item_name: 'Unknown', quantity: 0, unit: '' }]
                            
-                           return (
-                             <tr key={req.id}>
+                           // Create a row for EACH item in the requisition
+                           return items.map((item, idx) => (
+                             <tr key={`${req.id}-${idx}`}>
                                 <td>
-                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                      <div className="am-loan-avatar">{initials}</div>
-                                      <div>
-                                         <div style={{ fontWeight: 700 }}>{req.users?.name || 'Staff'}</div>
-                                         <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{req.users?.role || 'Staff'}</div>
-                                      </div>
-                                   </div>
+                                   {idx === 0 && (
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div className="am-loan-avatar">{initials}</div>
+                                        <div>
+                                           <div style={{ fontWeight: 700 }}>{req.users?.name || 'Staff'}</div>
+                                           <div style={{ fontSize: 10, color: 'var(--admin-text-muted)' }}>{req.users?.role || 'Staff'}</div>
+                                        </div>
+                                     </div>
+                                   )}
                                 </td>
                                 <td>
-                                   <div style={{ fontWeight: 700 }}>{mainItem.item_name}</div>
-                                   <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {req.notes || 'Routine restock'}
-                                   </div>
+                                   <div style={{ fontWeight: 700 }}>{item.item_name}</div>
+                                   {idx === 0 && (
+                                     <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {req.notes || 'Routine restock'}
+                                     </div>
+                                   )}
                                 </td>
-                                <td style={{ fontWeight: 800 }}>{mainItem.quantity} {mainItem.unit}</td>
+                                <td style={{ fontWeight: 800 }}>{item.quantity} {item.unit}</td>
                                 <td>
-                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                      <span className="am-priority-dot" style={{ background: req.notes?.toLowerCase().includes('urgent') ? '#FF5252' : '#B0B0B0' }}></span>
-                                      {req.notes?.toLowerCase().includes('urgent') ? 'Urgent' : 'Normal'}
-                                   </div>
+                                   {idx === 0 && (
+                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                                        <span className="am-priority-dot" style={{ background: req.notes?.toLowerCase().includes('urgent') ? '#FF5252' : '#B0B0B0' }}></span>
+                                        {req.notes?.toLowerCase().includes('urgent') ? 'Urgent' : 'Normal'}
+                                     </div>
+                                   )}
                                 </td>
-                                <td style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{new Date(req.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}</td>
+                                <td style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>
+                                   {idx === 0 && new Date(req.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}
+                                </td>
                                 <td>
-                                   <span className="am-status-badge" style={{ 
-                                     background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
-                                     color: req.status === 'APPROVED' ? '#1D3557' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
-                                   }}>
-                                     {req.status}
-                                   </span>
+                                   {idx === 0 && (
+                                     <span className="am-status-badge" style={{ 
+                                       background: req.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (req.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
+                                       color: req.status === 'APPROVED' ? '#1D3557' : (req.status === 'PENDING' ? '#FF9800' : '#FF5252')
+                                     }}>
+                                       {req.status}
+                                     </span>
+                                   )}
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
-                                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                      {req.status === 'PENDING' && (
-                                        <>
-                                           <button className="btn success tiny" onClick={() => updateRequestedOrderStatus(req.id, 'APPROVED')}>✅</button>
-                                           <button className="btn ghost tiny" onClick={() => updateRequestedOrderStatus(req.id, 'REJECTED')}>❌</button>
-                                        </>
-                                      )}
-                                      {req.status === 'APPROVED' && (
-                                         <button className="btn ghost tiny" style={{ color: '#2196F3' }} onClick={() => updateRequestedOrderStatus(req.id, 'RECEIVED')}>📦 Mark Received</button>
-                                      )}
-                                      <button className="btn ghost tiny">👁️</button>
-                                   </div>
+                                   {idx === 0 && (
+                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                        {req.status === 'PENDING' && (
+                                          <>
+                                             <button className="btn success tiny" onClick={() => updateRequestedOrderStatus(req.id, 'APPROVED')}>✅</button>
+                                             <button className="btn ghost tiny" onClick={() => updateRequestedOrderStatus(req.id, 'REJECTED')}>❌</button>
+                                          </>
+                                        )}
+                                        {req.status === 'APPROVED' && (
+                                           <button className="btn ghost tiny" style={{ color: '#2196F3' }} onClick={() => updateRequestedOrderStatus(req.id, 'RECEIVED')}>📦 Mark Received</button>
+                                        )}
+                                        <button className="btn ghost tiny" onClick={() => setSelectedRequisitionForReview(req)}>👁️</button>
+                                     </div>
+                                   )}
                                 </td>
                              </tr>
-                           )
+                           ))
                         })}
                       {requestedOrders.length === 0 && (
                         <tr>
@@ -3183,6 +3411,106 @@ export default function Owner() {
           </div>
         </>
       ) : null}
+
+      {/* Requisition Details Modal */}
+      {selectedRequisitionForReview && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSelectedRequisitionForReview(null)}>
+          <div style={{ background: '#FFF', borderRadius: 16, padding: 32, maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1D3557' }}>📋 Requisition Details</h2>
+              <button type="button" onClick={() => setSelectedRequisitionForReview(null)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#6B7280' }}>×</button>
+            </div>
+
+            <div style={{ background: '#F9FAFB', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase' }}>Requested By</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{selectedRequisitionForReview.users?.name || 'Staff'}</div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{selectedRequisitionForReview.users?.role || 'Role'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase' }}>Date</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{new Date(selectedRequisitionForReview.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{new Date(selectedRequisitionForReview.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })}</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase' }}>Status</div>
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ 
+                    padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                    background: selectedRequisitionForReview.status === 'APPROVED' ? 'rgba(76,175,80,0.1)' : (selectedRequisitionForReview.status === 'PENDING' ? 'rgba(255,152,0,0.1)' : 'rgba(255,82,82,0.1)'),
+                    color: selectedRequisitionForReview.status === 'APPROVED' ? '#1D3557' : (selectedRequisitionForReview.status === 'PENDING' ? '#FF9800' : '#FF5252')
+                  }}>
+                    {selectedRequisitionForReview.status}
+                  </span>
+                </div>
+              </div>
+
+              {selectedRequisitionForReview.notes && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #E5E7EB' }}>
+                  <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 700, textTransform: 'uppercase' }}>Notes</div>
+                  <div style={{ fontSize: 13, marginTop: 4, fontStyle: 'italic', color: '#374151' }}>{selectedRequisitionForReview.notes}</div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 700 }}>Items Requested ({(selectedRequisitionForReview.requisition_items || []).length})</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(selectedRequisitionForReview.requisition_items || []).map((item, idx) => (
+                  <div key={idx} style={{ background: '#F9FAFB', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{item.item_name}</div>
+                      <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Unit: {item.unit}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 800, fontSize: 14 }}>{item.quantity}</div>
+                      <div style={{ fontSize: 11, color: '#6B7280' }}>{item.unit}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={() => setSelectedRequisitionForReview(null)}
+                style={{ flex: 1, padding: '12px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, fontWeight: 600, cursor: 'pointer', color: '#6B7280' }}
+              >
+                Close
+              </button>
+              {selectedRequisitionForReview.status === 'PENDING' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateRequestedOrderStatus(selectedRequisitionForReview.id, 'APPROVED')
+                      setSelectedRequisitionForReview(null)
+                    }}
+                    style={{ flex: 1, padding: '12px', background: '#1D3557', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', color: '#FFF' }}
+                  >
+                    ✅ Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateRequestedOrderStatus(selectedRequisitionForReview.id, 'REJECTED')
+                      setSelectedRequisitionForReview(null)
+                    }}
+                    style={{ flex: 1, padding: '12px', background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', borderRadius: 8, fontWeight: 600, cursor: 'pointer', color: '#FF5252' }}
+                  >
+                    ❌ Reject
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ══════════════════════════════════════════════════════
           STOCK REQUESTS TAB — Owner reviews storekeeper requests
@@ -3927,31 +4255,52 @@ export default function Owner() {
                 {/* ── Current Stock Levels ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Current Stock Levels</h3>
-                  <div className="am-eod-table">
-                    <div className="am-eod-table-head">
-                      <span>Item Name</span>
-                      <span>Category</span>
-                      <span>In Stock</span>
-                      <span>Status</span>
-                    </div>
-                    {stockItems.map((item, idx) => {
-                      const status = getItemStockStatus(item);
-                      return (
-                        <div key={idx} className="am-eod-table-row">
-                          <span className="am-eod-cell-name">
-                            {item.name} <span className="am-eod-cell-cat">{item.itemType === 'INGREDIENT' ? 'Ingredient' : 'Product'}</span>
-                          </span>
-                          <span>{item.category}</span>
-                          <span style={{ fontWeight: 600 }}>{item.stock} {item.unit || 'pcs'}</span>
-                          <span>
-                            <span className={`badge ${status === 'HEALTHY' ? 'badge-success' : status === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
-                              {status}
-                            </span>
-                          </span>
+                  {(() => {
+                    // Group items by category
+                    const groupedByCategory = {};
+                    stockItems.forEach(item => {
+                      const cat = item.category || 'Uncategorized';
+                      if (!groupedByCategory[cat]) {
+                        groupedByCategory[cat] = [];
+                      }
+                      groupedByCategory[cat].push(item);
+                    });
+
+                    return Object.entries(groupedByCategory).map(([category, items]) => (
+                      <div key={category} style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10, paddingLeft: 4 }}>
+                          {category}
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="am-eod-table">
+                          <div className="am-eod-table-head">
+                            <span>Item Name</span>
+                            <span>Type</span>
+                            <span>In Stock</span>
+                            <span>Status</span>
+                          </div>
+                          {items.map((item, idx) => {
+                            const status = getItemStockStatus(item);
+                            return (
+                              <div key={idx} className="am-eod-table-row">
+                                <span className="am-eod-cell-name">
+                                  {item.name}
+                                </span>
+                                <span style={{ fontSize: 11, color: '#6B7280' }}>
+                                  {item.itemType === 'INGREDIENT' ? '🧪 Ingredient' : '📦 Product'}
+                                </span>
+                                <span style={{ fontWeight: 600 }}>{item.stock} {item.unit || 'pcs'}</span>
+                                <span>
+                                  <span className={`badge ${status === 'HEALTHY' ? 'badge-success' : status === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
+                                    {status}
+                                  </span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </section>
 
                   {/* ── Outstanding Credits ── */}

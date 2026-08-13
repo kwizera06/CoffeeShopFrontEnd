@@ -76,7 +76,14 @@ function getLineAst(is80mm) {
   return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
 }
 
-export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName }) {
+export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName, order, totalItems, isPartialOrder }) {
+  // Support both old and new API
+  const finalOrderId = orderId || order?.id
+  const finalTableNumber = tableNumber || order?.tableNumber
+  const finalWaiterName = waiterName || order?.waiterName
+  const finalCreatedAt = createdAt || order?.createdAt
+  const finalLines = lines || order?.lines || []
+  
   const is80mm = shopName && (
     shopName.toLowerCase().includes('inganji') || 
     shopName.toLowerCase().includes('steak') || 
@@ -85,11 +92,11 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
   const paperWidth = is80mm ? '80mm' : '58mm';
   const printableWidth = is80mm ? '62mm' : '46mm';
 
-  const d = createdAt ? new Date(createdAt) : new Date();
+  const d = finalCreatedAt ? new Date(finalCreatedAt) : new Date();
   const dateStr = d.toLocaleDateString('en-GB', { timeZone: 'Africa/Kigali' });
   const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' });
 
-  const rows = lines.map((l) => {
+  const rows = finalLines.map((l) => {
     const ings = Array.isArray(l.ingredients) ? l.ingredients.filter(i => i.name) : [];
     const ingText = ings.length > 0
       ? `<div style="font-size: 9pt; padding-left: 10px; font-style: italic; text-align: left; font-weight: bold; margin-bottom: 8px;">
@@ -123,7 +130,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
       </div>
       ${getLineEq(is80mm)}
 
-      <div>Server: ${esc(waiterName || 'Staff')}</div>
+      <div>Server: ${esc(finalWaiterName || 'Staff')}</div>
       <div>Station 1</div>
       <div style="font-size: 14pt; padding: 6px 0; text-align:center; font-weight:bold;">Dine In</div>
       
@@ -134,8 +141,9 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
       
       ${getLineEq(is80mm)}
 
-      <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(tableNumber)}</div>
+      <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(finalTableNumber)}</div>
       <div style="font-size: 10pt;">Guests: 1</div>
+      ${isPartialOrder ? `<div style="font-size: 11pt; font-weight: bold; color: #c00; padding: 4px 0;">⚠ PARTIAL ORDER</div>` : ''}
       
       ${getLineDash(is80mm)}
 
@@ -144,8 +152,8 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
       ${getLineDash(is80mm)}
       
       <div style="padding: 8px 0;">
-         <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(orderId).slice(0, 4))}</div>
-         <div style="font-size: 10pt;">Order #: ${esc(String(orderId).split('-')[0])}</div>
+         <div style="font-size: 12pt; font-weight: bold;">Ticket #: ${esc(String(finalOrderId).slice(0, 4))}</div>
+         <div style="font-size: 10pt;">Order #: ${esc(String(finalOrderId).split('-')[0])}</div>
       </div>
 
       ${getLineAst(is80mm)}

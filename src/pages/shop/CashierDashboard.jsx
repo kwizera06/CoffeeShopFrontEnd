@@ -131,6 +131,7 @@ function ProductionRecordingScreen() {
   const [logs, setLogs]             = useState([])
   const [confirming, setConfirming]  = useState(null)
   const [phase2Busy, setPhase2Busy]  = useState(false)
+  const [productionSearch, setProductionSearch] = useState('')
 
   const loadLogs = useCallback(async () => {
     try {
@@ -296,15 +297,175 @@ function ProductionRecordingScreen() {
         <form onSubmit={handleStartProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Prepared Product</label>
-            <select onChange={e => onProductSelect(e.target.value)} required
-              style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}>
-              <option value="">— Select a product —</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} · Std. yield: {p.recipe_reference_yield} pcs
-                </option>
-              ))}
-            </select>
+            <div style={{ position: 'relative', marginTop: 4 }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px 12px',
+                border: '1px solid #D1D5DB',
+                borderRadius: 8,
+                background: '#FFFFFF',
+                gap: 8
+              }}>
+                <HiOutlineMagnifyingGlass style={{ color: '#6B7280', fontSize: 18 }} />
+                <input
+                  type="text"
+                  placeholder="🔍 Search products & check stock level..."
+                  value={productionSearch}
+                  onChange={(e) => setProductionSearch(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: 13
+                  }}
+                />
+              </div>
+
+              {/* Search Results Dropdown */}
+              {productionSearch && (
+                <div style={{
+                  position: 'fixed',
+                  top: '320px',
+                  left: '30px',
+                  right: '30px',
+                  maxWidth: '540px',
+                  background: '#FFFFFF',
+                  border: '2px solid #3B82F6',
+                  borderRadius: '12px',
+                  maxHeight: 'calc(100vh - 380px)',
+                  overflowY: 'auto',
+                  zIndex: 2000,
+                  boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)'
+                }}>
+                  {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length > 0 ? (
+                    <div>
+                      <div style={{
+                        padding: '14px 16px',
+                        background: '#EFF6FF',
+                        borderBottom: '2px solid #BFDBFE',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#1E40AF',
+                        position: 'sticky',
+                        top: 0,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>🔍 Found {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length} Product(s)</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#3B82F6' }}>Click to select</span>
+                      </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                        gap: '12px',
+                        padding: '16px',
+                        background: '#FAFBFC'
+                      }}>
+                        {products
+                          .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
+                          .map((p) => (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                onProductSelect(p.id);
+                                setProductionSearch('');
+                              }}
+                              style={{
+                                padding: '12px',
+                                background: '#FFFFFF',
+                                border: '2px solid #E5E7EB',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                textAlign: 'center',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#3B82F6';
+                                e.currentTarget.style.background = '#F0F9FF';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#E5E7EB';
+                                e.currentTarget.style.background = '#FFFFFF';
+                                e.currentTarget.style.boxShadow = 'none';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <div style={{
+                                width: '50px',
+                                height: '50px',
+                                background: '#FEF3C7',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '28px'
+                              }}>
+                                🥐
+                              </div>
+                              <div style={{
+                                fontWeight: 700,
+                                color: '#111827',
+                                fontSize: 12,
+                                lineHeight: '1.2',
+                                maxHeight: '35px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical'
+                              }}>
+                                {p.name}
+                              </div>
+                              <div style={{
+                                fontSize: 10,
+                                color: '#6B7280',
+                                background: '#F3F4F6',
+                                padding: '4px 6px',
+                                borderRadius: '4px',
+                                fontWeight: 600
+                              }}>
+                                📦 {p.recipe_reference_yield} pcs
+                              </div>
+                              <div style={{
+                                background: '#10B981',
+                                color: 'white',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                marginTop: '2px',
+                                width: '100%',
+                                cursor: 'pointer'
+                              }}>
+                                ✓ Select
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '32px 16px',
+                      textAlign: 'center',
+                      color: '#DC2626',
+                      fontSize: 14,
+                      fontWeight: 600
+                    }}>
+                      ❌ No products found matching <strong>"{productionSearch}"</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {recipe && (
@@ -524,7 +685,12 @@ export default function CashierDashboard() {
   const [pendingWaiterId, setPendingWaiterId] = useState(null)
   const [showPinModal, setShowPinModal] = useState(false)
   const [pinInput, setPinInput] = useState('')
+  const [longPressTimer, setLongPressTimer] = useState(null)
+  const [selectedOrderForTicket, setSelectedOrderForTicket] = useState(null)
+  const [selectedItemsForPrint, setSelectedItemsForPrint] = useState({}) // Track which items to print
   const [pinError, setPinError] = useState('')
+  const [showRemovalPinModal, setShowRemovalPinModal] = useState(false) // PIN modal for removing items
+  const [pendingItemRemovalId, setPendingItemRemovalId] = useState(null) // Which item is being removed
   const [qtyById, setQtyById] = useState({})
   const [initialQtyById, setInitialQtyById] = useState({})
   
@@ -913,11 +1079,16 @@ export default function CashierDashboard() {
   function setQty(id, next) {
     if (editId && (role === 'CASHIER' || role === 'WAITER')) {
       const initialQty = initialQtyById[id] || 0;
+      // If reducing below initial quantity, require PIN verification
       if (next < initialQty) {
-        alert(`Cashiers and waiters cannot reduce quantities below the original ordered amount (${initialQty}).`);
-        return;
+        setPendingItemRemovalId(id)
+        setShowRemovalPinModal(true)
+        setPinInput('')
+        setPinError('')
+        return
       }
     }
+    // Allow adding items without PIN
     setQtyById(m => {
       const copy = { ...m, [id]: next }
       if (next <= 0) delete copy[id]
@@ -978,7 +1149,7 @@ export default function CashierDashboard() {
     }
   }
 
-  async function confirmWaiterPin(e) {
+  async function confirmRemovalPin(e) {
     e.preventDefault()
     if (!pinInput) {
       setPinError('Enter PIN')
@@ -986,18 +1157,35 @@ export default function CashierDashboard() {
     }
 
     try {
-      // Verify PIN
-      const waiter = staff.find(s => s.id === pendingWaiterId)
-      if (waiter.security_pin !== pinInput) {
-        setPinError('Incorrect PIN')
+      // Get current user's security PIN
+      const currentUser = getSession()
+      const userFromStaff = staff.find(s => s.id === currentUser.userId)
+      
+      if (!userFromStaff || !userFromStaff.security_pin) {
+        setPinError('Security PIN not configured for your account')
         return
       }
 
-      setSelectedWaiter(pendingWaiterId)
-      setShowPinModal(false)
+      // Verify PIN
+      if (userFromStaff.security_pin !== pinInput) {
+        setPinError('Incorrect PIN')
+        setPinInput('')
+        return
+      }
+
+      // PIN verified - now allow the item removal
+      const initialQty = initialQtyById[pendingItemRemovalId] || 0
+      setQtyById(m => {
+        const copy = { ...m, [pendingItemRemovalId]: initialQty - 1 }
+        if (copy[pendingItemRemovalId] <= 0) delete copy[pendingItemRemovalId]
+        return copy
+      })
+
+      // Close modal
+      setShowRemovalPinModal(false)
       setPinInput('')
       setPinError('')
-      setPendingWaiterId(null)
+      setPendingItemRemovalId(null)
     } catch (err) {
       setPinError(err.message)
     }
@@ -1349,7 +1537,7 @@ export default function CashierDashboard() {
                   const qty = qtyById[m.id] || 0;
                   const theme = getCategoryColors(m.category);
                   const isOutOfStock = m.is_recipe === false && m.stock_level <= 0;
-                  const hasEnoughStock = m.is_recipe !== false || qty < m.stock_level;
+                  const hasEnoughStock = m.is_recipe === true || qty < m.stock_level;
 
                   return (
                     <div
@@ -1419,7 +1607,10 @@ export default function CashierDashboard() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                              <button 
-                               onClick={() => setQty(l.menuItemId, qtyById[l.menuItemId] - 1)}
+                               onClick={() => {
+                                 const nextQty = qtyById[l.menuItemId] - 1
+                                 setQty(l.menuItemId, nextQty)
+                               }}
                                style={{ background: 'transparent', border: 'none', color: '#A0A0A0', cursor: 'pointer', display: 'flex', fontSize: 32 }}
                              >
                                <HiOutlineMinusCircle />
@@ -1487,8 +1678,27 @@ export default function CashierDashboard() {
                 const isChefReady = o.status === 'CHEF_READY'
                 const isKitchen = o.locked === true && !isChefReady
                 const isDraft = !isKitchen && !isChefReady
+                
+                const handlePointerDown = () => {
+                  const timer = setTimeout(() => {
+                    setSelectedOrderForTicket(o)
+                  }, 500)
+                  setLongPressTimer(timer)
+                }
+                
+                const handlePointerUp = () => {
+                  if (longPressTimer) clearTimeout(longPressTimer)
+                }
+                
                 return (
-                <div key={o.id} className="cashier-order-card" style={{ borderLeft: isChefReady ? '3px solid #EAB308' : isKitchen ? '3px solid #4ADE80' : '3px solid #60A5FA' }}>
+                <div 
+                  key={o.id} 
+                  className="cashier-order-card" 
+                  style={{ borderLeft: isChefReady ? '3px solid #EAB308' : isKitchen ? '3px solid #4ADE80' : '3px solid #60A5FA' }}
+                  onPointerDown={handlePointerDown}
+                  onPointerUp={handlePointerUp}
+                  onPointerLeave={handlePointerUp}
+                >
                   <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
                     <div className="table-badge">Table {o.tableNumber}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2295,6 +2505,40 @@ export default function CashierDashboard() {
         </div>
       )}
 
+      {/* ITEM REMOVAL PIN VERIFICATION MODAL */}
+      {showRemovalPinModal && (
+        <div className="cashier-modal-overlay">
+          <div className="cashier-modal" style={{ maxWidth: 360 }}>
+            <h3 style={{ marginBottom: 8 }}>🔒 Confirm Item Removal</h3>
+            <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
+              Enter your security PIN to remove this item from the order
+            </p>
+            <form onSubmit={confirmRemovalPin}>
+              {pinError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{pinError}</div>}
+              <input
+                type="password"
+                className="cashier-search"
+                style={{ fontSize: 24, padding: '12px 16px', textAlign: 'center', letterSpacing: 12, marginBottom: 24, fontWeight: 'bold', width: '100%' }}
+                autoFocus
+                placeholder="****"
+                value={pinInput}
+                onChange={e => { setPinInput(e.target.value); setPinError('') }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <button type="button" className="cashier-btn-close-shift" onClick={() => { 
+                  setShowRemovalPinModal(false); 
+                  setPendingItemRemovalId(null)
+                  setPinInput(''); 
+                  setPinError(''); 
+                }}>Cancel</button>
+                <button type="submit" className="cashier-btn-submit active">Confirm</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WAITER PIN VERIFICATION MODAL */}
       {showPinModal && (
         <div className="cashier-modal-overlay">
           <div className="cashier-modal" style={{ maxWidth: 360 }}>
@@ -2376,6 +2620,180 @@ export default function CashierDashboard() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* KITCHEN ORDER TICKET MODAL — Long Press on Order Card */}
+      {selectedOrderForTicket && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => {
+          setSelectedOrderForTicket(null)
+          setSelectedItemsForPrint({})
+        }}>
+          <div style={{ background: '#1C1C1C', borderRadius: 12, maxWidth: 500, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 24, border: '2px solid #E6CCB2' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, color: '#E6CCB2', fontSize: 22 }}>🍳 Kitchen Order Ticket</h2>
+              <button onClick={() => {
+                setSelectedOrderForTicket(null)
+                setSelectedItemsForPrint({})
+              }} style={{ background: 'none', border: 'none', color: '#E6CCB2', fontSize: 24, cursor: 'pointer' }}>×</button>
+            </div>
+
+            {/* Order Header */}
+            <div style={{ background: '#111', padding: 16, borderRadius: 8, marginBottom: 20, borderLeft: '4px solid #E6CCB2' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>Table</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#E6CCB2' }}>Table {selectedOrderForTicket.tableNumber}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>Waiter</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#E8E8E8' }}>{selectedOrderForTicket.waiterName}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>Time</div>
+                  <div style={{ fontSize: 14, color: '#E8E8E8' }}>{new Date(selectedOrderForTicket.createdAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>Items</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ADE80' }}>{selectedOrderForTicket.lines.length} items</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Items with Selection Checkboxes */}
+            <div style={{ background: '#111', padding: 16, borderRadius: 8, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>Items to Prepare</div>
+                <button 
+                  onClick={() => {
+                    // Select/Deselect all
+                    const allSelected = selectedOrderForTicket.lines.every((_, i) => selectedItemsForPrint[i])
+                    const newSelection = {}
+                    if (!allSelected) {
+                      selectedOrderForTicket.lines.forEach((_, i) => { newSelection[i] = true })
+                    }
+                    setSelectedItemsForPrint(newSelection)
+                  }}
+                  style={{ 
+                    fontSize: 11, 
+                    fontWeight: 700, 
+                    color: '#E6CCB2', 
+                    background: 'transparent', 
+                    border: '1px solid #E6CCB2', 
+                    borderRadius: 4, 
+                    padding: '2px 8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {selectedOrderForTicket.lines.every((_, i) => selectedItemsForPrint[i]) ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+
+              {selectedOrderForTicket.lines.map((line, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid #2A2A2A', background: selectedItemsForPrint[idx] ? 'rgba(230, 204, 178, 0.15)' : 'transparent', paddingLeft: 12, paddingRight: 12, marginLeft: -12, marginRight: -12, borderRadius: 6, transition: 'all 0.2s ease' }}>
+                  <input 
+                    type="checkbox"
+                    checked={selectedItemsForPrint[idx] || false}
+                    onChange={(e) => {
+                      setSelectedItemsForPrint(prev => ({
+                        ...prev,
+                        [idx]: e.target.checked
+                      }))
+                    }}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      cursor: 'pointer',
+                      accent: '#E6CCB2'
+                    }}
+                  />
+                  <div style={{ fontWeight: 800, fontSize: 18, color: selectedItemsForPrint[idx] ? '#E6CCB2' : '#888', minWidth: 40, transition: 'color 0.2s ease' }}>{line.quantity}×</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: selectedItemsForPrint[idx] ? '#E6CCB2' : '#E8E8E8', fontSize: 14, transition: 'color 0.2s ease' }}>{line.itemName}</div>
+                    {line.needsKitchen && <div style={{ fontSize: 10, color: selectedItemsForPrint[idx] ? '#FFB84D' : '#FB923C', marginTop: 4, transition: 'color 0.2s ease' }}>🍳 Kitchen preparation required</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Selection Counter */}
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#E6CCB2', marginBottom: 16, padding: '8px 12px', background: '#111', borderRadius: 6 }}>
+              ✓ Selected: {Object.values(selectedItemsForPrint).filter(Boolean).length} / {selectedOrderForTicket.lines.length} items
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: 12, flexDirection: 'column' }}>
+              <button 
+                onClick={() => {
+                  // Get selected lines only
+                  const selectedLines = selectedOrderForTicket.lines.filter((_, idx) => selectedItemsForPrint[idx])
+                  
+                  if (selectedLines.length === 0) {
+                    alert('⚠️ Please select at least one item to print')
+                    return
+                  }
+
+                  printKitchenTicket({ 
+                    order: {
+                      ...selectedOrderForTicket,
+                      lines: selectedLines
+                    },
+                    shopName,
+                    totalItems: selectedLines.reduce((s, l) => s + l.quantity, 0),
+                    isPartialOrder: selectedLines.length < selectedOrderForTicket.lines.length
+                  });
+                  setSelectedOrderForTicket(null)
+                  setSelectedItemsForPrint({})
+                }}
+                disabled={Object.values(selectedItemsForPrint).filter(Boolean).length === 0}
+                style={{ 
+                  padding: '14px 20px', 
+                  background: Object.values(selectedItemsForPrint).filter(Boolean).length === 0 ? '#999' : '#E6CCB2',
+                  color: '#1C1C1C',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: Object.values(selectedItemsForPrint).filter(Boolean).length === 0 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+              >
+                <HiOutlinePrinter /> Print Selected Items
+              </button>
+              <button 
+                onClick={() => {
+                  setSelectedOrderForTicket(null)
+                  setSelectedItemsForPrint({})
+                }}
+                style={{ 
+                  padding: '12px 20px', 
+                  background: '#333', 
+                  color: '#E6CCB2',
+                  border: '1px solid #555',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Instructions */}
+            <div style={{ marginTop: 20, padding: '12px 16px', background: 'rgba(230,204,178,0.1)', borderRadius: 8, borderLeft: '3px solid #E6CCB2' }}>
+              <div style={{ fontSize: 11, color: '#E6CCB2', fontWeight: 700, marginBottom: 6 }}>📋 Instructions</div>
+              <div style={{ fontSize: 12, color: '#B0B0B0', lineHeight: 1.6 }}>
+                1. ☑️ Select which items to send to kitchen<br/>
+                2. Click "Print Selected Items" to generate ticket<br/>
+                3. Take the printed slip to the chef/kitchen<br/>
+                4. Chef will prepare items and mark when ready
+              </div>
+            </div>
           </div>
         </div>
       )}
