@@ -1157,18 +1157,14 @@ export default function CashierDashboard() {
     }
 
     try {
-      // Get current user's security PIN
-      const currentUser = getSession()
-      const userFromStaff = staff.find(s => s.id === currentUser.userId)
+      // Find a cashier/manager with matching security_key (same as Ready tab gate)
+      const approver = staff.find(s =>
+        (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') &&
+        s.security_key === pinInput.trim()
+      )
       
-      if (!userFromStaff || !userFromStaff.security_pin) {
-        setPinError('Security PIN not configured for your account')
-        return
-      }
-
-      // Verify PIN
-      if (userFromStaff.security_pin !== pinInput) {
-        setPinError('Incorrect PIN')
+      if (!approver) {
+        setPinError('Incorrect PIN or insufficient permissions')
         setPinInput('')
         return
       }
@@ -2511,7 +2507,7 @@ export default function CashierDashboard() {
           <div className="cashier-modal" style={{ maxWidth: 360 }}>
             <h3 style={{ marginBottom: 8 }}>🔒 Confirm Item Removal</h3>
             <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
-              Enter your security PIN to remove this item from the order
+              Enter the cashier/manager PIN (same as Awaiting Payment tab) to remove this item from the order
             </p>
             <form onSubmit={confirmRemovalPin}>
               {pinError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{pinError}</div>}
