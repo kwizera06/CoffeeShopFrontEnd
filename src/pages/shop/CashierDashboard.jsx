@@ -1204,9 +1204,35 @@ export default function CashierDashboard() {
     setBusy(true)
     try {
       if (editId) {
+        // Check if any items were removed - if so, user must have passed PIN verification
+        const originalQtys = initialQtyById || {};
+        const currentQtys = qtyById || {};
+        let hasRemoval = false;
+        
+        for (const [itemId, originalQty] of Object.entries(originalQtys)) {
+          const currentQty = currentQtys[itemId] || 0;
+          if (currentQty < originalQty) {
+            hasRemoval = true;
+            break;
+          }
+        }
+        
+        // Check if items were completely removed
+        for (const [itemId, originalQty] of Object.entries(originalQtys)) {
+          if (!(itemId in currentQtys) && originalQty > 0) {
+            hasRemoval = true;
+            break;
+          }
+        }
+        
         await api(`/api/shop/orders/${editId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ tableNumber: tn, items: cartLines, waiterId: selectedWaiter }),
+          body: JSON.stringify({ 
+            tableNumber: tn, 
+            items: cartLines, 
+            waiterId: selectedWaiter,
+            itemsRemoved: hasRemoval  // Flag indicating removals were made
+          }),
         })
         if (printKitchen) {
           printKitchenTicket({
