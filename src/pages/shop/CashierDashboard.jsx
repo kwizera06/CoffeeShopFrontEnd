@@ -196,10 +196,16 @@ function ProductionRecordingScreen() {
     }
     setPhase2Busy(true)
     try {
-      await api(`/api/shop/storekeeper/production/${confirming.log.id}/complete`, {
+      const result = await api(`/api/shop/storekeeper/production/${confirming.log.id}/complete`, {
         method: 'PUT',
         body: JSON.stringify({ actualQty: actual, varianceComment: confirming.comment }),
       })
+      
+      // Show success message with stock increase details
+      const productName = confirming.log.menu_items?.name || 'Product'
+      const message = `✅ Production Confirmed!\n\n📦 ${productName}: +${actual} units added to stock\n${variance !== 0 ? `⚠️ Variance: ${Math.abs(variance)} units (${confirming.comment})` : '✓ Perfect match'}`
+      alert(message)
+      
       setConfirming(null)
       await loadLogs()
     } catch (e) { setError(e.message) }
@@ -575,16 +581,16 @@ function ProductionRecordingScreen() {
       {completed.length > 0 && (
         <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
           <h3 style={{ margin: '0 0 16px', fontWeight: 800, color: '#1D3557', fontSize: 15 }}>
-            Production History
+            ✅ Production History
           </h3>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                <tr style={{ borderBottom: '1px solid #E2E8F0', background: '#F9FAFB' }}>
                   <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>DATE</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PRODUCT</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PLANNED</th>
-                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>ACTUAL</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>ACTUAL ➕</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>VARIANCE</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>COMMENT</th>
                 </tr>
@@ -592,14 +598,23 @@ function ProductionRecordingScreen() {
               <tbody>
                 {completed.map(log => {
                   const v = parseFloat(log.variance ?? 0)
+                  const isRecent = new Date() - new Date(log.completed_at) < 60000 // Recent if within 1 minute
                   return (
-                    <tr key={log.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <tr key={log.id} style={{ 
+                      borderBottom: '1px solid #E2E8F0',
+                      background: isRecent ? 'rgba(16, 185, 129, 0.05)' : 'transparent',
+                      transition: 'background 0.3s ease'
+                    }}>
                       <td style={{ whiteSpace: 'nowrap', color: '#6B7280', fontSize: 11, padding: '8px 0' }}>
                         {new Date(log.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ fontWeight: 600, padding: '8px 0' }}>{log.menu_items?.name}</td>
-                      <td style={{ padding: '8px 0' }}>{log.planned_qty}</td>
-                      <td style={{ fontWeight: 700, padding: '8px 0' }}>{log.actual_qty}</td>
+                      <td style={{ fontWeight: 600, padding: '8px 0', color: isRecent ? '#10B981' : '#111827' }}>
+                        {isRecent && '⭐ '}{log.menu_items?.name}
+                      </td>
+                      <td style={{ padding: '8px 0', color: '#6B7280' }}>{log.planned_qty}</td>
+                      <td style={{ fontWeight: 700, padding: '8px 0', color: '#10B981', fontSize: 13 }}>
+                        +{log.actual_qty} 📦
+                      </td>
                       <td style={{ fontWeight: 700, color: v === 0 ? '#15803D' : v > 0 ? '#B91C1C' : '#15803D', padding: '8px 0' }}>
                         {v === 0 ? '✓ 0' : (v > 0 ? `-${v}` : `+${Math.abs(v)}`)}
                       </td>
@@ -611,6 +626,9 @@ function ProductionRecordingScreen() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div style={{ marginTop: 16, padding: 12, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, fontSize: 12, color: '#065F46' }}>
+            <strong>✅ Stock Status:</strong> All confirmed productions have been added to inventory. Ingredients automatically adjusted based on variance.
           </div>
         </div>
       )}
@@ -715,6 +733,8 @@ export default function CashierDashboard() {
   const [warehouseError, setWarehouseError] = useState('')
   const [warehouseSearchOpen, setWarehouseSearchOpen] = useState(false)
   const [warehouseSearchInput, setWarehouseSearchInput] = useState('')
+  const [warehouseProductSearch, setWarehouseProductSearch] = useState('')
+  const [warehouseProductDropdownOpen, setWarehouseProductDropdownOpen] = useState(false)
 
   // Billing (Pending & Ready) states
   const [pending, setPending] = useState([])
@@ -899,6 +919,21 @@ export default function CashierDashboard() {
     }
   }, [tab, selectedShiftId, loadHistory])
 
+  // Close warehouse product dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const warehouseProductField = document.querySelector('[data-warehouse-product-field]')
+      if (warehouseProductField && !warehouseProductField.contains(e.target)) {
+        setWarehouseProductDropdownOpen(false)
+      }
+    }
+
+    if (warehouseProductDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [warehouseProductDropdownOpen])
+
   const loadBilling = useCallback(async () => {
     try {
       const [kitchen, drafts, chefReady, r] = await Promise.all([
@@ -968,6 +1003,7 @@ export default function CashierDashboard() {
         })
       })
       setNewWarehouseRequest({ productId: '', quantity: '', notes: '' })
+      setWarehouseProductSearch('')
       setWarehouseError('')
       await loadWarehouseRequests()
     } catch (e) {
@@ -1974,51 +2010,96 @@ export default function CashierDashboard() {
                   Request Items from Warehouse
                 </h3>
                 <form onSubmit={handleCreateWarehouseRequest} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1, minWidth: 150 }}>
+                  <div style={{ flex: 1, minWidth: 150, position: 'relative' }} data-warehouse-product-field>
                     <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Product</label>
-                    {/* Desktop: Dropdown | Mobile: Search button + hidden select */}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <select
-                        value={newWarehouseRequest.productId}
-                        onChange={(e) => setNewWarehouseRequest(prev => ({ ...prev, productId: e.target.value }))}
+                    {/* Searchable product input */}
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="Search products..."
+                        value={warehouseProductSearch}
+                        onChange={(e) => {
+                          setWarehouseProductSearch(e.target.value)
+                          setWarehouseProductDropdownOpen(true)
+                        }}
+                        onFocus={() => setWarehouseProductDropdownOpen(true)}
                         style={{ 
-                          flex: 1,
+                          width: '100%',
                           padding: '8px 12px', 
                           border: '1px solid #D1D5DB', 
                           borderRadius: 8, 
                           marginTop: 4, 
                           outline: 'none', 
                           background: '#FFFFFF',
-                          display: window.innerWidth > 768 ? 'block' : 'none'
+                          fontSize: 14
                         }}
-                      >
-                        <option value="">Select product...</option>
-                        {warehouseInventory.map(item => (
-                          <option key={item.productId} value={item.productId}>
-                            {item.name} (W: {item.warehouseQty}, F: {item.shopFloorQty})
-                          </option>
-                        ))}
-                      </select>
-                      {window.innerWidth <= 768 && (
-                        <>
-                          <input
-                            type="text"
-                            placeholder="Search items..."
-                            value={newWarehouseRequest.productId ? warehouseInventory.find(i => i.productId === newWarehouseRequest.productId)?.name : ''}
-                            readOnly
-                            onClick={() => setWarehouseSearchOpen(true)}
-                            style={{ 
-                              flex: 1,
-                              padding: '8px 12px', 
-                              border: '1px solid #D1D5DB', 
-                              borderRadius: 8, 
-                              marginTop: 4, 
-                              outline: 'none', 
-                              background: '#FFFFFF',
-                              cursor: 'pointer'
-                            }}
-                          />
-                        </>
+                      />
+                      
+                      {/* Dropdown menu */}
+                      {warehouseProductDropdownOpen && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          background: '#FFFFFF',
+                          border: '1px solid #D1D5DB',
+                          borderRadius: 8,
+                          maxHeight: 300,
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }}>
+                          {warehouseInventory
+                            .filter(item => 
+                              item.name.toLowerCase().includes(warehouseProductSearch.toLowerCase())
+                            )
+                            .map(item => (
+                              <button
+                                key={item.productId}
+                                type="button"
+                                onClick={() => {
+                                  setNewWarehouseRequest(prev => ({ ...prev, productId: item.productId }))
+                                  setWarehouseProductSearch(item.name)
+                                  setWarehouseProductDropdownOpen(false)
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 16px',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  background: 'none',
+                                  borderBottom: '1px solid #F3F4F6',
+                                  cursor: 'pointer',
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                  color: '#111827',
+                                  transition: 'background 0.2s',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#F9FAFB'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                              >
+                                <div>
+                                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{item.name}</div>
+                                  <div style={{ fontSize: 12, color: '#6B7280' }}>
+                                    W: {item.warehouseQty} | F: {item.shopFloorQty}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          
+                          {warehouseInventory.filter(item => 
+                            item.name.toLowerCase().includes(warehouseProductSearch.toLowerCase())
+                          ).length === 0 && (
+                            <div style={{ padding: '16px', textAlign: 'center', color: '#9CA3AF', fontSize: 14 }}>
+                              No products found
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
