@@ -1595,10 +1595,15 @@ export default function CashierDashboard() {
                   const qty = qtyById[m.id] || 0;
                   const theme = getCategoryColors(m.category);
                   
-                  // Enforcement: No product can be sold if stock is 0, EXCEPT Juice & Smoothies
-                  const isUnrestricted = m.category === 'Juice & Smoothies' || m.category === 'Juice&Smoothies' || (m.category || '').toLowerCase().includes('juice');
-                  const isOutOfStock = !isUnrestricted && m.stock_level <= 0;
-                  const hasEnoughStock = isUnrestricted || qty < m.stock_level;
+                  // Enforcement: Stock restrictions apply ONLY to these specific categories
+                  const normCat = (m.category || '').toLowerCase().replace(/\s/g, '');
+                  const restrictedCats = [
+                    'snacks', 'others', 'giftshop', 'softdrinks', 'softdrink',
+                    'beer&alcohol', 'cups&takeaway', 'cups&takeway', 'wines', 'wine', 'whisky'
+                  ];
+                  const isRestricted = restrictedCats.includes(normCat);
+                  const isOutOfStock = isRestricted && m.stock_level <= 0;
+                  const hasEnoughStock = !isRestricted || qty < m.stock_level;
 
                   return (
                     <div
