@@ -401,6 +401,54 @@ function WarehouseInventoryScreen() {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all') // 'all', 'low_warehouse', 'low_floor'
   const [searchQuery, setSearchQuery] = useState('')
+  
+  const [editingId, setEditingId] = useState(null)
+  const [editQty, setEditQty] = useState('')
+  const [savingId, setSavingId] = useState(null)
+
+  const handleSaveQuantity = async (item) => {
+    if (editQty === '' || isNaN(editQty)) return;
+    setSavingId(item.productId);
+    try {
+      const targetQuantity = parseFloat(editQty);
+      
+      if (item.isDuplicate && item.duplicates && item.duplicates.length > 0) {
+        // Fix for "ghost stock": if item is merged from multiple sources (like Menu Item + Ingredient),
+        // apply the total requested quantity to the first source, and zero out the rest.
+        // This ensures the new merged total exactly equals targetQuantity.
+        for (let i = 0; i < item.duplicates.length; i++) {
+          const dup = item.duplicates[i];
+          const qtyToSet = i === 0 ? targetQuantity : 0;
+          await api('/api/shop/warehouse/set-warehouse-quantity', {
+            method: 'PUT',
+            body: JSON.stringify({
+              productId: dup.productId,
+              itemType: dup.itemType,
+              quantity: qtyToSet,
+              notes: 'Storekeeper updated inventory quantity directly (merged deduplication)'
+            })
+          });
+        }
+      } else {
+        await api('/api/shop/warehouse/set-warehouse-quantity', {
+          method: 'PUT',
+          body: JSON.stringify({
+            productId: item.productId,
+            itemType: item.itemType,
+            quantity: targetQuantity,
+            notes: 'Storekeeper updated inventory quantity directly'
+          })
+        });
+      }
+
+      setEditingId(null);
+      await loadInventory(); // refresh list
+    } catch (e) {
+      setError(e.message || 'Failed to update quantity');
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   useEffect(() => {
     loadInventory()
@@ -426,6 +474,7 @@ function WarehouseInventoryScreen() {
           nameMap[nameKey] = {
             ...item,
             duplicateIds: [item.productId],
+            duplicates: [item],
             isDuplicate: false
           }
         } else {
@@ -434,6 +483,7 @@ function WarehouseInventoryScreen() {
           nameMap[nameKey].shopFloorQty += item.shopFloorQty
           nameMap[nameKey].totalQty += item.totalQty
           nameMap[nameKey].duplicateIds.push(item.productId)
+          nameMap[nameKey].duplicates.push(item)
           nameMap[nameKey].isDuplicate = true
         }
       })
@@ -587,11 +637,47 @@ function WarehouseInventoryScreen() {
 
                 {/* ── Warehouse Stock Only ── */}
                 <div style={{ background: 'rgba(234,179,8,0.08)', padding: 12, borderRadius: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Warehouse Stock</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#B45309' }}>
-                      {item.warehouseQty} units
-                    </span>
+                    {editingId === item.productId ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input 
+                          type="number" 
+                          min="0"
+                          step="0.01"
+                          style={{ width: 60, padding: '4px 8px', fontSize: 13, border: '1px solid #D1D5DB', borderRadius: 4 }}
+                          value={editQty}
+                          onChange={e => setEditQty(e.target.value)}
+                          autoFocus
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveQuantity(item)}
+                        />
+                        <button 
+                          onClick={() => handleSaveQuantity(item)}
+                          disabled={savingId === item.productId}
+                          style={{ background: '#10B981', color: 'white', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                        >
+                          {savingId === item.productId ? '...' : 'Save'}
+                        </button>
+                        <button 
+                          onClick={() => setEditingId(null)}
+                          style={{ background: '#EF4444', color: 'white', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                        >
+                          X
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#B45309' }}>
+                          {item.warehouseQty} units
+                        </span>
+                        <button
+                          onClick={() => { setEditingId(item.productId); setEditQty(item.warehouseQty); }}
+                          style={{ background: '#FFFFFF', border: '1px solid #D1D5DB', padding: '2px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', color: '#374151', fontWeight: 600 }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div style={{ background: '#FEF3C7', height: 6, borderRadius: 3, overflow: 'hidden' }}>
                     <div
