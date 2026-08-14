@@ -1555,8 +1555,11 @@ export default function Owner() {
                 </label>
               )}
 
-              {(!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) ? (
-                 <div className="span-2 am-form-grid-inner" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                 <div className="span-3 am-form-grid-inner" style={{ 
+                   display: 'grid', 
+                   gridTemplateColumns: (!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) ? '1fr 1fr 1fr' : '1fr 1fr', 
+                   gap: 16 
+                 }}>
                    <label className="am-field">
                      <span>Current Stock Level</span>
                      <input 
@@ -1567,30 +1570,30 @@ export default function Owner() {
                        placeholder="e.g. 50"
                      />
                    </label>
-                   <label className="am-field">
-                     <span>Purchase Price (RWF)</span>
-                     <input 
-                       className="am-input"
-                       type="number" 
-                       value={menuForm.buyingPrice} 
-                       onChange={e => setMenuForm(f => ({ ...f, buyingPrice: e.target.value }))}
-                       placeholder="e.g. 500"
-                     />
-                   </label>
+                   {(!menuForm.isRecipe || ['Soft Drinks', 'Beer & Alcohol', 'Wines', 'Soda & Water', 'Wine'].includes(menuForm.category)) && (
+                     <label className="am-field">
+                       <span>Purchase Price (RWF)</span>
+                       <input 
+                         className="am-input"
+                         type="number" 
+                         value={menuForm.buyingPrice} 
+                         onChange={e => setMenuForm(f => ({ ...f, buyingPrice: e.target.value }))}
+                         placeholder="e.g. 500"
+                       />
+                     </label>
+                   )}
+                   <div className="am-field">
+                     <span style={{ opacity: 0.5 }}>Availability</span>
+                     <label className="am-checkbox-label" style={{ marginTop: 8 }}>
+                       <input
+                         type="checkbox"
+                         checked={menuForm.available}
+                         onChange={(e) => setMenuForm((f) => ({ ...f, available: e.target.checked }))}
+                       />
+                       <span>Visible in Point of Sale</span>
+                     </label>
+                   </div>
                  </div>
-              ) : (
-                <div className="am-field">
-                  <span style={{ opacity: 0.5 }}>Availability</span>
-                  <label className="am-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={menuForm.available}
-                      onChange={(e) => setMenuForm((f) => ({ ...f, available: e.target.checked }))}
-                    />
-                    <span>Visible in Point of Sale</span>
-                  </label>
-                </div>
-              )}
             </div>
 
             {menuForm.isRecipe && (
@@ -3129,23 +3132,21 @@ export default function Owner() {
 
 
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-            {filteredStockItems.length === 0 ? (
-              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#6B7280', background: 'var(--admin-card-bg)', borderRadius: 16, border: '1px solid var(--admin-border)' }}>
-                {stockFilter === 'ALL' ? 'No stock items found.' : `No ${stockFilter.toLowerCase()} stock items.`}
-              </div>
-            ) : filteredStockItems.map(item => {
+          {(() => {
+            const renderStockCard = (item) => {
               const status = getItemStockStatus(item)
               const isIng = item.itemType === 'INGREDIENT'
               const ing = isIng ? ingredients.find(i => i.id === item.id) : null
               const menuItem = !isIng ? menu.find(m => m.id === item.id) : null
+              const isGiftShop = (item.category || '').toLowerCase() === 'gift shop'
+              
               return (
                 <div
                   key={`${item.itemType}-${item.id}`}
                   style={{
-                    background: 'var(--admin-card-bg)',
+                    background: isGiftShop ? '#FAF5FF' : 'var(--admin-card-bg)',
                     borderRadius: 14,
-                    border: `1.5px solid ${ status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : 'var(--admin-border)'}`,
+                    border: `1.5px solid ${ status === 'CRITICAL' ? '#FF5252' : status === 'LOW' ? '#FF9800' : isGiftShop ? '#D8B4FE' : 'var(--admin-border)'}`,
                     padding: 16,
                     display: 'flex',
                     flexDirection: 'column',
@@ -3155,7 +3156,21 @@ export default function Owner() {
                   {/* Header row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--admin-text)' }}>{item.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--admin-text)' }}>
+                        {item.name}
+                        {isGiftShop && (
+                          <span style={{ 
+                            marginLeft: 8, 
+                            background: '#9333EA', 
+                            color: 'white', 
+                            padding: '2px 6px', 
+                            borderRadius: 4, 
+                            fontSize: 9, 
+                            fontWeight: 800,
+                            verticalAlign: 'middle'
+                          }}>GIFT SHOP</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 11, color: 'var(--admin-text-muted)' }}>{item.category} · {item.unit}</div>
                     </div>
                     <span style={{
@@ -3291,9 +3306,42 @@ export default function Owner() {
                     )}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              );
+            };
+
+            if (filteredStockItems.length === 0) {
+              return (
+                <div style={{ textAlign: 'center', padding: 40, color: '#6B7280', background: 'var(--admin-card-bg)', borderRadius: 16, border: '1px solid var(--admin-border)' }}>
+                  {stockFilter === 'ALL' ? 'No stock items found.' : `No ${stockFilter.toLowerCase()} stock items.`}
+                </div>
+              );
+            }
+
+            const giftShopItems = filteredStockItems.filter(i => (i.category || '').toLowerCase() === 'gift shop');
+            const regularItems = filteredStockItems.filter(i => (i.category || '').toLowerCase() !== 'gift shop');
+
+            return (
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: 24, alignItems: 'start' }}>
+                 {/* General Stock Column */}
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                   <h3 style={{ borderBottom: '2px solid var(--admin-border)', paddingBottom: 8, color: 'var(--admin-text)' }}>General Stock ({regularItems.length})</h3>
+                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                     {regularItems.map(renderStockCard)}
+                   </div>
+                 </div>
+
+                 {/* Gift Shop Column */}
+                 {giftShopItems.length > 0 && (
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                     <h3 style={{ borderBottom: '2px solid #D8B4FE', paddingBottom: 8, color: '#9333EA' }}>Gift Shop ({giftShopItems.length})</h3>
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                       {giftShopItems.map(renderStockCard)}
+                     </div>
+                   </div>
+                 )}
+               </div>
+            );
+          })()}
           <p style={{ margin: '16px 0 0', fontSize: 12, color: '#6B7280' }}>
             Click History on any card to see every stock movement from the beginning.
           </p>
@@ -4111,34 +4159,69 @@ export default function Owner() {
       doc.text('2. CURRENT STOCK LEVELS', 14, y)
       y += 6
 
+      // Build sold qty map from dailyRows for the PDF too
+      const pdfSoldMap = {}
+      const pdfProcessed = new Set()
+      dailyRows.forEach(row => {
+        if (row.rawItems && !pdfProcessed.has(row.orderId)) {
+          pdfProcessed.add(row.orderId)
+          row.rawItems.forEach(item => {
+            const k = (item.name || '').toLowerCase().trim()
+            pdfSoldMap[k] = (pdfSoldMap[k] || 0) + (item.qty || 1)
+          })
+        }
+      })
+
       const stockBody = stockItems.map(item => {
-        const status = getItemStockStatus(item)
+        const nameKey = item.name.toLowerCase().trim()
+        const sold = pdfSoldMap[nameKey] || 0
+        const opening = item.stock + sold
+        const unit = item.unit || 'pcs'
         return [
           item.name,
-          `${item.stock} ${item.unit || 'pcs'}`,
-          status,
+          `${opening} ${unit}`,
+          sold > 0 ? `− ${sold} ${unit}` : '—',
+          `${item.stock} ${unit}`,
         ]
       })
 
       autoTable(doc, {
         startY: y,
-        head: [['Name', 'In Stock', 'Status']],
+        head: [['Product Name', 'Opening Stock', 'Qty Sold', 'Current Stock']],
         body: stockBody,
         theme: 'grid',
         headStyles: { fillColor: BLUE, fontSize: 10, fontStyle: 'bold', textColor: 255 },
         styles: { fontSize: 10, cellPadding: 3 },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+        },
         margin: { left: 14, right: 14 },
         didParseCell: (data) => {
-          if (data.section !== 'body' || data.column.index !== 2) return
-          const val = String(data.cell.raw || '')
-          if (val === 'CRITICAL') {
-            data.cell.styles.textColor = RED
-            data.cell.styles.fontStyle = 'bold'
-          } else if (val === 'LOW') {
-            data.cell.styles.textColor = [217, 119, 6]
-            data.cell.styles.fontStyle = 'bold'
-          } else if (val === 'HEALTHY') {
-            data.cell.styles.textColor = GREEN
+          if (data.section !== 'body') return
+          if (data.column.index === 2) {
+            const val = String(data.cell.raw || '')
+            if (val !== '—') {
+              data.cell.styles.textColor = RED
+              data.cell.styles.fontStyle = 'bold'
+            } else {
+              data.cell.styles.textColor = [150, 150, 150]
+            }
+          }
+          if (data.column.index === 3) {
+            const raw = String(data.cell.raw || '')
+            const num = parseFloat(raw)
+            if (!isNaN(num)) {
+              if (num <= 0) {
+                data.cell.styles.textColor = RED
+                data.cell.styles.fontStyle = 'bold'
+              } else if (num <= 10) {
+                data.cell.styles.textColor = [217, 119, 6]
+              } else {
+                data.cell.styles.textColor = GREEN
+              }
+            }
           }
         }
       })
@@ -4307,14 +4390,28 @@ export default function Owner() {
                 {/* ── Current Stock Levels ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Current Stock Levels</h3>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 16, marginTop: -8 }}>
+                    Opening stock = stock at cashier start of day. Qty Sold = units moved during shifts.
+                  </p>
                   {(() => {
+                    // Build a map of qty sold per product name from dailyRows
+                    const soldQtyMap = {};
+                    const processedOrders = new Set();
+                    dailyRows.forEach(row => {
+                      if (row.rawItems && !processedOrders.has(row.orderId)) {
+                        processedOrders.add(row.orderId);
+                        row.rawItems.forEach(item => {
+                          const key = (item.name || 'Unknown').toLowerCase().trim();
+                          soldQtyMap[key] = (soldQtyMap[key] || 0) + (item.qty || 1);
+                        });
+                      }
+                    });
+
                     // Group items by category
                     const groupedByCategory = {};
                     stockItems.forEach(item => {
                       const cat = item.category || 'Uncategorized';
-                      if (!groupedByCategory[cat]) {
-                        groupedByCategory[cat] = [];
-                      }
+                      if (!groupedByCategory[cat]) groupedByCategory[cat] = [];
                       groupedByCategory[cat].push(item);
                     });
 
@@ -4324,27 +4421,30 @@ export default function Owner() {
                           {category}
                         </div>
                         <div className="am-eod-table">
-                          <div className="am-eod-table-head">
-                            <span>Item Name</span>
-                            <span>Type</span>
-                            <span>In Stock</span>
-                            <span>Status</span>
+                          <div className="am-eod-table-head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+                            <span>Product Name</span>
+                            <span>Opening Stock</span>
+                            <span>Qty Sold</span>
+                            <span>Current Stock</span>
                           </div>
                           {items.map((item, idx) => {
-                            const status = getItemStockStatus(item);
+                            const nameKey = item.name.toLowerCase().trim();
+                            const qtySold = soldQtyMap[nameKey] || 0;
+                            const openingStock = item.stock + qtySold;
+                            const unit = item.unit || 'pcs';
                             return (
-                              <div key={idx} className="am-eod-table-row">
-                                <span className="am-eod-cell-name">
+                              <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+                                <span className="am-eod-cell-name" style={{ fontWeight: 600 }}>
                                   {item.name}
                                 </span>
-                                <span style={{ fontSize: 11, color: '#6B7280' }}>
-                                  {item.itemType === 'INGREDIENT' ? '🧪 Ingredient' : '📦 Product'}
+                                <span style={{ fontWeight: 600, color: '#1D3557' }}>
+                                  {openingStock} {unit}
                                 </span>
-                                <span style={{ fontWeight: 600 }}>{item.stock} {item.unit || 'pcs'}</span>
-                                <span>
-                                  <span className={`badge ${status === 'HEALTHY' ? 'badge-success' : status === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 10 }}>
-                                    {status}
-                                  </span>
+                                <span style={{ fontWeight: 700, color: qtySold > 0 ? '#E53E3E' : '#94A3B8' }}>
+                                  {qtySold > 0 ? `− ${qtySold} ${unit}` : '—'}
+                                </span>
+                                <span style={{ fontWeight: 700, color: item.stock <= 0 ? '#E53E3E' : item.stock <= 10 ? '#D97706' : '#10B981' }}>
+                                  {item.stock} {unit}
                                 </span>
                               </div>
                             );

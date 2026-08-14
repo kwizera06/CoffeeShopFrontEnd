@@ -1594,8 +1594,11 @@ export default function CashierDashboard() {
                 {filteredMenu.map(m => {
                   const qty = qtyById[m.id] || 0;
                   const theme = getCategoryColors(m.category);
-                  const isOutOfStock = m.is_recipe === false && m.stock_level <= 0;
-                  const hasEnoughStock = m.is_recipe === true || qty < m.stock_level;
+                  
+                  // Enforcement: No product can be sold if stock is 0, EXCEPT Juice & Smoothies
+                  const isUnrestricted = m.category === 'Juice & Smoothies' || m.category === 'Juice&Smoothies' || (m.category || '').toLowerCase().includes('juice');
+                  const isOutOfStock = !isUnrestricted && m.stock_level <= 0;
+                  const hasEnoughStock = isUnrestricted || qty < m.stock_level;
 
                   return (
                     <div
@@ -1621,7 +1624,7 @@ export default function CashierDashboard() {
                       <div className="cashier-card-icon" style={{ color: isOutOfStock ? '#9ca3af' : theme.text }}>{getItemIcon(m.name, m.category)}</div>
                       <div className="cashier-card-title" style={{ color: isOutOfStock ? '#9ca3af' : theme.text }}>{m.name}</div>
                       <div className="cashier-card-price" style={{ color: isOutOfStock ? '#ef4444' : theme.text, fontWeight: isOutOfStock ? 'bold' : 'normal' }}>
-                          {isOutOfStock ? 'Empty in Stock' : `${Number(m.price).toLocaleString()} RWF`}
+                          {isOutOfStock ? 'Out of Stock' : `${Number(m.price).toLocaleString()} RWF`}
                       </div>
                     </div>
                   )
