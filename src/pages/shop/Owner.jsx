@@ -2736,7 +2736,7 @@ export default function Owner() {
                      } else {
                        await api('/api/shop/owner/inventory', { method: 'POST', body: JSON.stringify(ingForm) });
                      }
-                     setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' });
+                     setIngForm({ id: '', name: '', stock_level: 0, warehouse_qty: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' });
                      await reloadCore();
                    } catch(err) { setError(err.message) }
                  }} 
@@ -2747,10 +2747,16 @@ export default function Owner() {
                     <span>Ingredient Name</span>
                     <input className="am-input" value={ingForm.name} onChange={e => setIngForm(f => ({...f, name: e.target.value}))} required placeholder="e.g. Whole milk" />
                   </label>
-                  <label className="am-field">
-                    <span>Stock Level</span>
-                    <input className="am-input" type="number" value={ingForm.stock_level} onChange={e => setIngForm(f => ({...f, stock_level: Number(e.target.value)}))} required />
-                  </label>
+                  <div className="grid-2" style={{ gap: 16 }}>
+                    <label className="am-field">
+                      <span>Shop Floor Stock</span>
+                      <input className="am-input" type="number" value={ingForm.stock_level || 0} onChange={e => setIngForm(f => ({...f, stock_level: Number(e.target.value)}))} required />
+                    </label>
+                    <label className="am-field">
+                      <span>Warehouse Stock</span>
+                      <input className="am-input" type="number" value={ingForm.warehouse_qty || 0} onChange={e => setIngForm(f => ({...f, warehouse_qty: Number(e.target.value)}))} required />
+                    </label>
+                  </div>
                   <div className="grid-2" style={{ gap: 16 }}>
                     <label className="am-field">
                       <span>Unit</span>
@@ -2782,7 +2788,7 @@ export default function Owner() {
                     <button 
                       className="btn outline xl" 
                       type="button" 
-                      onClick={() => setIngForm({ id: '', name: '', stock_level: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })}
+                      onClick={() => setIngForm({ id: '', name: '', stock_level: 0, warehouse_qty: 0, unit: 'ml', min_threshold: 0, buying_price: 0, category: 'General' })}
                       style={{ borderRadius: 12 }}
                     >
                       Clear
@@ -2838,7 +2844,16 @@ export default function Owner() {
                               </span>
                             </div>
                             <div style={{ margin: '12px 0' }}>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>{ing.stock_level}</div>
+                              <div style={{ display: 'flex', gap: 16 }}>
+                                <div>
+                                  <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Shop Floor</div >
+                                  <div style={{ fontSize: 20, fontWeight: 800, color: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}>{ing.stock_level}</div>
+                                </div>
+                                <div style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: 16 }}>
+                                  <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Warehouse</div>
+                                  <div style={{ fontSize: 20, fontWeight: 800, color: (ing.warehouse_qty || 0) <= 0 ? '#FF5252' : '#1D3557' }}>{ing.warehouse_qty || 0}</div>
+                                </div>
+                              </div>
                               <div className="am-prod-bar-bg" style={{ width: '100%', marginTop: 4 }}>
                                 <div className="am-prod-bar-fill" style={{ width: `${Math.max(0, Math.min(100, (ing.stock_level / Math.max(1, ing.min_threshold)) * 100))}%`, backgroundColor: ing.stock_level <= 0 ? '#FF5252' : '#FF9800' }}></div>
                               </div>
@@ -2870,7 +2885,16 @@ export default function Owner() {
                             <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800, background: 'rgba(76,175,80,0.1)', color: '#1D3557' }}>HEALTHY</span>
                           </div>
                           <div style={{ margin: '12px 0' }}>
-                            <div style={{ fontSize: 20, fontWeight: 800 }}>{ing.stock_level}</div>
+                            <div style={{ display: 'flex', gap: 16 }}>
+                              <div>
+                                <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Shop Floor</div>
+                                <div style={{ fontSize: 20, fontWeight: 800 }}>{ing.stock_level}</div>
+                              </div>
+                              <div style={{ borderLeft: '1px solid #E5E7EB', paddingLeft: 16 }}>
+                                <div style={{ fontSize: 10, color: 'var(--admin-text-muted)', marginBottom: 2 }}>Warehouse</div>
+                                <div style={{ fontSize: 20, fontWeight: 800, color: '#1D3557' }}>{ing.warehouse_qty || 0}</div>
+                              </div>
+                            </div>
                             <div className="am-prod-bar-bg" style={{ width: '100%', marginTop: 4 }}>
                               <div className="am-prod-bar-fill" style={{ width: '100%', backgroundColor: '#1D3557' }}></div>
                             </div>
