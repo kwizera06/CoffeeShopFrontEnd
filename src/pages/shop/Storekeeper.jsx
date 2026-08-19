@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, getSession } from '../../api'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import socket from '../../socket'
 import {
   HiOutlineBeaker,
   HiOutlineArchiveBox,
@@ -395,7 +396,7 @@ function ProductionScreen() {
 /* ─────────────────────────────────────────────────────────────
    SCREEN 2 — Warehouse Inventory (view warehouse & floor stock)
 ───────────────────────────────────────────────────────────── */
-function WarehouseInventoryScreen() {
+function WarehouseInventoryScreen({ refreshKey }) {
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -450,8 +451,16 @@ function WarehouseInventoryScreen() {
     }
   }
 
+  // Load on mount, and whenever the parent signals a refresh (e.g. after approval)
   useEffect(() => {
     loadInventory()
+  }, [refreshKey])
+
+  // Also auto-refresh when the backend emits warehouseUpdate (e.g. stock changed)
+  useEffect(() => {
+    const handler = () => loadInventory()
+    socket.on('warehouseUpdate', handler)
+    return () => socket.off('warehouseUpdate', handler)
   }, [])
 
   const loadInventory = async () => {
@@ -706,6 +715,7 @@ function WarehouseRequestsScreen() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [filter, setFilter] = useState('PENDING')
   const [actionInProgress, setActionInProgress] = useState({})
   const [rejectReason, setRejectReason] = useState({})
@@ -736,18 +746,33 @@ function WarehouseRequestsScreen() {
 
   const handleApprove = async (transferId) => {
     setActionInProgress(prev => ({ ...prev, [transferId]: 'approving' }))
+    setError('')
+    setSuccess('')
     try {
       const editedQty = editingQuantity[transferId]
       const approveData = editedQty ? { quantity: parseFloat(editedQty) } : {}
       
-      await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
+      const result = await api(`/api/shop/warehouse/requests/${transferId}/approve`, {
         method: 'PUT',
         body: approveData && Object.keys(approveData).length > 0 ? JSON.stringify(approveData) : undefined
       })
       await loadRequests()
       setEditingQuantity(prev => ({ ...prev, [transferId]: '' }))
       setIsEditMode(prev => ({ ...prev, [transferId]: false }))
-      setError('')
+
+      // Show confirmation of the stock movement
+      const qty = result?.approvedQuantity ?? result?.originalQuantity ?? ''
+      const name = result?.productName ?? 'item'
+      const newFloor = result?.shopFloorQtyAfter
+      const newWarehouse = result?.warehouseQtyAfter
+      setSuccess(
+        `✓ Approved ${qty} unit(s) of "${name}". ` +
+        (newFloor !== undefined
+          ? `Warehouse: ${newWarehouse} → Shop floor: ${newFloor}`
+          : 'Stock has been transferred to shop floor.')
+      )
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => setSuccess(''), 5000)
     } catch (e) {
       setError(e.message || 'Failed to approve request')
     } finally {
@@ -764,6 +789,7 @@ function WarehouseRequestsScreen() {
     
     setActionInProgress(prev => ({ ...prev, [transferId]: 'rejecting' }))
     try {
+      console.log(`[handleReject] Rejecting request ${transferId} with reason: ${reason}`)
       await api(`/api/shop/warehouse/requests/${transferId}/reject`, {
         method: 'PUT',
         body: JSON.stringify({ reason })
@@ -772,7 +798,10 @@ function WarehouseRequestsScreen() {
       setShowRejectForm(prev => ({ ...prev, [transferId]: false }))
       await loadRequests()
       setError('')
+      setSuccess(`✓ Request rejected`)
+      setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
+      console.error(`[handleReject] Error:`, e)
       setError(e.message || 'Failed to reject request')
     } finally {
       setActionInProgress(prev => ({ ...prev, [transferId]: null }))
@@ -1062,7 +1091,10 @@ function WarehouseRequestsScreen() {
                           type="text"
                           placeholder="Reason for rejection..."
                           value={rejectReason[req.transferId] || ''}
-                          onChange={(e) => setRejectReason(prev => ({ ...prev, [req.transferId]: e.target.value }))}
+                          onChange={(e) => {
+                            console.log(`[rejectInput] Updated: ${e.target.value}`)
+                            setRejectReason(prev => ({ ...prev, [req.transferId]: e.target.value }))
+                          }}
                           style={{
                             flex: 1,
                             padding: '8px 12px',
@@ -1073,7 +1105,12 @@ function WarehouseRequestsScreen() {
                           }}
                         />
                         <button
-                          onClick={() => handleReject(req.transferId)}
+                          onClick={() => {
+                            console.log(`[confirmReject] Clicked for transfer ${req.transferId}`)
+                            console.log(`[confirmReject] Reason: "${rejectReason[req.transferId]}"`)
+                            console.log(`[confirmReject] isBusy: ${isBusy}`)
+                            handleReject(req.transferId)
+                          }}
                           disabled={isBusy || !rejectReason[req.transferId]?.trim()}
                           style={{
                             padding: '8px 16px',
@@ -1828,6 +1865,8 @@ export default function Storekeeper() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'inventory'
   const [stats, setStats] = useState({ ingredients: 0, inProgress: 0, pendingDeliveries: 0 })
+  // Increment to force inventory screen refresh after warehouse changes
+  const [inventoryRefreshKey, setInventoryRefreshKey] = useState(0)
 
   useEffect(() => {
     const allowed = ['STOREKEEPER', 'SHOP_ADMIN', 'MANAGER']
@@ -1848,6 +1887,13 @@ export default function Storekeeper() {
       })
     }).catch(() => {})
   }, [tab])
+
+  // Listen for warehouseUpdate socket events from any screen and bump the refresh key
+  useEffect(() => {
+    const handler = () => setInventoryRefreshKey(k => k + 1)
+    socket.on('warehouseUpdate', handler)
+    return () => socket.off('warehouseUpdate', handler)
+  }, [])
 
   const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
   const hour = new Date().getHours()
@@ -1960,7 +2006,7 @@ export default function Storekeeper() {
 
       {/* ── Screen content ── */}
       <div className="sk-content">
-        {tab === 'inventory'  && <WarehouseInventoryScreen />}
+        {tab === 'inventory'  && <WarehouseInventoryScreen refreshKey={inventoryRefreshKey} />}
         {tab === 'requests'   && <WarehouseRequestsScreen />}
         {tab === 'request'    && <StockRequestScreen />}
         {tab === 'personal'   && <PersonalStockScreen />}
