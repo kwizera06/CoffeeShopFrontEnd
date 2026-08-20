@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
@@ -324,7 +325,9 @@ export default function Owner() {
   })
   const [dailyRows, setDailyRows] = useState([])
   const [showAllOrdersToggle, setShowAllOrdersToggle] = useState(false)
-  const [monthlyRows, setMonthlyRows] = useState([])
+  const [monthlyRows, setMonthlyRows] = useState({ data: [], pagination: null })
+  const [monthlyPage, setMonthlyPage] = useState(1)
+  const [monthlyLimit] = useState(50)
   const [charts, setCharts] = useState({ hourly: [], topProducts: [] })
   const [shifts, setShifts] = useState([])
   const [categorySales, setCategorySales] = useState({})
@@ -478,30 +481,57 @@ export default function Owner() {
     }
   }, [role])
 
-  const reloadCore = useCallback(async () => {
-    const [o, m, s, i, l, b, bh, pl] = await Promise.all([
-      api(`/api/shop/owner/overview?date=${reportDay}`),
-      api('/api/shop/menu'),
-      api('/api/shop/staff'),
-      api('/api/shop/owner/inventory'),
-      api('/api/shop/loans'),
-      api(`/api/shop/owner/reports/bakery?date=${reportDay}`),
-      api('/api/shop/owner/production'),
-      api('/api/shop/storekeeper/production'),
-    ])
-    setOverview(o)
-    setMenu(m)
-    setStaff(s)
-    setIngredients(i)
-    setLoans(l || [])
-    setBakerySummary(b)
-    setBakeryHistory(bh || [])
-    setProductionLogs(pl || [])
+  // ✅ React Query hook for core data with 30-second cache
+  const { data: coreData, isLoading: coreLoading, error: coreError } = useQuery({
+    queryKey: ['core', reportDay],
+    queryFn: async () => {
+      console.log('🔄 [React Query] Fetching core data...')
+      const [o, m, s, i, l, b, bh, pl] = await Promise.all([
+        api(`/api/shop/owner/overview?date=${reportDay}`),
+        api('/api/shop/menu'),
+        api('/api/shop/staff'),
+        api('/api/shop/owner/inventory'),
+        api('/api/shop/loans'),
+        api(`/api/shop/owner/reports/bakery?date=${reportDay}`),
+        api('/api/shop/owner/production'),
+        api('/api/shop/storekeeper/production'),
+      ])
+      console.log('✅ [React Query] Core data fetched and cached')
+      return { o, m, s, i, l, b, bh, pl }
+    },
+    staleTime: 30000,  // Cache for 30 seconds
+    enabled: allowed,  // Only run when user has permission
+  })
 
-    if (role === 'SHOP_ADMIN') {
-      void reloadManagerAdditions().catch(() => {})
+  // ✅ Update state when cached data is available
+  useEffect(() => {
+    if (coreData) {
+      setOverview(coreData.o)
+      setMenu(coreData.m)
+      setStaff(coreData.s)
+      setIngredients(coreData.i)
+      setLoans(coreData.l || [])
+      setBakerySummary(coreData.b)
+      setBakeryHistory(coreData.bh || [])
+      setProductionLogs(coreData.pl || [])
+
+      if (role === 'SHOP_ADMIN') {
+        void reloadManagerAdditions().catch(() => {})
+      }
     }
-  }, [reportDay, role, reloadManagerAdditions])
+    if (coreError) {
+      setError(coreError.message || 'Failed to load data')
+    }
+  }, [coreData, coreError, role, reloadManagerAdditions])
+
+  // ✅ Get queryClient for manual cache invalidation
+  const queryClient = useQueryClient()
+
+  // ✅ Keep reloadCore as a function for manual refresh (uses cache if <30s old)
+  const reloadCore = useCallback(() => {
+    console.log('🔄 [Manual] Invalidating core cache...')
+    queryClient.invalidateQueries(['core', reportDay])
+  }, [reportDay, queryClient])
 
   useEffect(() => {
     if (tab === 'audit' && role === 'SHOP_ADMIN') {
@@ -514,39 +544,31 @@ export default function Owner() {
     try {
       await api(`/api/shop/loans/${selectedLoanForReview.id}`, { method: 'DELETE' })
       setSelectedLoanForReview(null)
-      await reloadCore()
+      queryClient.invalidateQueries(['core', reportDay])
     } catch (e) {
       alert('Error deleting loan: ' + e.message)
     }
-  }, [selectedLoanForReview])
-
-  const reloadOverview = useCallback(async () => {
-    try {
-      const o = await api(`/api/shop/owner/overview?date=${reportDay}`)
-      setOverview(o)
-    } catch {}
-  }, [reportDay])
+  }, [selectedLoanForReview, queryClient, reportDay])
 
   useEffect(() => {
     if (!allowed) {
       return
     }
-    
-    void reloadCore().catch((e) => setError(e.message))
 
     if (!supabase) return
 
     const tenantId = getSession().tenantId
 
     // ── Channel 1: Orders table (In Prep / Waiting counts) ──────────────
+    // Keep cache invalidation for orders since they affect overview counts
     const ordersChannel = supabase
       .channel(`owner-orders-${tenantId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${tenantId}` },
         () => {
-          // Just refresh the overview (kitchen counts) — fast & lightweight
-          void reloadOverview().catch(() => {})
+          console.log('🔔 [Realtime] Order changed, invalidating cache...')
+          queryClient.invalidateQueries(['core', reportDay])
         }
       )
       .subscribe((status) => {
@@ -555,39 +577,87 @@ export default function Owner() {
       })
 
     // ── Channel 2: Payments table (revenue/completed counts) ────────────
+    // Keep cache invalidation for payments since they affect overview calculations
     const paymentsChannel = supabase
       .channel(`owner-payments-${tenantId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payments', filter: `tenant_id=eq.${tenantId}` },
         () => {
-          void reloadOverview().catch(() => {})
+          console.log('🔔 [Realtime] Payment changed, invalidating cache...')
+          queryClient.invalidateQueries(['core', reportDay])
         }
       )
       .subscribe()
 
-    // ── Channel 3: Menu/inventory/staff (full reload only when needed) ──
+    // ── Channel 3: Menu/inventory/staff (✅ USE PAYLOAD DATA - NO API CALLS) ──
     const coreChannel = supabase
       .channel(`owner-core-${tenantId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${tenantId}` },
-        () => void reloadCore().catch(() => {})
+        { event: 'INSERT', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Menu item added:', payload.new.name)
+          setMenu(prev => [...prev, payload.new])  // ✅ Direct state update (0 bytes egress)
+        }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
-        () => void reloadCore().catch(() => {})
+        { event: 'UPDATE', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Menu item updated:', payload.new.name)
+          setMenu(prev => prev.map(m => m.id === payload.new.id ? payload.new : m))  // ✅ Direct update
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'menu_items', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Menu item deleted:', payload.old.id)
+          setMenu(prev => prev.filter(m => m.id !== payload.old.id))  // ✅ Direct removal
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Ingredient added:', payload.new.name)
+          setIngredients(prev => [...prev, payload.new])  // ✅ Direct state update
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Ingredient updated:', payload.new.name)
+          setIngredients(prev => prev.map(i => i.id === payload.new.id ? payload.new : i))  // ✅ Direct update
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'ingredients', filter: `tenant_id=eq.${tenantId}` },
+        (payload) => {
+          console.log('✅ [Realtime] Ingredient deleted:', payload.old.id)
+          setIngredients(prev => prev.filter(i => i.id !== payload.old.id))  // ✅ Direct removal
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'productions', filter: `tenant_id=eq.${tenantId}` },
-        () => void reloadCore().catch(() => {})
+        () => {
+          // Production changes are less frequent and affect multiple related tables
+          // Keep cache invalidation for these
+          console.log('🔔 [Realtime] Production changed, invalidating cache...')
+          queryClient.invalidateQueries(['core', reportDay])
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'production_outputs', filter: `tenant_id=eq.${tenantId}` },
-        () => void reloadCore().catch(() => {})
+        () => {
+          console.log('🔔 [Realtime] Production output changed, invalidating cache...')
+          queryClient.invalidateQueries(['core', reportDay])
+        }
       )
       .subscribe()
 
@@ -596,7 +666,7 @@ export default function Owner() {
       void supabase.removeChannel(paymentsChannel)
       void supabase.removeChannel(coreChannel)
     }
-  }, [allowed, reloadCore, reloadOverview])
+  }, [allowed, reportDay, queryClient])
 
   const reloadEOD = useCallback(async () => {
     if (!allowed || (tab !== 'reports' && tab !== 'overview' && tab !== 'eod')) {
@@ -607,15 +677,20 @@ export default function Owner() {
       
       const [d, moon, c, s] = await Promise.all([
         api(`/api/shop/owner/reports/daily?date=${reportDay}`),
-        api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}`),
+        api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}&page=${monthlyPage}&limit=${monthlyLimit}`),  // ✅ Add pagination params
         api(`/api/shop/owner/reports/charts?date=${reportDay}`),
         api(`/api/shop/shifts?date=${reportDay}`),
       ])
       
       console.log(`📊 [EOD Report] Loaded: ${d.length} daily rows, ${s.length} shifts`);
+      console.log(`📊 [Monthly Report] Page ${moon.pagination?.page || 1} of ${moon.pagination?.totalPages || 1} (${moon.pagination?.total || moon.length} total orders)`);
       
       setDailyRows(d)
-      setMonthlyRows(moon)
+      // ✅ Support both old format (array) and new format (object with data + pagination)
+      setMonthlyRows({
+        data: moon.data || moon,
+        pagination: moon.pagination || null
+      })
       setCharts(c)
       setShifts(s)
       
@@ -681,7 +756,12 @@ export default function Owner() {
     } catch(e) {
       setError(e.message)
     }
-  }, [allowed, tab, reportDay, month.year, month.month, staff])
+  }, [allowed, tab, reportDay, month.year, month.month, monthlyPage, monthlyLimit, staff])
+
+  // ✅ Reset to page 1 when month changes
+  useEffect(() => {
+    setMonthlyPage(1)
+  }, [month.year, month.month])
 
   useEffect(() => {
     if (!allowed) return
@@ -1165,10 +1245,21 @@ export default function Owner() {
               <div className="am-metric-card" onClick={() => setTab('loans')}>
                 <div className="am-metric-header">
                   <div className="am-metric-icon" style={{ background: 'rgba(230, 126, 34, 0.1)', color: '#E67E22' }}><HiOutlineUsers /></div>
-                  CREDIT / LOANS
+                  LOANS GIVEN TODAY
                 </div>
-                <div className="am-metric-value">{Number(overview?.todayLoanSales ?? 0).toLocaleString()} RWF</div>
-                <div className="am-metric-trend" style={{ color: '#E67E22' }}><HiOutlineExclamationTriangle /> Unpaid client credit</div>
+                <div className="am-metric-value">{Number(overview?.loansGiven ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend" style={{ color: '#E67E22' }}>
+                  <HiOutlineExclamationTriangle /> Stock used, no cash yet ({overview?.loansGivenCount ?? 0} loans)
+                </div>
+              </div>
+
+              <div className="am-metric-card" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.08) 100%)', border: '1.5px solid rgba(16, 185, 129, 0.2)' }}>
+                <div className="am-metric-header">
+                  <div className="am-metric-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10B981' }}><HiOutlineBanknotes /></div>
+                  LOAN REPAYMENTS
+                </div>
+                <div className="am-metric-value" style={{ color: '#059669' }}>{Number(overview?.loanRepayments ?? 0).toLocaleString()} RWF</div>
+                <div className="am-metric-trend" style={{ color: '#059669' }}>↑ Money from previous loans (no stock used)</div>
               </div>
 
               <div className="am-metric-card" onClick={() => openDrilldown('profit')}>
