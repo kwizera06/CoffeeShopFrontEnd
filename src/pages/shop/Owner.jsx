@@ -61,9 +61,11 @@ export default function Owner() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [search, setSearch] = useState('')
+  const [eodStockSearch, setEodStockSearch] = useState('') // Search for EOD stock levels
   const [eodProductPage, setEodProductPage] = useState(1)
   const [isExporting, setIsExporting] = useState(false)
   const [dateRange, setDateRange] = useState('daily')
+  const [eodStockList, setEodStockList] = useState([])
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
@@ -391,6 +393,21 @@ export default function Owner() {
         minThreshold: MENU_LOW_THRESHOLD,
         warehouse_qty: Number(m.warehouse_qty ?? 0),
       }))
+    
+    // Add prepared products (is_recipe = true) with stock > 1 for EOD report
+    const preparedProducts = menu
+      .filter(m => m.is_recipe && Number(m.stock_level ?? m.stockLevel ?? 0) > 1)
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        itemType: 'PREPARED_PRODUCT',
+        category: 'Prepared Products', // Group all prepared products
+        unit: 'pcs',
+        stock: Number(m.stock_level ?? m.stockLevel ?? 0),
+        minThreshold: MENU_LOW_THRESHOLD,
+        warehouse_qty: Number(m.warehouse_qty ?? 0),
+      }))
+    
     const ings = ingredients.map(ing => ({
       id: ing.id,
       name: ing.name,
@@ -403,7 +420,7 @@ export default function Owner() {
     }))
     
     // Merge duplicates by name
-    const allItems = [...products, ...ings]
+    const allItems = [...products, ...preparedProducts, ...ings]
     const nameMap = {}
     
     allItems.forEach(item => {
@@ -675,17 +692,19 @@ export default function Owner() {
     try {
       console.log(`📊 [EOD Report] Loading for date: ${reportDay}`);
       
-      const [d, moon, c, s] = await Promise.all([
+      const [d, moon, c, s, eodStockData] = await Promise.all([
         api(`/api/shop/owner/reports/daily?date=${reportDay}`),
         api(`/api/shop/owner/reports/monthly?year=${month.year}&month=${month.month}&page=${monthlyPage}&limit=${monthlyLimit}`),  // ✅ Add pagination params
         api(`/api/shop/owner/reports/charts?date=${reportDay}`),
         api(`/api/shop/shifts?date=${reportDay}`),
+        api(`/api/shop/owner/reports/eod-stock?date=${reportDay}`),
       ])
       
       console.log(`📊 [EOD Report] Loaded: ${d.length} daily rows, ${s.length} shifts`);
       console.log(`📊 [Monthly Report] Page ${moon.pagination?.page || 1} of ${moon.pagination?.totalPages || 1} (${moon.pagination?.total || moon.length} total orders)`);
       
       setDailyRows(d)
+      setEodStockList(eodStockData || [])
       // ✅ Support both old format (array) and new format (object with data + pagination)
       setMonthlyRows({
         data: moon.data || moon,
@@ -850,12 +869,17 @@ export default function Owner() {
       // Calculate attribution ratio for split payments
       const orderTotal = row.orderTotal || (row.rawItems || []).reduce((acc, it) => acc + (Number(it.price) * (it.qty || 1)), 0);
       const ratio = orderTotal > 0 ? (Number(row.amount) / orderTotal) : 1;
+      const isLoan = row.methodLabel === 'CR/Loan';
 
       (row.rawItems || []).forEach(item => {
-        const key = item.name || item.item_name || 'Unknown'
+        let key = item.name || item.item_name || 'Unknown'
+        if (isLoan) key += ' (Loan)'
+        
         if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, category: item.category || 'Uncategorized' }
         map[key].qty += (item.qty || 1) * ratio
-        map[key].revenue += (Number(item.price) || 0) * (item.qty || 1) * ratio
+        if (!isLoan) {
+          map[key].revenue += (Number(item.price) || 0) * (item.qty || 1) * ratio
+        }
       })
     })
     return Object.values(map).sort((a, b) => b.revenue - a.revenue)
@@ -867,13 +891,18 @@ export default function Owner() {
     rows.forEach(row => {
       const orderTotal = row.orderTotal || (row.rawItems || []).reduce((acc, it) => acc + (Number(it.price) * (it.qty || 1)), 0);
       const ratio = orderTotal > 0 ? (Number(row.amount) / orderTotal) : 1;
+      const isLoan = row.methodLabel === 'CR/Loan';
 
       (row.rawItems || []).forEach(item => {
-        const key = item.name || item.item_name || 'Unknown'
+        let key = item.name || item.item_name || 'Unknown'
+        if (isLoan) key += ' (Loan)'
+        
         if (!map[key]) map[key] = { name: key, qty: 0, revenue: 0, cost: 0, category: item.category || 'Uncategorized' }
         const qty = (item.qty || 1) * ratio
         map[key].qty += qty
-        map[key].revenue += (Number(item.price) || 0) * qty
+        if (!isLoan) {
+          map[key].revenue += (Number(item.price) || 0) * qty
+        }
         map[key].cost += (Number(item.buying_price) || 0) * qty
       })
     })
@@ -4505,68 +4534,196 @@ export default function Owner() {
                 {/* ── Current Stock Levels ── */}
                 <section className="am-eod-section">
                   <h3 className="am-eod-section-title">Current Stock Levels</h3>
-                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 16, marginTop: -8 }}>
+                  <p style={{ fontSize: 12, color: '#94A3B8', marginBottom: 12, marginTop: -8 }}>
                     Opening stock = stock at cashier start of day. Qty Sold = units moved during shifts.
                   </p>
+                  
+                  {/* Search Input */}
+                  <div style={{ 
+                    marginBottom: 16, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 8,
+                    padding: '10px 14px',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: 10
+                  }}>
+                    <svg 
+                      width="18" 
+                      height="18" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                      style={{ color: '#94A3B8', flexShrink: 0 }}
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search products by name..."
+                      value={eodStockSearch}
+                      onChange={(e) => setEodStockSearch(e.target.value)}
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#1D3557'
+                      }}
+                    />
+                    {eodStockSearch && (
+                      <button
+                        onClick={() => setEodStockSearch('')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#94A3B8',
+                          cursor: 'pointer',
+                          fontSize: 18,
+                          lineHeight: 1,
+                          padding: 4,
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
                   {(() => {
-                    // Build a map of qty sold per product name from dailyRows
-                    const soldQtyMap = {};
-                    const processedOrders = new Set();
-                    dailyRows.forEach(row => {
-                      if (row.rawItems && !processedOrders.has(row.orderId)) {
-                        processedOrders.add(row.orderId);
-                        row.rawItems.forEach(item => {
-                          const key = (item.name || 'Unknown').toLowerCase().trim();
-                          soldQtyMap[key] = (soldQtyMap[key] || 0) + (item.qty || 1);
-                        });
-                      }
+                    // Create a map from accurate API eodStockList
+                    const stockMapByKey = {};
+                    eodStockList.forEach(es => {
+                      const key = (es.name || 'Unknown').toLowerCase().trim();
+                      stockMapByKey[key] = es;
                     });
+
+                    // Filter stock items by search query
+                    const searchLower = eodStockSearch.toLowerCase().trim();
+                    const filteredStockItems = searchLower 
+                      ? stockItems.filter(item => item.name.toLowerCase().includes(searchLower))
+                      : stockItems;
+
+                    // Show message if search returns no results
+                    if (searchLower && filteredStockItems.length === 0) {
+                      return (
+                        <div style={{
+                          padding: '40px 20px',
+                          textAlign: 'center',
+                          background: '#F8FAFC',
+                          borderRadius: 12,
+                          border: '1px solid #E2E8F0'
+                        }}>
+                          <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                            No products found
+                          </div>
+                          <div style={{ fontSize: 13, color: '#94A3B8' }}>
+                            Try a different search term or clear the filter
+                          </div>
+                        </div>
+                      );
+                    }
 
                     // Group items by category
                     const groupedByCategory = {};
-                    stockItems.forEach(item => {
+                    filteredStockItems.forEach(item => {
                       const cat = item.category || 'Uncategorized';
                       if (!groupedByCategory[cat]) groupedByCategory[cat] = [];
                       groupedByCategory[cat].push(item);
                     });
 
-                    return Object.entries(groupedByCategory).map(([category, items]) => (
-                      <div key={category} style={{ marginBottom: 24 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10, paddingLeft: 4 }}>
-                          {category}
-                        </div>
-                        <div className="am-eod-table">
-                          <div className="am-eod-table-head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
-                            <span>Product Name</span>
-                            <span>Opening Stock</span>
-                            <span>Qty Sold</span>
-                            <span>Current Stock</span>
-                          </div>
-                          {items.map((item, idx) => {
-                            const nameKey = item.name.toLowerCase().trim();
-                            const qtySold = soldQtyMap[nameKey] || 0;
-                            const openingStock = item.stock + qtySold;
-                            const unit = item.unit || 'pcs';
-                            return (
-                              <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
-                                <span className="am-eod-cell-name" style={{ fontWeight: 600 }}>
-                                  {item.name}
-                                </span>
-                                <span style={{ fontWeight: 600, color: '#1D3557' }}>
-                                  {openingStock} {unit}
-                                </span>
-                                <span style={{ fontWeight: 700, color: qtySold > 0 ? '#E53E3E' : '#94A3B8' }}>
-                                  {qtySold > 0 ? `− ${qtySold} ${unit}` : '—'}
-                                </span>
-                                <span style={{ fontWeight: 700, color: item.stock <= 0 ? '#E53E3E' : item.stock <= 10 ? '#D97706' : '#10B981' }}>
-                                  {item.stock} {unit}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                    // Show results count when searching
+                    const resultsHeader = searchLower ? (
+                      <div style={{
+                        padding: '8px 12px',
+                        background: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        borderRadius: 8,
+                        marginBottom: 16,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#1E40AF'
+                      }}>
+                        Found {filteredStockItems.length} product{filteredStockItems.length !== 1 ? 's' : ''} matching "{eodStockSearch}"
                       </div>
-                    ));
+                    ) : null;
+
+                    return (
+                      <>
+                        {resultsHeader}
+                        {Object.entries(groupedByCategory).map(([category, items]) => (
+                          <div key={category} style={{ marginBottom: 24 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10, paddingLeft: 4 }}>
+                              {category}
+                              <span style={{ marginLeft: 8, fontWeight: 600, color: '#94A3B8' }}>
+                                ({items.length})
+                              </span>
+                            </div>
+                            <div className="am-eod-table">
+                              <div className="am-eod-table-head" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr 1fr' }}>
+                                <span>Product Name</span>
+                                <span>Opening</span>
+                                <span>Sold</span>
+                                <span>Added</span>
+                                <span>Closing</span>
+                              </div>
+                              {items.map((item, idx) => {
+                                const nameKey = item.name.toLowerCase().trim();
+                                const esData = stockMapByKey[nameKey] || {};
+                                
+                                // Fallbacks: if no history found, opening/closing just show current live stock
+                                const opening = esData.openingStock ?? item.stock;
+                                const closing = esData.closingStock ?? item.stock;
+                                
+                                const qtySold = esData.qtySold ?? 0;
+                                const qtyLoan = esData.qtyLoan ?? 0;
+                                const qtyAdded = esData.qtyAdded ?? 0;
+                                
+                                const unit = item.unit || 'pcs';
+                                return (
+                                  <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr 1fr' }}>
+                                    <span className="am-eod-cell-name" style={{ fontWeight: 600 }}>
+                                      {item.name}
+                                    </span>
+                                    <span style={{ fontWeight: 600, color: '#1D3557' }}>
+                                      {opening} {unit}
+                                    </span>
+                                    <span style={{ fontWeight: 700, color: qtySold > 0 ? '#E53E3E' : '#94A3B8' }}>
+                                      {qtySold > 0 ? (
+                                        <span>
+                                          − {qtySold} {unit}
+                                          {qtyLoan > 0 && (
+                                            <span style={{ fontSize: 11, display: 'block', color: '#E67E22', marginTop: 2 }}>
+                                              ({qtyLoan} {unit} loan)
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : '—'}
+                                    </span>
+                                    <span style={{ fontWeight: 700, color: qtyAdded > 0 ? '#3B82F6' : '#94A3B8' }}>
+                                      {qtyAdded > 0 ? `+ ${qtyAdded} ${unit}` : '—'}
+                                    </span>
+                                    <span style={{ fontWeight: 700, color: closing <= 0 ? '#E53E3E' : closing <= 10 ? '#D97706' : '#10B981' }}>
+                                      {closing} {unit}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    );
                   })()}
                 </section>
 

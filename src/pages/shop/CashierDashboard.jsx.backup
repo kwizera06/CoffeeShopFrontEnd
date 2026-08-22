@@ -120,7 +120,6 @@ function roleDisplayLabel(role) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-/* ─────────────────────────────────────────────────────────────
    Production Recording Screen (Cashier Version)
 ───────────────────────────────────────────────────────────── */
 function ProductionRecordingScreen() {
@@ -295,111 +294,58 @@ function ProductionRecordingScreen() {
       {showRecipeModal && selectedProduct && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-          onClick={() => { setShowRecipeModal(false); setError('') }}>
-          <div style={{ background: '#FFFFFF', width: '100%', maxWidth: 500, padding: 28, borderRadius: 16, maxHeight: '90vh', overflowY: 'auto' }}
+          onClick={() => setConfirming(null)}>
+          <div style={{ background: '#FFFFFF', width: '100%', maxWidth: 440, padding: 28, borderRadius: 16 }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 4px', color: '#111827', fontSize: 18, fontWeight: 800 }}>
-              Create Recipe for {selectedProduct.name}
+              Confirm Production Output
             </h3>
             <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
-              Define the ingredients and batch size for this product
+              Planned: <strong>{confirming.log.planned_qty}</strong> units of{' '}
+              <strong>{confirming.log.menu_items?.name}</strong>
             </p>
-            <form onSubmit={handleSaveRecipe} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleCompleteProduction} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
-                  Standard Yield (units per batch)
-                </label>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Actual quantity produced</label>
                 <input
                   type="number"
-                  min="0.1"
-                  step="0.1"
+                  min="0"
+                  step="1"
                   required
-                  value={recipeForm.standardYield}
-                  onChange={e => setRecipeForm(f => ({ ...f, standardYield: e.target.value }))}
-                  placeholder="e.g. 25"
+                  value={confirming.actualQty}
+                  onChange={e => setConfirming(c => ({ ...c, actualQty: e.target.value }))}
+                  placeholder="e.g. 36"
                   style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
                 />
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9CA3AF' }}>
-                  How many units does one batch produce?
-                </p>
               </div>
-
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8, display: 'block' }}>
-                  Ingredients
-                </label>
-                {recipeForm.ingredients.map((ing, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                    <select
-                      value={ing.id}
-                      onChange={e => {
-                        const selected = availableIngredients.find(i => i.id === e.target.value)
-                        setRecipeForm(f => ({
-                          ...f,
-                          ingredients: f.ingredients.map((item, i) =>
-                            i === idx ? { ...item, id: e.target.value, name: selected?.name || '' } : item
-                          )
-                        }))
-                      }}
-                      style={{ flex: 2, padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8 }}
-                    >
-                      <option value="">Select ingredient...</option>
-                      {availableIngredients.map(i => (
-                        <option key={i.id} value={i.id}>{i.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      placeholder="Qty"
-                      value={ing.quantity}
-                      onChange={e => {
-                        setRecipeForm(f => ({
-                          ...f,
-                          ingredients: f.ingredients.map((item, i) =>
-                            i === idx ? { ...item, quantity: e.target.value } : item
-                          )
-                        }))
-                      }}
-                      style={{ flex: 1, padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: 8 }}
+              {confirming.actualQty !== '' &&
+               Math.abs(parseFloat(confirming.log.planned_qty) - parseFloat(confirming.actualQty || 0)) > 0.001 && (
+                <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)',
+                  borderRadius: 10, padding: 12 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                    ⚠ Variance detected ({(parseFloat(confirming.log.planned_qty) - parseFloat(confirming.actualQty || 0)).toFixed(2)} units) — comment required
+                  </p>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Variance explanation</label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={confirming.comment}
+                      onChange={e => setConfirming(c => ({ ...c, comment: e.target.value }))}
+                      placeholder="e.g. 4 pieces burnt during cooking"
+                      style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRecipeForm(f => ({
-                          ...f,
-                          ingredients: f.ingredients.filter((_, i) => i !== idx)
-                        }))
-                      }}
-                      style={{ padding: '8px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, cursor: 'pointer' }}
-                    >
-                      ✕
-                    </button>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecipeForm(f => ({
-                      ...f,
-                      ingredients: [...f.ingredients, { id: '', name: '', quantity: '' }]
-                    }))
-                  }}
-                  style={{ width: '100%', padding: '8px', background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
-                >
-                  + Add Ingredient
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                <button type="submit" disabled={busy} style={{
-                  flex: 1, padding: 12, background: busy ? '#D1D5DB' : '#10B981', color: 'white', border: 'none', 
-                  borderRadius: 8, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer'
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="submit" disabled={phase2Busy} style={{
+                  flex: 1, padding: 12, background: '#10B981', color: 'white', border: 'none', 
+                  borderRadius: 8, fontWeight: 600, cursor: 'pointer'
                 }}>
-                  {busy ? 'Saving…' : '✓ Save Recipe'}
+                  {phase2Busy ? 'Saving…' : '✓ Confirm & Add to Stock'}
                 </button>
-                <button type="button" onClick={() => { setShowRecipeModal(false); setError('') }} style={{
+                <button type="button" onClick={() => { setConfirming(null); setError('') }} style={{
                   flex: 1, padding: 12, background: '#F3F4F6', color: '#374151', border: 'none',
                   borderRadius: 8, fontWeight: 600, cursor: 'pointer'
                 }}>
@@ -411,16 +357,16 @@ function ProductionRecordingScreen() {
         </div>
       )}
 
-      {/* Production Form */}
+      {/* Start production form */}
       <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
         <h3 style={{ margin: '0 0 4px', fontWeight: 800, color: '#1D3557', fontSize: 16 }}>
           <HiOutlineBeaker style={{ verticalAlign: 'middle', marginRight: 8 }} />
-          Record Production
+          Record New Production Run
         </h3>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
-          Add finished product quantity to stock. Ingredients will be auto-deducted based on recipe.
+          Select a prepared product, enter the desired output quantity, and the system will calculate and immediately deduct the required ingredients.
         </p>
-        <form onSubmit={handleRecordProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <form onSubmit={handleStartProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Prepared Product</label>
             <div style={{ position: 'relative', marginTop: 4 }}>
@@ -436,7 +382,7 @@ function ProductionRecordingScreen() {
                 <HiOutlineMagnifyingGlass style={{ color: '#6B7280', fontSize: 18 }} />
                 <input
                   type="text"
-                  placeholder="🔍 Search prepared products..."
+                  placeholder="🔍 Search products & check stock level..."
                   value={productionSearch}
                   onChange={(e) => setProductionSearch(e.target.value)}
                   style={{
@@ -452,49 +398,141 @@ function ProductionRecordingScreen() {
               {/* Search Results Dropdown */}
               {productionSearch && (
                 <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  marginTop: 4,
+                  position: 'fixed',
+                  top: '320px',
+                  left: '30px',
+                  right: '30px',
+                  maxWidth: '540px',
                   background: '#FFFFFF',
                   border: '2px solid #3B82F6',
                   borderRadius: '12px',
-                  maxHeight: '300px',
+                  maxHeight: 'calc(100vh - 380px)',
                   overflowY: 'auto',
                   zIndex: 2000,
-                  boxShadow: '0 8px 24px rgba(59, 130, 246, 0.2)'
+                  boxShadow: '0 20px 40px rgba(59, 130, 246, 0.3)'
                 }}>
                   {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length > 0 ? (
                     <div>
-                      {products
-                        .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
-                        .map((p) => (
-                          <div
-                            key={p.id}
-                            onClick={() => {
-                              onProductSelect(p.id);
-                              setProductionSearch('');
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #F3F4F6',
-                              transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#F0F9FF'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = '#FFFFFF'}
-                          >
-                            <div style={{ fontWeight: 700, color: '#111827', marginBottom: 2 }}>{p.name}</div>
-                            <div style={{ fontSize: 11, color: '#6B7280' }}>
-                              Current stock: {p.currentStock} | Standard yield: {p.standardYield}
+                      <div style={{
+                        padding: '14px 16px',
+                        background: '#EFF6FF',
+                        borderBottom: '2px solid #BFDBFE',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#1E40AF',
+                        position: 'sticky',
+                        top: 0,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>🔍 Found {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length} Product(s)</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#3B82F6' }}>Click to select</span>
+                      </div>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                        gap: '12px',
+                        padding: '16px',
+                        background: '#FAFBFC'
+                      }}>
+                        {products
+                          .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
+                          .map((p) => (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                onProductSelect(p.id);
+                                setProductionSearch('');
+                              }}
+                              style={{
+                                padding: '12px',
+                                background: '#FFFFFF',
+                                border: '2px solid #E5E7EB',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                textAlign: 'center',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#3B82F6';
+                                e.currentTarget.style.background = '#F0F9FF';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#E5E7EB';
+                                e.currentTarget.style.background = '#FFFFFF';
+                                e.currentTarget.style.boxShadow = 'none';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <div style={{
+                                width: '50px',
+                                height: '50px',
+                                background: '#FEF3C7',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '28px'
+                              }}>
+                                🥐
+                              </div>
+                              <div style={{
+                                fontWeight: 700,
+                                color: '#111827',
+                                fontSize: 12,
+                                lineHeight: '1.2',
+                                maxHeight: '35px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical'
+                              }}>
+                                {p.name}
+                              </div>
+                              <div style={{
+                                fontSize: 10,
+                                color: '#6B7280',
+                                background: '#F3F4F6',
+                                padding: '4px 6px',
+                                borderRadius: '4px',
+                                fontWeight: 600
+                              }}>
+                                📦 {p.recipe_reference_yield} pcs
+                              </div>
+                              <div style={{
+                                background: '#10B981',
+                                color: 'white',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                marginTop: '2px',
+                                width: '100%',
+                                cursor: 'pointer'
+                              }}>
+                                ✓ Select
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                      </div>
                     </div>
                   ) : (
-                    <div style={{ padding: '24px 16px', textAlign: 'center', color: '#DC2626', fontSize: 13 }}>
-                      No products found matching "{productionSearch}"
+                    <div style={{
+                      padding: '32px 16px',
+                      textAlign: 'center',
+                      color: '#DC2626',
+                      fontSize: 14,
+                      fontWeight: 600
+                    }}>
+                      ❌ No products found matching <strong>"{productionSearch}"</strong>
                     </div>
                   )}
                 </div>
@@ -502,163 +540,167 @@ function ProductionRecordingScreen() {
             </div>
           </div>
 
-          {selectedProduct && !recipe && !showRecipeModal && (
-            <div style={{ padding: 16, background: '#FFF8E1', border: '1px solid #FFD54F', borderRadius: 10 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#F57F17', fontWeight: 600 }}>
-                ⚠️ This product has no recipe. Create a recipe first to record production.
+          {recipe && (
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
+                Planned output quantity (units)
+              </label>
+              <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#9CA3AF' }}>
+                Standard recipe yield is {recipe.standardYield} units. Ingredients will be scaled proportionally.
               </p>
-              <button
-                type="button"
-                onClick={() => setShowRecipeModal(true)}
-                style={{
-                  marginTop: 12,
-                  padding: '8px 16px',
-                  background: '#3B82F6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                + Create Recipe
-              </button>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required
+                value={plannedQty}
+                onChange={e => setPlannedQty(e.target.value)}
+                placeholder={`e.g. ${recipe.standardYield}`}
+                style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
+              />
+            </div>
+          )}
+
+          {recipe && scaledLines.length > 0 && (
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
+              <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, color: '#1D3557' }}>
+                Ingredients that will be deducted from stock
+              </p>
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>INGREDIENT</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>IN STOCK</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>WILL DEDUCT</th>
+                    <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>REMAINING</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scaledLines.map(r => {
+                    const after    = r.currentStock - r.required
+                    const isLow    = after < 0
+                    const isWarn   = after >= 0 && after < r.currentStock * 0.1
+                    return (
+                      <tr key={r.ingredientId} style={{ background: isLow ? 'rgba(239,68,68,0.05)' : 'transparent', borderBottom: '1px solid #E2E8F0' }}>
+                        <td style={{ fontWeight: 600, padding: '8px 0' }}>{r.ingredientName}</td>
+                        <td style={{ padding: '8px 0' }}>{r.currentStock} {r.unit}</td>
+                        <td style={{ color: '#E8751A', fontWeight: 700, padding: '8px 0' }}>
+                          -{r.required} {r.unit}
+                        </td>
+                        <td style={{ fontWeight: 700, color: isLow ? '#B91C1C' : isWarn ? '#92400E' : '#15803D', padding: '8px 0' }}>
+                          {isLow && '⚠ '} {after.toFixed(3)} {r.unit}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
           {recipe && (
-            <>
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
-                  Quantity to Add (units)
-                </label>
-                <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#9CA3AF' }}>
-                  Standard yield: {recipe.standardYield} units per batch. Current stock: {selectedProduct?.currentStock || 0}
-                </p>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  required
-                  value={quantityToAdd}
-                  onChange={e => setQuantityToAdd(e.target.value)}
-                  placeholder={`e.g. ${recipe.standardYield}`}
-                  style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Notes (optional)</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="e.g. Morning batch"
-                  style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
-                />
-              </div>
-
-              {quantityToAdd > 0 && scaledIngredients.length > 0 && (
-                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#1D3557' }}>
-                    Ingredients to Deduct ({batchesNeeded.toFixed(2)} batches)
-                  </p>
-                  <p style={{ margin: '0 0 12px', fontSize: 11, color: '#6B7280' }}>
-                    Calculation: {quantityToAdd} units ÷ {recipe.standardYield} = {batchesNeeded.toFixed(2)} batches
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {scaledIngredients.map((ing, idx) => (
-                      <div key={idx} style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        padding: '8px 12px',
-                        background: ing.remaining < 0 ? 'rgba(239,68,68,0.05)' : '#FFFFFF',
-                        borderRadius: 8,
-                        border: '1px solid',
-                        borderColor: ing.remaining < 0 ? 'rgba(239,68,68,0.2)' : '#E5E7EB'
-                      }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13 }}>{ing.name}</div>
-                          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                            Stock: {ing.currentStock} → Will deduct: {ing.deduction} → Remaining: {' '}
-                            <span style={{ 
-                              fontWeight: 700,
-                              color: ing.remaining < 0 ? '#DC2626' : ing.remaining < ing.currentStock * 0.1 ? '#F59E0B' : '#10B981'
-                            }}>
-                              {ing.remaining.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                        {ing.remaining < 0 && (
-                          <span style={{ fontSize: 20 }}>⚠️</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {allIngredientsZero && (
-                    <div style={{ marginTop: 12, padding: 12, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8 }}>
-                      <p style={{ margin: 0, fontSize: 13, color: '#B91C1C', fontWeight: 600 }}>
-                        ❌ Cannot produce: All ingredients are out of stock
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button 
-                  type="submit" 
-                  disabled={busy || !quantityToAdd || allIngredientsZero} 
-                  style={{
-                    flex: 1,
-                    borderRadius: 10, 
-                    height: 48, 
-                    fontSize: 15, 
-                    fontWeight: 700,
-                    background: (busy || !quantityToAdd || allIngredientsZero) ? '#D1D5DB' : '#10B981', 
-                    color: 'white', 
-                    border: 'none', 
-                    cursor: (busy || !quantityToAdd || allIngredientsZero) ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {busy ? 'Recording…' : '✅ Record Production'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRecipeModal(true)
-                    setRecipeForm({
-                      standardYield: recipe.standardYield.toString(),
-                      ingredients: recipe.ingredients.map(ing => ({
-                        id: ing.ingredientId || ing.componentMenuItemId,
-                        name: ing.name,
-                        quantity: ing.quantityRequired.toString()
-                      }))
-                    })
-                  }}
-                  style={{
-                    padding: '0 16px',
-                    background: '#F3F4F6',
-                    color: '#374151',
-                    border: '1px solid #D1D5DB',
-                    borderRadius: 10,
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✏️ Edit Recipe
-                </button>
-              </div>
-            </>
+            <button type="submit" disabled={busy || !plannedQty} style={{
+              borderRadius: 10, height: 48, fontSize: 15, fontWeight: 700,
+              background: busy ? '#D1D5DB' : '#3B82F6', color: 'white', border: 'none', cursor: 'pointer'
+            }}>
+              {busy ? 'Deducting ingredients…' : '🚀 Start Production & Deduct Ingredients'}
+            </button>
           )}
         </form>
       </div>
+
+      {/* In Progress */}
+      {inProgress.length > 0 && (
+        <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 800, color: '#92400E', fontSize: 15 }}>
+            <HiOutlineClock style={{ verticalAlign: 'middle', marginRight: 8 }} />
+            Awaiting Actual Output ({inProgress.length})
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {inProgress.map(log => (
+              <div key={log.id} style={{ border: '1px solid rgba(234,179,8,0.4)',
+                borderRadius: 12, padding: 16, background: 'rgba(234,179,8,0.04)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {log.menu_items?.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                    Planned: <strong>{log.planned_qty}</strong> units · {new Date(log.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <button style={{
+                  padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+                  background: '#3B82F6', color: 'white', border: 'none', cursor: 'pointer'
+                }}
+                  onClick={() => { setError(''); setConfirming({ log, actualQty: log.planned_qty, comment: '' }) }}>
+                  ✅ Enter Actual Output
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Completed history */}
+      {completed.length > 0 && (
+        <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+          <h3 style={{ margin: '0 0 16px', fontWeight: 800, color: '#1D3557', fontSize: 15 }}>
+            ✅ Production History
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #E2E8F0', background: '#F9FAFB' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>DATE</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PRODUCT</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>PLANNED</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>ACTUAL ➕</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>VARIANCE</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 700 }}>COMMENT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completed.map(log => {
+                  const v = parseFloat(log.variance ?? 0)
+                  const isRecent = new Date() - new Date(log.completed_at) < 60000 // Recent if within 1 minute
+                  return (
+                    <tr key={log.id} style={{ 
+                      borderBottom: '1px solid #E2E8F0',
+                      background: isRecent ? 'rgba(16, 185, 129, 0.05)' : 'transparent',
+                      transition: 'background 0.3s ease'
+                    }}>
+                      <td style={{ whiteSpace: 'nowrap', color: '#6B7280', fontSize: 11, padding: '8px 0' }}>
+                        {new Date(log.created_at).toLocaleDateString()}
+                      </td>
+                      <td style={{ fontWeight: 600, padding: '8px 0', color: isRecent ? '#10B981' : '#111827' }}>
+                        {isRecent && '⭐ '}{log.menu_items?.name}
+                      </td>
+                      <td style={{ padding: '8px 0', color: '#6B7280' }}>{log.planned_qty}</td>
+                      <td style={{ fontWeight: 700, padding: '8px 0', color: '#10B981', fontSize: 13 }}>
+                        +{log.actual_qty} 📦
+                      </td>
+                      <td style={{ fontWeight: 700, color: v === 0 ? '#15803D' : v > 0 ? '#B91C1C' : '#15803D', padding: '8px 0' }}>
+                        {v === 0 ? '✓ 0' : (v > 0 ? `-${v}` : `+${Math.abs(v)}`)}
+                      </td>
+                      <td style={{ fontSize: 11, color: '#6B7280', maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '8px 0' }}>
+                        {log.variance_comment || '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 16, padding: 12, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, fontSize: 12, color: '#065F46' }}>
+            <strong>✅ Stock Status:</strong> All confirmed productions have been added to inventory. Ingredients automatically adjusted based on variance.
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
 
 export default function CashierDashboard() {
   const nav = useNavigate()
@@ -879,9 +921,7 @@ export default function CashierDashboard() {
       const processedOrders = new Set()
 
       res.forEach(p => {
-        if (p.methodLabel !== 'CR/Loan') {
-          totalAmount += Number(p.amount || 0)
-        }
+        totalAmount += Number(p.amount || 0)
 
         // Count products (only once per order to avoid duplicating items on split payments)
         if (p.rawItems && p.orderId && !processedOrders.has(p.orderId)) {
