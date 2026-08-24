@@ -3399,29 +3399,29 @@ export default function Owner() {
                     <button
                       type="button"
                       className="btn outline tiny"
-                      style={{ flex: 1, minWidth: 70 }}
+                      style={{ flex: 1, minWidth: 60, padding: '6px 8px', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                       onClick={() => openStockItemHistory(item)}
                     >📜 History</button>
 
                     <button
                       type="button"
                       className="btn tiny"
-                      style={{ flex: 1, minWidth: 70, background: 'rgba(251,146,60,0.1)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.3)' }}
+                      style={{ flex: 1, minWidth: 80, padding: '6px 8px', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: 'rgba(251,146,60,0.1)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.3)' }}
                       onClick={() => restockWarehouse(item.id, isIng ? 'INGREDIENT' : 'MENU_ITEM', item.warehouse_qty || 0)}
-                    >📦 Restock Warehouse</button>
+                    >📦 Warehouse</button>
 
                     <button
                       type="button"
                       className="btn tiny"
-                      style={{ flex: 1, minWidth: 70, background: 'rgba(34,197,94,0.1)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.3)' }}
+                      style={{ flex: 1, minWidth: 80, padding: '6px 8px', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: 'rgba(34,197,94,0.1)', color: '#22C55E', border: '1px solid rgba(34,197,94,0.3)' }}
                       onClick={() => restoreShopFloorStock(item.id, isIng ? 'INGREDIENT' : 'MENU_ITEM', item.stock || 0)}
-                    >🏪 Restore Floor Stock</button>
+                    >🏪 Floor</button>
 
                     {canEdit && isIng && ing && (
                       <button
                         type="button"
                         className="btn tiny primary"
-                        style={{ flex: 1, minWidth: 70 }}
+                        style={{ flex: 1, minWidth: 60, padding: '6px 8px', fontSize: '11px' }}
                         onClick={() => { setIngForm(ing); setTab('inventory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                       >✏️ Edit</button>
                     )}
@@ -3429,7 +3429,7 @@ export default function Owner() {
                       <button
                         type="button"
                         className="btn tiny primary"
-                        style={{ flex: 1, minWidth: 70 }}
+                        style={{ flex: 1, minWidth: 60, padding: '6px 8px', fontSize: '11px' }}
                         onClick={() => { editMenu(menuItem); setShowMenuForm(true); setTab('menu'); setTimeout(() => document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
                       >✏️ Edit</button>
                     )}
