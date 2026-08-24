@@ -783,6 +783,7 @@ export default function CashierDashboard() {
   const [pinError, setPinError] = useState('')
   const [showRemovalPinModal, setShowRemovalPinModal] = useState(false) // PIN modal for removing items
   const [pendingItemRemovalId, setPendingItemRemovalId] = useState(null) // Which item is being removed
+  const [pendingClearAllItems, setPendingClearAllItems] = useState(false) // Flag for clear all action
   const [qtyById, setQtyById] = useState({})
   const [initialQtyById, setInitialQtyById] = useState({})
   
@@ -1281,19 +1282,26 @@ export default function CashierDashboard() {
         return
       }
 
-      // PIN verified - now allow the item removal
-      const initialQty = initialQtyById[pendingItemRemovalId] || 0
-      setQtyById(m => {
-        const copy = { ...m, [pendingItemRemovalId]: initialQty - 1 }
-        if (copy[pendingItemRemovalId] <= 0) delete copy[pendingItemRemovalId]
-        return copy
-      })
+      // PIN verified - now allow the action
+      if (pendingClearAllItems) {
+        // Clear all items
+        setQtyById({})
+        setPendingClearAllItems(false)
+      } else if (pendingItemRemovalId) {
+        // Remove single item
+        const initialQty = initialQtyById[pendingItemRemovalId] || 0
+        setQtyById(m => {
+          const copy = { ...m, [pendingItemRemovalId]: initialQty - 1 }
+          if (copy[pendingItemRemovalId] <= 0) delete copy[pendingItemRemovalId]
+          return copy
+        })
+        setPendingItemRemovalId(null)
+      }
 
       // Close modal
       setShowRemovalPinModal(false)
       setPinInput('')
       setPinError('')
-      setPendingItemRemovalId(null)
     } catch (err) {
       setPinError(err.message)
     }
@@ -1771,11 +1779,39 @@ export default function CashierDashboard() {
                              >
                                <HiOutlinePlusCircle />
                              </button>
+                             {editId && (
+                               <button
+                                 onClick={() => {
+                                   const nextQty = qtyById[l.menuItemId] - 1;
+                                   setQty(l.menuItemId, nextQty);
+                                 }}
+                                 style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', fontSize: 20, marginLeft: 8 }}
+                                 title="Remove item"
+                               >
+                                 <HiOutlineTrash />
+                               </button>
+                             )}
                           </div>
                        </div>
                      ))
                  )}
                </div>
+               {editId && (
+                 <div style={{ padding: '8px 0', borderTop: '1px solid #E6CCB2', display: 'flex', gap: 8, marginBottom: 8 }}>
+                   <button
+                     className="cashier-btn"
+                     onClick={() => {
+                       setPendingClearAllItems(true)
+                       setShowRemovalPinModal(true)
+                       setPinInput('')
+                       setPinError('')
+                     }}
+                     style={{ flex: 1, background: '#EF4444', borderColor: '#DC2626', fontSize: 12, padding: '6px 12px' }}
+                   >
+                     🗑️ Clear All Items
+                   </button>
+                 </div>
+               )}
                <div className="cashier-ticket-footer">
                   <div className="cashier-total-row">
                     <span>Subtotal</span>
@@ -2696,9 +2732,12 @@ export default function CashierDashboard() {
       {showRemovalPinModal && (
         <div className="cashier-modal-overlay">
           <div className="cashier-modal" style={{ maxWidth: 360 }}>
-            <h3 style={{ marginBottom: 8 }}>🔒 Confirm Item Removal</h3>
+            <h3 style={{ marginBottom: 8 }}>🔒 {pendingClearAllItems ? 'Confirm Clear All Items' : 'Confirm Item Removal'}</h3>
             <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
-              Enter the cashier/manager PIN (same as Awaiting Payment tab) to remove this item from the order
+              {pendingClearAllItems 
+                ? 'Enter the cashier/manager PIN to remove all items from this order'
+                : 'Enter the cashier/manager PIN (same as Awaiting Payment tab) to remove this item from the order'
+              }
             </p>
             <form onSubmit={confirmRemovalPin}>
               {pinError && <div style={{ marginBottom: 12, fontSize: 13, color: '#DC2626' }}>{pinError}</div>}
@@ -2715,6 +2754,7 @@ export default function CashierDashboard() {
                 <button type="button" className="cashier-btn-close-shift" onClick={() => { 
                   setShowRemovalPinModal(false); 
                   setPendingItemRemovalId(null)
+                  setPendingClearAllItems(false)
                   setPinInput(''); 
                   setPinError(''); 
                 }}>Cancel</button>
