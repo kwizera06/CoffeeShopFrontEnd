@@ -144,6 +144,7 @@ export default function Owner() {
   const [productActionMenu, setProductActionMenu] = useState(null)
   const [stockHistory, setStockHistory] = useState(null)
   const [ingredientStockHistory, setIngredientStockHistory] = useState(null)
+  const [showStockHistoryModal, setShowStockHistoryModal] = useState(false)
   const [linkedProducts, setLinkedProducts] = useState(null)
   const [managerAdditions, setManagerAdditions] = useState([])
   const [managerAdditionsLoading, setManagerAdditionsLoading] = useState(false)
@@ -3489,8 +3490,128 @@ export default function Owner() {
           <p style={{ margin: '16px 0 0', fontSize: 12, color: '#6B7280' }}>
             Click History on any card to see every stock movement from the beginning.
           </p>
+
+          {/* Stock Deductions History for Prepared Products */}
+          <div style={{ marginTop: 40, paddingTop: 20, borderTop: '2px solid var(--admin-border)' }}>
+            <header className="am-header" style={{ marginBottom: 20 }}>
+              <div className="am-title">
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1D3557' }}>📊 Stock Deductions - Prepared Products</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>View how prepared product stock has been deducted from sales</p>
+              </div>
+            </header>
+
+            <div style={{ background: 'var(--admin-card-bg)', borderRadius: 16, border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--admin-header-bg)', borderBottom: '1px solid var(--admin-border)' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#6B7280' }}>PREPARED PRODUCT</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#6B7280' }}>CURRENT STOCK</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#6B7280' }}>STANDARD YIELD</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#6B7280' }}>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {menu.filter(m => m.is_recipe).length > 0 ? (
+                    menu.filter(m => m.is_recipe).map(product => (
+                      <tr key={product.id} style={{ borderBottom: '1px solid var(--admin-border)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.02)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#1D3557' }}>{product.name}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, color: '#6B7280' }}>
+                          <span style={{ background: product.stock_level <= 0 ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: product.stock_level <= 0 ? '#DC2626' : '#059669', padding: '4px 10px', borderRadius: 6, fontWeight: 700, fontSize: 12 }}>
+                            {product.stock_level || 0} pcs
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, color: '#6B7280' }}>{product.standard_yield || product.recipe_reference_yield || 1}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                          <button 
+                            className="btn tiny primary"
+                            onClick={async () => {
+                              try {
+                                const data = await api(`/api/shop/owner/stock-history?itemId=${product.id}&itemType=MENU_ITEM`)
+                                setStockHistory({ ...data, productName: product.name, unit: 'pcs', itemType: 'MENU_ITEM' })
+                                setShowStockHistoryModal(true)
+                              } catch (err) {
+                                setError(err.message)
+                              }
+                            }}
+                            style={{ minWidth: 80 }}
+                          >
+                            📋 History
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: '#6B7280', fontSize: 13 }}>
+                        No prepared products created yet. Create recipes in the Menu section first.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       ) : null}
+
+      {/* Stock History Modal */}
+      {showStockHistoryModal && stockHistory && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{stockHistory.productName}</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>Stock deduction history</p>
+              </div>
+              <button onClick={() => setShowStockHistoryModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6B7280' }}>✕</button>
+            </div>
+
+            {stockHistory.movements && stockHistory.movements.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {stockHistory.movements.map((move, idx) => (
+                  <div key={idx} style={{ padding: 12, background: '#F9FAFB', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+                      <div>
+                        <span style={{ 
+                          fontSize: 11, 
+                          fontWeight: 700, 
+                          textTransform: 'uppercase', 
+                          color: move.movement_type === 'SALE_DEDUCTION' ? '#DC2626' : move.movement_type === 'PRODUCTION_OUTPUT' ? '#059669' : '#3B82F6',
+                          background: move.movement_type === 'SALE_DEDUCTION' ? 'rgba(220,38,38,0.1)' : move.movement_type === 'PRODUCTION_OUTPUT' ? 'rgba(5,150,105,0.1)' : 'rgba(59,130,246,0.1)',
+                          padding: '2px 8px',
+                          borderRadius: 4
+                        }}>
+                          {move.movement_type === 'SALE_DEDUCTION' ? '📉 Deducted (Sale)' : move.movement_type === 'PRODUCTION_OUTPUT' ? '📈 Added (Production)' : move.movement_type}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>{new Date(move.created_at).toLocaleDateString()} {new Date(move.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      <div>
+                        <span style={{ fontSize: 10, color: '#6B7280', display: 'block', marginBottom: 2 }}>Previous Stock</span>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{move.previous_stock} {stockHistory.unit}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 10, color: '#6B7280', display: 'block', marginBottom: 2 }}>Quantity</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: move.quantity < 0 ? '#DC2626' : '#059669' }}>{move.quantity > 0 ? '+' : ''}{move.quantity}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 10, color: '#6B7280', display: 'block', marginBottom: 2 }}>New Stock</span>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{move.new_stock} {stockHistory.unit}</span>
+                      </div>
+                    </div>
+                    {move.notes && <div style={{ marginTop: 8, fontSize: 11, color: '#6B7280', fontStyle: 'italic' }}>Note: {move.notes}</div>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 24, textAlign: 'center', color: '#6B7280' }}>
+                No stock movements recorded yet for this product.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {tab === 'requested_order' && ownerAccess ? (
         <>

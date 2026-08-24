@@ -169,8 +169,9 @@ function ProductionRecordingScreen() {
       // If no recipe, show create recipe modal
       if (e.message?.includes('NO_RECIPE') || e.message?.includes('not found')) {
         setShowRecipeModal(true)
+        const productStandardYield = selectedProduct?.standardYield || 1
         setRecipeForm({
-          standardYield: '1',
+          standardYield: String(productStandardYield),
           ingredients: []
         })
       }
@@ -178,8 +179,10 @@ function ProductionRecordingScreen() {
   }
 
   // Calculate batches and ingredient deductions
+  // Use recipe's standardYield, fallback to product's if not available
+  const standardYield = recipe?.standardYield || selectedProduct?.standardYield || 1
   const batchesNeeded = recipe && quantityToAdd > 0 
-    ? parseFloat(quantityToAdd) / recipe.standardYield 
+    ? parseFloat(quantityToAdd) / standardYield 
     : 0
 
   const scaledIngredients = recipe && quantityToAdd > 0
@@ -190,15 +193,49 @@ function ProductionRecordingScreen() {
       }))
     : (recipe?.ingredients || [])
 
+  // Check if recipe is complete (has ingredients)
+  const hasCompleteRecipe = recipe && recipe.ingredients && recipe.ingredients.length > 0
+
   // Check if all ingredients are zero
   const allIngredientsZero = scaledIngredients.length > 0 && 
     scaledIngredients.every(ing => ing.currentStock <= 0)
+
+  // Check if any ingredient would go negative
+  const hasInsufficientStock = scaledIngredients.some(ing => ing.remaining < 0)
 
   async function handleRecordProduction(e) {
     e.preventDefault()
     setError('')
     setSuccess('')
-    if (!selectedProduct || !recipe) return
+    
+    // BLOCK: Recipe is required
+    if (!selectedProduct) {
+      setError('⚠️ Select a product first')
+      return
+    }
+    
+    if (!recipe) {
+      setError('🛑 RECIPE REQUIRED: This product has no recipe. Create a recipe first before recording production.')
+      return
+    }
+    
+    // BLOCK: Recipe must have ingredients
+    if (!recipe.ingredients || recipe.ingredients.length === 0) {
+      setError('🛑 INCOMPLETE RECIPE: Add ingredients to the recipe before recording production.')
+      return
+    }
+
+    // BLOCK: No negative stock - check if any ingredient would go negative
+    const hasInsufficientStock = scaledIngredients.some(ing => ing.remaining < 0)
+    if (hasInsufficientStock) {
+      const insufficientItems = scaledIngredients
+        .filter(ing => ing.remaining < 0)
+        .map(ing => `${ing.name} (need ${ing.deduction.toFixed(2)}, have ${ing.currentStock.toFixed(2)})`)
+        .join('\n')
+      setError(`❌ INSUFFICIENT STOCK:\n${insufficientItems}\n\nCannot proceed with negative stock.`)
+      return
+    }
+    
     const qty = parseFloat(quantityToAdd)
     if (!qty || qty <= 0) { 
       setError('Enter a valid quantity to add'); 
@@ -274,7 +311,7 @@ function ProductionRecordingScreen() {
   }
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24, position: 'relative', zIndex: 1, overflow: 'visible' }}>
       {/* Success Message */}
       {success && (
         <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)',
@@ -412,7 +449,7 @@ function ProductionRecordingScreen() {
       )}
 
       {/* Production Form */}
-      <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)' }}>
+      <div style={{ background: '#FFFFFF', padding: 24, borderRadius: 16, border: '1px solid var(--pos-border)', overflow: 'visible' }}>
         <h3 style={{ margin: '0 0 4px', fontWeight: 800, color: '#1D3557', fontSize: 16 }}>
           <HiOutlineBeaker style={{ verticalAlign: 'middle', marginRight: 8 }} />
           Record Production
@@ -420,10 +457,10 @@ function ProductionRecordingScreen() {
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
           Add finished product quantity to stock. Ingredients will be auto-deducted based on recipe.
         </p>
-        <form onSubmit={handleRecordProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div>
+        <form onSubmit={handleRecordProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'relative', overflow: 'visible', zIndex: 1 }}>
+          <div style={{ position: 'relative', zIndex: 100 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>Prepared Product</label>
-            <div style={{ position: 'relative', marginTop: 4 }}>
+            <div style={{ position: 'relative', marginTop: 4, overflow: 'visible' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -448,57 +485,6 @@ function ProductionRecordingScreen() {
                   }}
                 />
               </div>
-
-              {/* Search Results Dropdown */}
-              {productionSearch && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  marginTop: 4,
-                  background: '#FFFFFF',
-                  border: '2px solid #3B82F6',
-                  borderRadius: '12px',
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  zIndex: 2000,
-                  boxShadow: '0 8px 24px rgba(59, 130, 246, 0.2)'
-                }}>
-                  {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length > 0 ? (
-                    <div>
-                      {products
-                        .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
-                        .map((p) => (
-                          <div
-                            key={p.id}
-                            onClick={() => {
-                              onProductSelect(p.id);
-                              setProductionSearch('');
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #F3F4F6',
-                              transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#F0F9FF'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = '#FFFFFF'}
-                          >
-                            <div style={{ fontWeight: 700, color: '#111827', marginBottom: 2 }}>{p.name}</div>
-                            <div style={{ fontSize: 11, color: '#6B7280' }}>
-                              Current stock: {p.currentStock} | Standard yield: {p.standardYield}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div style={{ padding: '24px 16px', textAlign: 'center', color: '#DC2626', fontSize: 13 }}>
-                      No products found matching "{productionSearch}"
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -526,15 +512,23 @@ function ProductionRecordingScreen() {
             </div>
           )}
 
-          {recipe && (
+          {/* Show form fields when product selected (with or without recipe) */}
+          {selectedProduct && (
             <>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>
                   Quantity to Add (units)
                 </label>
-                <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#9CA3AF' }}>
-                  Standard yield: {recipe.standardYield} units per batch. Current stock: {selectedProduct?.currentStock || 0}
-                </p>
+                {recipe && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#9CA3AF' }}>
+                    Standard yield: {standardYield} units per batch. Current stock: {selectedProduct?.currentStock || 0}
+                  </p>
+                )}
+                {!recipe && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#F59E0B' }}>
+                    ⚠️ Create a recipe first to see production details
+                  </p>
+                )}
                 <input
                   type="number"
                   min="0.1"
@@ -542,8 +536,9 @@ function ProductionRecordingScreen() {
                   required
                   value={quantityToAdd}
                   onChange={e => setQuantityToAdd(e.target.value)}
-                  placeholder={`e.g. ${recipe.standardYield}`}
+                  placeholder="e.g. 1"
                   style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
+                  disabled={!recipe}
                 />
               </div>
 
@@ -557,14 +552,18 @@ function ProductionRecordingScreen() {
                   style={{ width: '100%', padding: '8px 12px', marginTop: 4, border: '1px solid #D1D5DB', borderRadius: 8 }}
                 />
               </div>
+            </>
+          )}
 
+          {recipe && (
+            <>
               {quantityToAdd > 0 && scaledIngredients.length > 0 && (
                 <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
                   <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#1D3557' }}>
                     Ingredients to Deduct ({batchesNeeded.toFixed(2)} batches)
                   </p>
                   <p style={{ margin: '0 0 12px', fontSize: 11, color: '#6B7280' }}>
-                    Calculation: {quantityToAdd} units ÷ {recipe.standardYield} = {batchesNeeded.toFixed(2)} batches
+                    Calculation: {quantityToAdd} units ÷ {standardYield} = {batchesNeeded.toFixed(2)} batches
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {scaledIngredients.map((ing, idx) => (
@@ -610,17 +609,17 @@ function ProductionRecordingScreen() {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button 
                   type="submit" 
-                  disabled={busy || !quantityToAdd || allIngredientsZero} 
+                  disabled={busy || !quantityToAdd || allIngredientsZero || !hasCompleteRecipe || hasInsufficientStock} 
                   style={{
-                    flex: 1,
+                  flex: 1,
                     borderRadius: 10, 
                     height: 48, 
                     fontSize: 15, 
                     fontWeight: 700,
-                    background: (busy || !quantityToAdd || allIngredientsZero) ? '#D1D5DB' : '#10B981', 
+                    background: (busy || !quantityToAdd || allIngredientsZero || !hasCompleteRecipe || hasInsufficientStock) ? '#D1D5DB' : '#10B981', 
                     color: 'white', 
                     border: 'none', 
-                    cursor: (busy || !quantityToAdd || allIngredientsZero) ? 'not-allowed' : 'pointer'
+                    cursor: (busy || !quantityToAdd || allIngredientsZero || !hasCompleteRecipe || hasInsufficientStock) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {busy ? 'Recording…' : '✅ Record Production'}
@@ -655,6 +654,57 @@ function ProductionRecordingScreen() {
           )}
         </form>
       </div>
+
+      {/* Search Results Dropdown - RENDERED OUTSIDE FORM */}
+      {productionSearch && (
+        <div style={{
+          position: 'fixed',
+          width: 'calc(100% - 200px)',
+          background: '#FFFFFF',
+          border: '2px solid #3B82F6',
+          borderRadius: '12px',
+          maxHeight: '400px',
+          overflowY: 'auto',
+          zIndex: 9999,
+          boxShadow: '0 12px 32px rgba(59, 130, 246, 0.35)',
+          pointerEvents: 'auto',
+          left: 24,
+          top: 'auto'
+        }}>
+          {products.filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase())).length > 0 ? (
+            <div>
+              {products
+                .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      onProductSelect(p.id);
+                      setProductionSearch('');
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #F3F4F6',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#F0F9FF'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#FFFFFF'}
+                  >
+                    <div style={{ fontWeight: 700, color: '#111827', marginBottom: 2 }}>{p.name}</div>
+                    <div style={{ fontSize: 11, color: '#6B7280' }}>
+                      Current stock: {p.currentStock} | Standard yield: {p.standardYield}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: '#DC2626', fontSize: 13 }}>
+              No products found matching "{productionSearch}"
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
