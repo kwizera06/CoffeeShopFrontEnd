@@ -1270,7 +1270,7 @@ export default function CashierDashboard() {
     }
 
     try {
-      // Find a cashier/manager with matching security_key (same as Ready tab gate)
+      // Find a cashier/manager with matching security_key
       const approver = staff.find(s =>
         (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') &&
         s.security_key === pinInput.trim()
@@ -1278,6 +1278,16 @@ export default function CashierDashboard() {
       
       if (!approver) {
         setPinError('Incorrect PIN or insufficient permissions')
+        setPinInput('')
+        return
+      }
+
+      // IMPORTANT: Only allow PIN from the cashier who opened the current shift
+      // Debug logs
+      console.log('Shift opened_by:', shift?.opened_by, 'Approver ID:', approver?.id, 'Match:', shift?.opened_by === approver?.id)
+      
+      if (shift && shift.opened_by && shift.opened_by !== approver.id) {
+        setPinError('This PIN belongs to a different cashier. Only the shift opener can modify orders.')
         setPinInput('')
         return
       }
@@ -2818,6 +2828,17 @@ export default function CashierDashboard() {
                   (s.role === 'CASHIER' || s.role === 'MANAGER' || s.role === 'SHOP_ADMIN') &&
                   s.security_key === readyPinInput.trim()
                 )
+                
+                // Debug logs
+                console.log('Ready Tab - Shift opened_by:', shift?.opened_by, 'Approver ID:', approver?.id, 'Match:', shift?.opened_by === approver?.id)
+                
+                // IMPORTANT: Only allow PIN from the cashier who opened the current shift
+                if (approver && shift && shift.opened_by && shift.opened_by !== approver.id) {
+                  setReadyPinError('This PIN belongs to a different cashier. Only the shift opener can access Ready tab.')
+                  setReadyPinInput('')
+                  return
+                }
+                
                 if (approver) {
                   setReadyTabUnlocked(true)
                   setShowReadyPinModal(false)
