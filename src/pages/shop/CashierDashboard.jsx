@@ -815,27 +815,9 @@ export default function CashierDashboard() {
   const [pending, setPending] = useState([])
   const [ready, setReady] = useState([])
 
-  // Filter ready orders to show ONLY current shift orders
-  // Hide orders when shift is closed - ONLY show orders from current shift
-  const filteredReadyOrders = (ready || []).filter(o => {
-    if (!shift) {
-      console.log('🔍 No active shift - hiding all ready orders');
-      return false;
-    }
-    
-    // Check if order was created during current shift
-    const orderCreatedTime = new Date(o.createdAt).getTime();
-    const shiftOpenedTime = new Date(shift.opened_at).getTime();
-    const orderIsFromCurrentShift = orderCreatedTime >= shiftOpenedTime;
-    
-    if (!orderIsFromCurrentShift) {
-      console.log(`🔍 Order ${o.id} FILTERED OUT - created before shift opened`);
-      console.log(`   Order time: ${new Date(o.createdAt).toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}`);
-      console.log(`   Shift time: ${new Date(shift.opened_at).toLocaleString('en-GB', { timeZone: 'Africa/Kigali' })}`);
-    }
-    
-    return orderIsFromCurrentShift;
-  });
+  // Ready orders should always be visible for payment, regardless of shift
+  // (they were created in previous shifts and need to be paid before closing)
+  const filteredReadyOrders = (ready || []);
   
   if (ready.length > 0 || !shift) {
     console.log(`📊 [Refund] ready.length=${ready.length}, shift=${shift ? '✓ active' : '✗ closed'}, filtered=${filteredReadyOrders.length}`);
@@ -1962,7 +1944,7 @@ export default function CashierDashboard() {
         {tab === 'ready' && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <div className="cashier-billing-grid">
-              {filteredReadyOrders.length === 0 && <p className="muted" style={{padding: 24}}>{!shift ? 'No active shift. Open a shift to see orders.' : 'No orders waiting for payment in current shift.'}</p>}
+              {filteredReadyOrders.length === 0 && <p className="muted" style={{padding: 24}}>No orders waiting for payment.</p>}
               {filteredReadyOrders.map(o => (
                 <div key={o.id} className="cashier-order-card" style={{borderColor: '#E6CCB2', display: 'flex', flexDirection: 'column'}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '8px'}}>
