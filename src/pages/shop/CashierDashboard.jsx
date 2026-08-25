@@ -1842,7 +1842,7 @@ export default function CashierDashboard() {
         {/* PENDING TAB */}
         {tab === 'pending' && (
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            <div className="cashier-billing-grid">
+            <div className="cashier-billing-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px', padding: '16px' }}>
               {pending.length === 0 && <p className="muted" style={{padding: 24}}>No pending orders.</p>}
               {pending.map(o => {
                 const isChefReady = o.status === 'CHEF_READY'
@@ -1864,14 +1864,14 @@ export default function CashierDashboard() {
                 <div 
                   key={o.id} 
                   className="cashier-order-card" 
-                  style={{ borderLeft: isChefReady ? '3px solid #EAB308' : isKitchen ? '3px solid #4ADE80' : '3px solid #60A5FA' }}
+                  style={{ borderLeft: isChefReady ? '3px solid #EAB308' : isKitchen ? '3px solid #4ADE80' : '3px solid #60A5FA', display: 'flex', flexDirection: 'column', minHeight: '320px' }}
                   onPointerDown={handlePointerDown}
                   onPointerUp={handlePointerUp}
                   onPointerLeave={handlePointerUp}
                 >
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'flex-start', marginBottom: '8px'}}>
                     <div className="table-badge">Table {o.tableNumber}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       {isChefReady 
                         ? <span style={{ fontSize: 10, fontWeight: 800, color: '#EAB308', background: 'rgba(234,179,8,0.12)', padding: '2px 8px', borderRadius: 20 }}>🔔 READY IN KITCHEN</span>
                         : isKitchen
@@ -1881,17 +1881,17 @@ export default function CashierDashboard() {
                       <div style={{fontSize: 12, color:'#8C9993'}}>{new Date(o.createdAt).toLocaleTimeString('en-GB', { timeZone: 'Africa/Kigali' })}</div>
                     </div>
                   </div>
-                  <div style={{fontSize: 14, color:'#8C9993'}}>Waiter: {o.waiterName}</div>
+                  <div style={{fontSize: 13, color:'#8C9993', marginBottom: '8px'}}>Waiter: {o.waiterName}</div>
                   
-                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 12, borderRadius: 8, fontSize: 13}}>
+                  <div style={{background: '#1C1C1C', color: '#E8E8E8', padding: 10, borderRadius: 8, fontSize: 12, marginBottom: '12px', flex: 1, overflowY: 'auto'}}>
                      {o.lines.map((l, i) => (
-                       <div key={i} style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                         <strong style={{ color: l.needsKitchen ? '#FB923C' : '#4ADE80', minWidth: 28 }}>
+                       <div key={i} style={{ marginBottom: 3, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                         <strong style={{ color: l.needsKitchen ? '#FB923C' : '#4ADE80', minWidth: 24 }}>
                            {l.quantity}x
                          </strong>
-                         <span style={{ flex: 1 }}>{l.itemName}</span>
+                         <span style={{ flex: 1, fontSize: 12 }}>{l.itemName}</span>
                          {l.needsKitchen && (
-                           <span style={{ fontSize: 9, fontWeight: 800, color: '#FB923C', background: 'rgba(251,146,60,0.15)', padding: '1px 6px', borderRadius: 10, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                           <span style={{ fontSize: 8, fontWeight: 800, color: '#FB923C', background: 'rgba(251,146,60,0.15)', padding: '1px 4px', borderRadius: 8, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>
                              🍳 KITCHEN
                            </span>
                          )}
@@ -1899,13 +1899,13 @@ export default function CashierDashboard() {
                      ))}
                   </div>
 
-                  <div style={{display: 'flex', gap: 8, marginTop: 'auto'}}>
+                  <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 'auto'}}>
                      {(isKitchen || isChefReady || isDraft) && (
-                       <button className="cashier-btn-close-shift active" style={{flex: 1, padding: 0}} onClick={()=>markReady(o.id)} disabled={busy}>
-                         <HiOutlineCheckCircle /> Mark Ready to Pay
+                       <button className="cashier-btn-close-shift active" style={{flex: 1, padding: '8px', fontSize: '12px', minWidth: '120px'}} onClick={()=>markReady(o.id)} disabled={busy}>
+                         ✓ Ready
                        </button>
                      )}
-                     <button title="Print Preview" className="cashier-btn-close-shift" style={{padding: '0 12px', borderColor: '#E6CCB2', color: '#E6CCB2'}} onClick={() => {
+                     <button title="Print Preview" className="cashier-btn-close-shift" style={{padding: '8px 10px', borderColor: '#E6CCB2', color: '#E6CCB2', fontSize: '14px'}} onClick={() => {
                         const previewOrder = {
                           ...o,
                           total: o.total ?? o.lines.reduce((s, l) => s + Number(l.quantity) * Number(l.price || 0), 0),
@@ -1922,16 +1922,14 @@ export default function CashierDashboard() {
                           momoNumber: context?.momoNumber
                         });
                      }}>
-                        <HiOutlinePrinter />
+                        🖨️
                      </button>
-                     <button className="cashier-btn-close-shift" style={{ flex: (!isKitchen && !isChefReady) ? 1 : undefined, padding: (!isKitchen && !isChefReady) ? undefined : '0 12px' }} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
-                        <HiOutlinePencilSquare /> {(!isKitchen && !isChefReady) && 'Edit'}
+                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: '8px', borderColor: '#8B7355', color: '#E6CCB2', fontSize: '12px', minWidth: '100px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
+                        ✏️ Edit
                      </button>
-                     {showAdmin && (
-                       <button className="cashier-btn-close-shift" style={{padding: '0 12px', color: '#EF4444', borderColor: '#EF4444'}} onClick={() => cancelOrderRequest(o.id)} title="Cancel Order">
-                          <HiOutlineTrash />
-                       </button>
-                     )}
+                     <button className="cashier-btn-close-shift" style={{padding: '8px 10px', color: '#EF4444', borderColor: '#EF4444', fontSize: '14px'}} onClick={() => cancelOrderRequest(o.id)} title="Delete Order">
+                        🗑️
+                     </button>
                   </div>
                 </div>
                 )
