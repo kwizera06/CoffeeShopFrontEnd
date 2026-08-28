@@ -1016,7 +1016,7 @@ export default function Owner() {
       category_group: CATEGORY_MAP[menuForm.category] || 'DRINK',
       available: menuForm.available,
       is_recipe: menuForm.isRecipe,
-      recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+      standard_yield: Number(menuForm.standard_yield || 1),
       stock_level: Number(menuForm.stockLevel || 0),
       buying_price: Number(menuForm.buyingPrice || 0),
       recipe: menuForm.isRecipe ? menuForm.productRecipe : []
@@ -1030,7 +1030,7 @@ export default function Owner() {
       setMenuForm({ 
         id: '', name: '', price: '', category: 'Hot Coffee', 
         available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '',
-        recipe_reference_yield: 1
+        standard_yield: 1
       })
       setSelectedRecipeItem(null)
       setShowMenuForm(false)
@@ -1107,7 +1107,7 @@ export default function Owner() {
         return null;
       }).filter(Boolean),
       isRecipe: mi.is_recipe || currentRecipe.length > 0,
-      recipe_reference_yield: mi.recipe_reference_yield || 1,
+      standard_yield: mi.standard_yield || 1,
       stockLevel: autoStock,
       buyingPrice: autoBuyingPrice
     })
@@ -1669,8 +1669,8 @@ export default function Owner() {
                   <input
                     className="am-input"
                     type="number"
-                    value={menuForm.recipe_reference_yield || 1}
-                    onChange={(e) => setMenuForm((f) => ({ ...f, recipe_reference_yield: Number(e.target.value) }))}
+                    value={menuForm.standard_yield !== undefined ? menuForm.standard_yield : 1}
+                    onChange={(e) => setMenuForm((f) => ({ ...f, standard_yield: e.target.value }))}
                     required
                   />
                 </label>
@@ -1810,7 +1810,7 @@ export default function Owner() {
                 {menuForm.id ? 'Save Changes' : 'Add to Menu'}
               </button>
               <button type="button" className="btn ghost" onClick={() => {
-                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '', recipe_reference_yield: 1 })
+                setMenuForm({ id: '', name: '', price: '', category: 'Hot Coffee', available: true, productRecipe: [], isRecipe: false, stockLevel: '', buyingPrice: '', standard_yield: 1 })
                 setSelectedRecipeItem(null)
                 setShowMenuForm(false)
               }}>
@@ -2527,7 +2527,7 @@ export default function Owner() {
                                            }}>
                                              {Math.floor((Math.min(...(menuForm.productRecipe || []).map(r => 
                                                r.quantity_required > 0 ? (r.stock_level / r.quantity_required) : Infinity
-                                             )) || 0) * (menuForm.recipe_reference_yield || 81)).toLocaleString()} <small style={{ fontSize: 10 }}>pcs</small>
+                                             )) || 0) * (menuForm.standard_yield || 1)).toLocaleString()} <small style={{ fontSize: 10 }}>pcs</small>
                                            </span>
                                         </div>
                                      </div>
@@ -5156,7 +5156,7 @@ export default function Owner() {
                             body: JSON.stringify({
                               name: menuForm.name,
                               price: Number(menuForm.price || 0),
-                              recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+                              standard_yield: Number(menuForm.standard_yield || 1),
                               category: 'Bakery',
                               is_recipe: true,
                               is_bakery: true,
@@ -5165,7 +5165,7 @@ export default function Owner() {
                               recipe: menuForm.productRecipe || []
                             })
                           });
-                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
+                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, standard_yield: 1 });
                           await reloadCore();
                           alert(`✅ Recipe "${mainItemName}" updated successfully!`);
 
@@ -5177,7 +5177,7 @@ export default function Owner() {
                             body: JSON.stringify({
                               ...menuForm, 
                               price: Number(menuForm.price || 0),
-                              recipe_reference_yield: Number(menuForm.recipe_reference_yield || 1),
+                              standard_yield: Number(menuForm.standard_yield || 1),
                               category: 'Bakery', 
                               is_recipe: true, 
                               is_bakery: true, 
@@ -5197,7 +5197,7 @@ export default function Owner() {
                                   category_group: mainItemName,
                                   available: true,
                                   is_bakery: true,
-                                  recipe_reference_yield: Number(v.standard_yield || 0)
+                                  standard_yield: Number(v.standard_yield || 1)
                                 })
                               });
                             }
@@ -5219,7 +5219,7 @@ export default function Owner() {
                             }
                           }
 
-                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 });
+                          setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, standard_yield: 1 });
                           await reloadCore();
                           alert(`🌟 Recipe "${mainItemName}" and its variants created!`);
                         }
@@ -5232,7 +5232,7 @@ export default function Owner() {
                        </label>
                        <label className="am-field">
                          <span>Base Standard Yield</span>
-                         <input className="am-input" type="number" value={menuForm.recipe_reference_yield || 81} onChange={e => setMenuForm(f => ({...f, recipe_reference_yield: Number(e.target.value)}))} required />
+                         <input className="am-input" type="number" value={menuForm.standard_yield || 1} onChange={e => setMenuForm(f => ({...f, standard_yield: Number(e.target.value)}))} required />
                        </label>
                     </div>
 
@@ -5274,7 +5274,7 @@ export default function Owner() {
                     </div>
 
                     <div style={{ padding: '12px', background: '#F8FAFC', borderRadius: 8, border: '1px dashed #CBD5E1' }}>
-                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>Standard Amounts (for {menuForm.recipe_reference_yield || 81} units)</span>
+                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>Standard Amounts (for {menuForm.standard_yield || 1} units)</span>
                        <div className="stack" style={{ gap: 8, marginTop: 8 }}>
                           <select 
                             className="am-input" 
@@ -5322,7 +5322,7 @@ export default function Owner() {
                         <button 
                           className="btn ghost xl" 
                           type="button" 
-                          onClick={() => setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, recipe_reference_yield: 81 })}
+                          onClick={() => setMenuForm({ id: '', name: '', price: '', category: 'Bakery', category_group: '', available: true, productRecipe: [], variantOutputs: [], is_recipe: true, standard_yield: 1 })}
                         >Cancel</button>
                       )}
                     </div>
@@ -5479,12 +5479,12 @@ export default function Owner() {
                                const recipeData = await api(`/api/shop/owner/recipes/${mid}`);
                                const mi = mid ? menu.find(m => m.id === mid) : null;
                                const recipeItems = Array.isArray(recipeData) ? recipeData : (recipeData?.recipe_items || []);
-                               const stdYield = recipeData?.standard_yield || targetItem?.recipe_reference_yield || 1;
+                               const stdYield = recipeData?.standard_yield || targetItem?.standard_yield || targetItem?.recipe_reference_yield || 1;
                                
                                // Auto-populate related output products in the same group!
                                const variants = menu.filter(m => m.category_group === targetItem.name && m.id !== targetItem.id);
                                const defaultOutputs = variants.length > 0 
-                                 ? variants.map(v => ({ menuItemId: v.id, quantity: v.recipe_reference_yield || 0, unitPrice: v.price }))
+                                 ? variants.map(v => ({ menuItemId: v.id, quantity: v.standard_yield || v.recipe_reference_yield || 0, unitPrice: v.price }))
                                  : [{ menuItemId: targetItem.id, quantity: stdYield, unitPrice: targetItem.price }];
 
                                setProductionForm(f => ({
@@ -5737,7 +5737,7 @@ export default function Owner() {
                             <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>Efficiency</div>
                             {(() => {
                                 const menuItem = menu.find(m => m.id === productionForm.menu_item_id);
-                                const refYield = menuItem?.recipe_reference_yield || 1;
+                                const refYield = menuItem?.standard_yield || menuItem?.recipe_reference_yield || 1;
                                 const totalProduced = (productionForm.outputs || []).reduce((acc, out) => acc + Number(out.quantity), 0);
                                 const expectedYield = (productionForm.batch_size || 1) * refYield;
                                 const efficiency = (totalProduced / (expectedYield || 1)) * 100;

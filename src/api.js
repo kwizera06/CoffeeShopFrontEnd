@@ -72,7 +72,15 @@ async function parseError(res) {
 
 const BASE_URL = import.meta.env.VITE_API_URL || '';
 
-export async function api(path, options = {}) {
+/**
+ * Core API call with mobile-friendly timeouts and automatic retry on transient network failures.
+ * 
+ * Mobile connections (3G/4G/WiFi) can drop briefly. One automatic retry prevents users
+ * from seeing false "Network error" failures when the device momentarily loses signal.
+ * We only retry on network-level failures (TypeError "Failed to fetch"), NOT on HTTP errors
+ * (4xx/5xx) which should be surfaced immediately to the user.
+ */
+export async function api(path, options = {}, _retryCount = 1) {
   const token = getToken()
   const headers = new Headers(options.headers)
   if (options.body != null && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -85,8 +93,9 @@ export async function api(path, options = {}) {
   // Ensure we don't double up on /api/ if path already includes it
   const fullPath = path.startsWith('http') ? path : `${BASE_URL}${path}`
   
-  // Mobile-friendly timeout handling: 30s for POST/PUT, 15s for GET
-  const timeout = (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') ? 30000 : 15000
+  // Mobile-friendly timeout handling: Extended to 60s (POST/PUT) and 30s (GET/DELETE)
+  // to accommodate slower mobile 3G/4G networks without falsely timing out.
+  const timeout = (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') ? 60000 : 30000
   
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
@@ -122,11 +131,20 @@ export async function api(path, options = {}) {
     }
   } catch (e) {
     clearTimeout(timeoutId)
+    
     if (e.name === 'AbortError') {
       throw new Error(`Request timeout after ${timeout/1000}s - check your network connection`)
     }
+    
+    // Retry once on transient network failures (mobile connection drops)
+    if (e instanceof TypeError && e.message.includes('Failed to fetch') && _retryCount > 0) {
+      console.warn(`[API] Network error on ${path}, retrying in 1.5s... (${_retryCount} attempt left)`)
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      return api(path, options, _retryCount - 1)
+    }
+    
     if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
-      throw new Error('Network error - please check your connection')
+      throw new Error('Network error - please check your connection and try again')
     }
     throw e
   }

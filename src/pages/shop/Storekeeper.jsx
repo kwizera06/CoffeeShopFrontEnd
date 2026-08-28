@@ -240,7 +240,7 @@ function ProductionScreen() {
               <option value="">— Select a product —</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} · Std. yield: {p.recipe_reference_yield} pcs
+                  {p.name} · Std. yield: {p.standard_yield || p.recipe_reference_yield || 1} pcs
                 </option>
               ))}
             </select>
