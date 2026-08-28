@@ -1601,7 +1601,7 @@ export default function Owner() {
             </div>
           </header>
 
-          {showMenuForm && canEdit && <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
+          {showMenuForm && <form id="menu-form" onSubmit={saveMenu} className={`am-card am-animate ${menuForm.id || menuForm.category !== 'Hot Coffee' ? 'glow-active' : ''}`} style={{ padding: '32px', marginBottom: 40 }}>
             <h3 style={{ marginBottom: 24, color: '#1D3557', display: 'flex', alignItems: 'center', gap: 12, fontSize: '20px', fontWeight: 800 }}>
               {menuForm.id ? 'Edit Product' : `Add Product to ${menuForm.category}`}
             </h3>
@@ -1949,8 +1949,7 @@ export default function Owner() {
              </div>
           </div>
 
-          {/* Global Add Product button — protected */}
-          {canEdit && (
+          {/* Global Add Product button */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
             <button
               className="btn primary"
@@ -1966,7 +1965,6 @@ export default function Owner() {
               + Add New Product
             </button>
           </div>
-          )}
 
           {(() => {
             const CATEGORIES_PER_PAGE = 3;
@@ -2000,7 +1998,6 @@ export default function Owner() {
                     <span style={{ color: '#1D3557' }}>•</span> {cat}
                     <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 400 }}>{items.length} Products</span>
                   </h3>
-                  {canEdit && (
                   <button 
                     className="btn primary tiny" 
                     onClick={() => {
@@ -2014,7 +2011,6 @@ export default function Owner() {
                   >
                     + Add Product
                   </button>
-                  )}
                 </div>
 
                 <div className="am-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
@@ -2068,23 +2064,23 @@ export default function Owner() {
                                 key={m.id} 
                                 style={{ 
                                   borderBottom: '1px solid #F3F4F6', 
-                                  cursor: canEdit ? 'pointer' : 'default', 
+                                  cursor: 'pointer', 
                                   borderLeft: `4px solid ${rowBorderColor}`,
                                   userSelect: 'none',
                                   WebkitUserSelect: 'none'
                                 }} 
-                                onPointerDown={canEdit ? () => handleProductPointerDown(m) : undefined} 
-                                onPointerUp={canEdit ? handleProductPointerUp : undefined} 
-                                onPointerLeave={canEdit ? handleProductPointerUp : undefined} 
+                                onPointerDown={() => handleProductPointerDown(m)} 
+                                onPointerUp={handleProductPointerUp} 
+                                onPointerLeave={handleProductPointerUp} 
                                 onContextMenu={e => e.preventDefault()}
-                                onClick={canEdit ? () => {
+                                onClick={() => {
                                   editMenu(m);
                                   setShowMenuForm(true);
                                   setTimeout(() => {
                                     document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
                                     document.getElementById('menu-name-input')?.focus();
                                   }, 100);
-                                } : undefined}
+                                }}
                               >
                                 <td style={{ padding: '16px 24px' }}>
                                   <div style={{ fontWeight: 600, color: '#111827' }}>
