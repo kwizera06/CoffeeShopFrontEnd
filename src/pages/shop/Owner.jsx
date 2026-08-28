@@ -2064,23 +2064,23 @@ export default function Owner() {
                                 key={m.id} 
                                 style={{ 
                                   borderBottom: '1px solid #F3F4F6', 
-                                  cursor: 'pointer', 
+                                  cursor: canEdit ? 'pointer' : 'default', 
                                   borderLeft: `4px solid ${rowBorderColor}`,
                                   userSelect: 'none',
                                   WebkitUserSelect: 'none'
                                 }} 
-                                onPointerDown={() => handleProductPointerDown(m)} 
-                                onPointerUp={handleProductPointerUp} 
-                                onPointerLeave={handleProductPointerUp} 
+                                onPointerDown={canEdit ? () => handleProductPointerDown(m) : undefined} 
+                                onPointerUp={canEdit ? handleProductPointerUp : undefined} 
+                                onPointerLeave={canEdit ? handleProductPointerUp : undefined} 
                                 onContextMenu={e => e.preventDefault()}
-                                onClick={() => {
+                                onClick={canEdit ? () => {
                                   editMenu(m);
                                   setShowMenuForm(true);
                                   setTimeout(() => {
                                     document.getElementById('menu-form')?.scrollIntoView({ behavior: 'smooth' });
                                     document.getElementById('menu-name-input')?.focus();
                                   }, 100);
-                                }}
+                                } : undefined}
                               >
                                 <td style={{ padding: '16px 24px' }}>
                                   <div style={{ fontWeight: 600, color: '#111827' }}>
