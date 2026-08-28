@@ -2,7 +2,7 @@
 export const MANAGER_TABS = ['overview', 'reports', 'eod', 'stock', 'loans', 'stock_requests', 'deliveries']
 
 /** Tabs auditors can access (read-only subset) */
-export const AUDITOR_TABS = ['overview', 'reports', 'eod', 'stock', 'loans', 'audit', 'deliveries']
+export const AUDITOR_TABS = ['overview', 'reports', 'eod', 'stock', 'loans', 'audit', 'deliveries', 'menu']
 
 /** Storekeeper has their own dedicated page, not the owner dashboard */
 export const STOREKEEPER_TABS = []

@@ -28,7 +28,7 @@ import './ShopModern.css'
 
 const NAV_ITEMS = [
   { tab: 'overview', label: 'Overview' },
-  { tab: 'menu', label: 'Menu', ownerOnly: true },
+  { tab: 'menu', label: 'Menu' },
   { tab: 'inventory', label: 'Inventory', ownerOnly: true },
   { tab: 'stock', label: 'Stock Levels' },
   { tab: 'loans', label: 'Loans' },
