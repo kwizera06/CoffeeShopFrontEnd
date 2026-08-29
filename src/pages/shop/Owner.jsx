@@ -395,9 +395,9 @@ export default function Owner() {
         warehouse_qty: Number(m.warehouse_qty ?? 0),
       }))
     
-    // Add prepared products (is_recipe = true) with stock > 1 for EOD report
+    // Add prepared products (is_recipe = true) for EOD report and stock tracking
     const preparedProducts = menu
-      .filter(m => m.is_recipe && Number(m.stock_level ?? m.stockLevel ?? 0) > 1)
+      .filter(m => m.is_recipe && Number(m.stock_level ?? m.stockLevel ?? 0) >= 0)
       .map(m => ({
         id: m.id,
         name: m.name,

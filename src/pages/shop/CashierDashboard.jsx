@@ -140,6 +140,12 @@ function ProductionRecordingScreen() {
   })
   const [availableIngredients, setAvailableIngredients] = useState([])
 
+  // Add Recipe Ingredients card state
+  const [addIngredientQtys, setAddIngredientQtys] = useState({}) // { ingredientId: qty }
+  const [addIngredientBusy, setAddIngredientBusy] = useState(false)
+  const [addIngredientSuccess, setAddIngredientSuccess] = useState('')
+  const [addIngredientError, setAddIngredientError] = useState('')
+
   // Load prepared products and ingredients
   useEffect(() => {
     Promise.all([
@@ -202,6 +208,18 @@ function ProductionRecordingScreen() {
 
   // Check if any ingredient would go negative
   const hasInsufficientStock = scaledIngredients.some(ing => ing.remaining < 0)
+
+  // Get only the short/insufficient ingredients
+  const insufficientIngredients = scaledIngredients.filter(ing => ing.remaining < 0)
+
+  // Pre-fill add-ingredient qtys with the shortfall when ingredients become insufficient
+  // (only for ingredients that are ingredients, not menu items)
+  const shortfallQtys = insufficientIngredients.reduce((acc, ing) => {
+    if (ing.ingredientId) {
+      acc[ing.ingredientId] = Math.abs(ing.remaining).toFixed(2)
+    }
+    return acc
+  }, {})
 
   async function handleRecordProduction(e) {
     e.preventDefault()
@@ -307,6 +325,55 @@ function ProductionRecordingScreen() {
       setError(e.message || 'Failed to save recipe')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Handle adding ingredient stock quantities from the Add Recipe Ingredients card
+  async function handleAddIngredientStock(e) {
+    e.preventDefault()
+    setAddIngredientError('')
+    setAddIngredientSuccess('')
+
+    // Build list of updates: use user-entered qtys, fall back to shortfall
+    const updates = insufficientIngredients
+      .filter(ing => ing.ingredientId)
+      .map(ing => ({
+        ingredientId: ing.ingredientId,
+        name: ing.name,
+        unit: ing.unit,
+        quantity: parseFloat(addIngredientQtys[ing.ingredientId] || shortfallQtys[ing.ingredientId] || 0)
+      }))
+      .filter(u => u.quantity > 0)
+
+    if (updates.length === 0) {
+      setAddIngredientError('Enter at least one quantity to add')
+      return
+    }
+
+    setAddIngredientBusy(true)
+    try {
+      await Promise.all(updates.map(u =>
+        api(`/api/shop/cashier/ingredients/${u.ingredientId}/add-stock`, {
+          method: 'POST',
+          body: JSON.stringify({
+            quantity: u.quantity,
+            notes: `Production top-up for ${selectedProduct?.name || 'recipe'}`
+          })
+        })
+      ))
+
+      const addedNames = updates.map(u => `${u.name} (+${u.quantity} ${u.unit || ''})`).join(', ')
+      setAddIngredientSuccess(`✅ Stock added: ${addedNames}. Refreshing recipe...`)
+      setAddIngredientQtys({})
+
+      // Reload recipe to get fresh stock levels
+      const r = await api(`/api/shop/cashier/recipes/${selectedProduct.id}`)
+      setRecipe(r)
+      setAddIngredientSuccess(`✅ Stock added! You can now record production.`)
+    } catch (e) {
+      setAddIngredientError(e.message || 'Failed to add stock')
+    } finally {
+      setAddIngredientBusy(false)
     }
   }
 
@@ -654,6 +721,144 @@ function ProductionRecordingScreen() {
           )}
         </form>
       </div>
+
+      {/* ─── ADD RECIPE INGREDIENTS CARD ─────────────────────────────────── */}
+      {hasInsufficientStock && insufficientIngredients.some(ing => ing.ingredientId) && (
+        <div style={{
+          background: 'linear-gradient(135deg, #FFF7ED 0%, #FEF3C7 100%)',
+          border: '2px solid #F59E0B',
+          borderRadius: 16,
+          padding: 24,
+          boxShadow: '0 4px 20px rgba(245,158,11,0.15)'
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10,
+              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontSize: 20, flexShrink: 0 }}>📦</div>
+            <div>
+              <h4 style={{ margin: 0, color: '#92400E', fontSize: 15, fontWeight: 800 }}>
+                Add Recipe Ingredients
+              </h4>
+              <p style={{ margin: 0, fontSize: 12, color: '#B45309' }}>
+                Some ingredients are short. Add stock below to proceed with production.
+              </p>
+            </div>
+          </div>
+
+          {/* Alert banner */}
+          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+            <div style={{ fontSize: 12, color: '#991B1B', lineHeight: 1.5 }}>
+              <strong>Insufficient stock detected:</strong>&nbsp;
+              {insufficientIngredients.map(ing =>
+                `${ing.name} (have ${(ing.currentStock||0).toFixed(2)}, need ${(ing.deduction||0).toFixed(2)})`
+              ).join(' · ')}
+            </div>
+          </div>
+
+          {/* Success / Error inside the card */}
+          {addIngredientSuccess && (
+            <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)',
+              color: '#065F46', padding: '10px 14px', borderRadius: 10, fontSize: 13,
+              fontWeight: 600, marginBottom: 14 }}>
+              {addIngredientSuccess}
+            </div>
+          )}
+          {addIngredientError && (
+            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+              color: '#B91C1C', padding: '10px 14px', borderRadius: 10, fontSize: 13,
+              marginBottom: 14 }}>
+              {addIngredientError}
+            </div>
+          )}
+
+          <form onSubmit={handleAddIngredientStock} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* One row per insufficient INGREDIENT (skip menu-item components) */}
+            {insufficientIngredients.filter(ing => ing.ingredientId).map(ing => {
+              const shortfall = Math.abs(ing.remaining)
+              const displayShortfall = shortfall.toFixed(2)
+              return (
+                <div key={ing.ingredientId} style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #FDE68A',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <div style={{ fontWeight: 700, color: '#1F2937', fontSize: 13 }}>{ing.name}</div>
+                    <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                      Have <span style={{ color: '#DC2626', fontWeight: 700 }}>{(ing.currentStock||0).toFixed(2)}</span>&nbsp;
+                      · Need <span style={{ color: '#F59E0B', fontWeight: 700 }}>{(ing.deduction||0).toFixed(2)}</span>&nbsp;
+                      · Short by <span style={{ color: '#DC2626', fontWeight: 800 }}>{displayShortfall}</span>&nbsp;{ing.unit||''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Add Qty:</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder={displayShortfall}
+                      value={addIngredientQtys[ing.ingredientId] ?? ''}
+                      onChange={e => setAddIngredientQtys(prev => ({ ...prev, [ing.ingredientId]: e.target.value }))}
+                      style={{
+                        width: 90,
+                        padding: '7px 10px',
+                        border: '2px solid #F59E0B',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        textAlign: 'right',
+                        outline: 'none',
+                        background: '#FFFBEB'
+                      }}
+                    />
+                    <span style={{ fontSize: 12, color: '#6B7280' }}>{ing.unit||'pcs'}</span>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Hint for menu-item components that can't be topped up here */}
+            {insufficientIngredients.some(ing => !ing.ingredientId) && (
+              <div style={{ fontSize: 12, color: '#92400E', padding: '8px 12px',
+                background: 'rgba(245,158,11,0.08)', borderRadius: 8 }}>
+                ℹ️ Some short items are composite products — add their stock via the Storekeeper or Warehouse module.
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={addIngredientBusy}
+              style={{
+                marginTop: 4,
+                padding: '12px 0',
+                background: addIngredientBusy
+                  ? '#D1D5DB'
+                  : 'linear-gradient(135deg, #F59E0B, #D97706)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: addIngredientBusy ? 'not-allowed' : 'pointer',
+                width: '100%',
+                boxShadow: addIngredientBusy ? 'none' : '0 4px 14px rgba(245,158,11,0.35)',
+                transition: 'all 0.2s'
+              }}
+            >
+              {addIngredientBusy ? '⏳ Adding stock…' : '📦 Add Ingredient Stock'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Search Results Dropdown - RENDERED OUTSIDE FORM */}
       {productionSearch && (
