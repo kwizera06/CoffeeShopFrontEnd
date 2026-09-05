@@ -70,7 +70,27 @@ async function parseError(res) {
   }
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  
+  // If a specific URL is set in .env, use it
+  if (envUrl && envUrl !== 'http://localhost:8081') {
+    return envUrl;
+  }
+  
+  // If we're on localhost, keep using localhost:8081
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8081';
+  }
+  
+  // For mobile or other networks, use the same host but with port 8081
+  // This allows: http://192.168.1.100:5173 → http://192.168.1.100:8081
+  const protocol = window.location.protocol; // http: or https:
+  const hostname = window.location.hostname; // IP address or domain
+  return `${protocol}//${hostname}:8081`;
+};
+
+const BASE_URL = getBaseUrl();
 
 /**
  * Core API call with mobile-friendly timeouts and automatic retry on transient network failures.
