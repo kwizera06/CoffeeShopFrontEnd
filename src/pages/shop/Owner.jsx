@@ -396,8 +396,9 @@ export default function Owner() {
       }))
     
     // Add prepared products (is_recipe = true) for EOD report and stock tracking
+    // Include items even if stock is negative so they can be audited/restored
     const preparedProducts = menu
-      .filter(m => m.is_recipe && Number(m.stock_level ?? m.stockLevel ?? 0) >= 0)
+      .filter(m => m.is_recipe)
       .map(m => ({
         id: m.id,
         name: m.name,

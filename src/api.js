@@ -78,16 +78,11 @@ const getBaseUrl = () => {
     return envUrl;
   }
   
-  // If we're on localhost, keep using localhost:8081
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8081';
-  }
-  
-  // For mobile or other networks, use the same host but with port 8081
-  // This allows: http://192.168.1.100:5173 → http://192.168.1.100:8081
-  const protocol = window.location.protocol; // http: or https:
-  const hostname = window.location.hostname; // IP address or domain
-  return `${protocol}//${hostname}:8081`;
+  // By returning an empty string, the frontend will make relative requests
+  // (e.g. /api/shop/...) which will inherently use the exact same hostname and port
+  // that the frontend was loaded from (like a localtunnel URL or local Vite server)
+  // Vite's built-in proxy handles forwarding these from 5174 to 8081 locally.
+  return '';
 };
 
 const BASE_URL = getBaseUrl();

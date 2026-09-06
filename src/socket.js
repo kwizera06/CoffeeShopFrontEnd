@@ -8,15 +8,9 @@ const getBaseUrl = () => {
     return envUrl;
   }
   
-  // If we're on localhost, keep using localhost:8081
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8081';
-  }
-  
-  // For mobile or other networks, use the same host but with port 8081
-  const protocol = window.location.protocol; // http: or https:
-  const hostname = window.location.hostname; // IP address or domain
-  return `${protocol}//${hostname}:8081`;
+  // By returning undefined, Socket.io automatically uses the current window location
+  // which works perfectly through localtunnel / pinggy, as Vite proxies the wss connection.
+  return undefined;
 };
 
 const BASE_URL = getBaseUrl();
