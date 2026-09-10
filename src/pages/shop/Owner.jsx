@@ -359,6 +359,11 @@ export default function Owner() {
   // Per-request approve-qty overrides: { [itemId]: number }
   const [approveQtys, setApproveQtys]           = useState({})
   const [deliveries, setDeliveries]             = useState([])
+  // Owner Approval Workflow
+  const [pendingProductions, setPendingProductions]     = useState([])
+  const [pendingWarehouse, setPendingWarehouse]         = useState([])
+  const [approvalLoading, setApprovalLoading]           = useState(false)
+  const [approvalFilter, setApprovalFilter]             = useState('ALL') // ALL | PRODUCTION | WAREHOUSE
   
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
@@ -955,6 +960,9 @@ export default function Owner() {
     if (allowed && ownerAccess && tab === 'deliveries') {
       fetchDeliveries();
     }
+    if (allowed && ownerAccess && tab === 'approvals') {
+      fetchPendingApprovals();
+    }
   }, [allowed, ownerAccess, tab, fetchRequestedOrders]);
 
   // Close all modals when switching tabs
@@ -991,6 +999,51 @@ export default function Owner() {
     try {
       const data = await api('/api/shop/storekeeper/deliveries')
       setDeliveries(data || [])
+    } catch (e) { setError(e.message) }
+  }
+
+  async function fetchPendingApprovals() {
+    setApprovalLoading(true)
+    try {
+      const data = await api('/api/shop/owner/pending-approvals')
+      setPendingProductions(data?.productions || [])
+      setPendingWarehouse(data?.warehouseRequests || [])
+    } catch (e) { setError(e.message) }
+    finally { setApprovalLoading(false) }
+  }
+
+  async function handleApproveProduction(productionId) {
+    setError('')
+    try {
+      await api(`/api/shop/owner/production/${productionId}/approve`, { method: 'PUT' })
+      await fetchPendingApprovals()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function handleRejectProduction(productionId) {
+    setError('')
+    try {
+      await api(`/api/shop/owner/production/${productionId}/reject`, { method: 'PUT' })
+      await fetchPendingApprovals()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function handleApproveWarehouse(transferId) {
+    setError('')
+    try {
+      await api(`/api/shop/warehouse/requests/owner/${transferId}/approve`, { method: 'PUT' })
+      await fetchPendingApprovals()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function handleRejectWarehouse(transferId, reason) {
+    setError('')
+    try {
+      await api(`/api/shop/warehouse/requests/owner/${transferId}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: reason || 'Rejected by owner' })
+      })
+      await fetchPendingApprovals()
     } catch (e) { setError(e.message) }
   }
 
@@ -4156,6 +4209,272 @@ export default function Owner() {
         </>
       ) : null}
 
+      {/* ══════════════════════════════════════════════════════
+           APPROVALS TAB — Owner approves production & warehouse requests
+          ══════════════════════════════════════════════════════ */}
+      {tab === 'approvals' && ownerAccess ? (
+        <>
+          <header className="am-header">
+            <div className="am-title">
+              <h1>Pending Approvals</h1>
+              <p>Review and approve stock movements before they take effect</p>
+            </div>
+            <button
+              type="button"
+              className="btn primary"
+              style={{ padding: '8px 20px', fontSize: 13 }}
+              onClick={fetchPendingApprovals}
+              disabled={approvalLoading}
+            >
+              {approvalLoading ? '⏳ Loading...' : '🔄 Refresh'}
+            </button>
+          </header>
+
+          {/* Summary cards */}
+          <div className="am-metrics-grid-top">
+            <div className="am-metric-card" style={{ cursor: 'pointer', borderColor: approvalFilter === 'ALL' ? '#6366F1' : undefined }} onClick={() => setApprovalFilter('ALL')}>
+              <div className="am-metric-header">TOTAL PENDING</div>
+              <div className="am-metric-value" style={{ color: '#6366F1' }}>{pendingProductions.length + pendingWarehouse.length}</div>
+              <div className="am-metric-trend" style={{ color: '#6366F1' }}>awaiting your review</div>
+            </div>
+            <div className="am-metric-card" style={{ cursor: 'pointer', borderColor: approvalFilter === 'PRODUCTION' ? '#F59E0B' : undefined }} onClick={() => setApprovalFilter('PRODUCTION')}>
+              <div className="am-metric-header">🍳 PRODUCTION</div>
+              <div className="am-metric-value" style={{ color: '#F59E0B' }}>{pendingProductions.length}</div>
+              <div className="am-metric-trend" style={{ color: '#F59E0B' }}>kitchen production runs</div>
+            </div>
+            <div className="am-metric-card" style={{ cursor: 'pointer', borderColor: approvalFilter === 'WAREHOUSE' ? '#3B82F6' : undefined }} onClick={() => setApprovalFilter('WAREHOUSE')}>
+              <div className="am-metric-header">📦 WAREHOUSE</div>
+              <div className="am-metric-value" style={{ color: '#3B82F6' }}>{pendingWarehouse.length}</div>
+              <div className="am-metric-trend" style={{ color: '#3B82F6' }}>stock requisitions</div>
+            </div>
+          </div>
+
+          {approvalLoading ? (
+            <div style={{ textAlign: 'center', padding: 60, color: '#6B7280' }}>
+              <div className="loading-spinner" style={{ margin: '0 auto 16px' }}></div>
+              Loading pending approvals...
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 32, marginTop: 24 }}>
+
+              {/* ── Production Approvals ── */}
+              {(approvalFilter === 'ALL' || approvalFilter === 'PRODUCTION') && (
+                <section>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1D3557' }}>🍳 Production Records</h2>
+                    <span style={{ background: 'rgba(245,158,11,0.12)', color: '#B45309', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
+                      {pendingProductions.length} pending
+                    </span>
+                  </div>
+
+                  {pendingProductions.length === 0 ? (
+                    <div style={{ background: 'var(--admin-card-bg)', border: '1px solid var(--admin-border)', borderRadius: 12, padding: 32, textAlign: 'center', color: '#9CA3AF' }}>
+                      ✅ No pending production records
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {pendingProductions.map(prod => (
+                        <div key={prod.id} style={{
+                          background: 'var(--admin-card-bg)',
+                          border: '1.5px solid rgba(245,158,11,0.35)',
+                          borderRadius: 14,
+                          padding: 20,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 14
+                        }}>
+                          {/* Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: '#1D3557' }}>
+                                {prod.menu_items?.name || 'Production Run'}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                                Submitted: {new Date(prod.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })}
+                              </div>
+                            </div>
+                            <span style={{
+                              padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                              background: 'rgba(245,158,11,0.12)', color: '#B45309'
+                            }}>⏳ PENDING APPROVAL</span>
+                          </div>
+
+                          {/* Details grid */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+                            <div style={{ background: 'rgba(245,158,11,0.06)', padding: 10, borderRadius: 8, border: '1px solid rgba(245,158,11,0.15)' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', marginBottom: 2 }}>BATCH SIZE</div>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: '#1D3557' }}>{prod.batch_size}</div>
+                            </div>
+                            <div style={{ background: 'rgba(34,197,94,0.06)', padding: 10, borderRadius: 8, border: '1px solid rgba(34,197,94,0.15)' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', marginBottom: 2 }}>ACTUAL YIELD</div>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: '#15803D' }}>{prod.actual_yield} pcs</div>
+                            </div>
+                            <div style={{ background: 'rgba(239,68,68,0.06)', padding: 10, borderRadius: 8, border: '1px solid rgba(239,68,68,0.15)' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', marginBottom: 2 }}>TOTAL COST</div>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: '#DC2626' }}>{Number(prod.total_cost || 0).toLocaleString()} RWF</div>
+                            </div>
+                          </div>
+
+                          {prod.notes && (
+                            <div style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', padding: '8px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 6 }}>
+                              📝 {prod.notes}
+                            </div>
+                          )}
+
+                          {/* Outputs */}
+                          {(prod.production_outputs || []).length > 0 && (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 8 }}>ITEMS TO BE ADDED TO STOCK:</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {prod.production_outputs.map((out, i) => (
+                                  <span key={i} style={{ background: 'rgba(34,197,94,0.1)', color: '#15803D', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                                    +{out.quantity} × {out.menu_items?.name || 'Item'}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleApproveProduction(prod.id)}
+                              style={{
+                                flex: 1, minWidth: 120, padding: '10px 16px',
+                                background: 'linear-gradient(135deg, #059669, #047857)',
+                                color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                              }}
+                            >
+                              ✅ Approve & Add to Stock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reason = window.prompt('Rejection reason (optional):')
+                                if (reason !== null) handleRejectProduction(prod.id)
+                              }}
+                              style={{
+                                flex: 1, minWidth: 120, padding: '10px 16px',
+                                background: 'rgba(239,68,68,0.08)', color: '#DC2626',
+                                border: '1.5px solid rgba(239,68,68,0.3)', borderRadius: 8, fontWeight: 700, fontSize: 13,
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                              }}
+                            >
+                              ❌ Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* ── Warehouse Request Approvals ── */}
+              {(approvalFilter === 'ALL' || approvalFilter === 'WAREHOUSE') && (
+                <section>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1D3557' }}>📦 Warehouse Requisitions</h2>
+                    <span style={{ background: 'rgba(59,130,246,0.12)', color: '#1D4ED8', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
+                      {pendingWarehouse.length} pending
+                    </span>
+                  </div>
+
+                  {pendingWarehouse.length === 0 ? (
+                    <div style={{ background: 'var(--admin-card-bg)', border: '1px solid var(--admin-border)', borderRadius: 12, padding: 32, textAlign: 'center', color: '#9CA3AF' }}>
+                      ✅ No pending warehouse requisitions
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {pendingWarehouse.map(req => (
+                        <div key={req.transferId} style={{
+                          background: 'var(--admin-card-bg)',
+                          border: '1.5px solid rgba(59,130,246,0.3)',
+                          borderRadius: 14,
+                          padding: 20,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 14
+                        }}>
+                          {/* Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: '#1D3557' }}>
+                                {req.productName}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                                Requested by: <strong>{req.requestedBy}</strong>
+                                {' · '}{new Date(req.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' })}
+                              </div>
+                            </div>
+                            <span style={{
+                              padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                              background: 'rgba(59,130,246,0.1)', color: '#1D4ED8'
+                            }}>⏳ AWAITING OWNER</span>
+                          </div>
+
+                          {/* Quantity detail */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+                            <div style={{ background: 'rgba(59,130,246,0.06)', padding: 10, borderRadius: 8, border: '1px solid rgba(59,130,246,0.15)' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', marginBottom: 2 }}>REQUESTED QTY</div>
+                              <div style={{ fontWeight: 800, fontSize: 18, color: '#1D4ED8' }}>{req.quantity}</div>
+                            </div>
+                            <div style={{ background: 'rgba(99,102,241,0.06)', padding: 10, borderRadius: 8, border: '1px solid rgba(99,102,241,0.15)' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', marginBottom: 2 }}>ITEM TYPE</div>
+                              <div style={{ fontWeight: 700, fontSize: 13, color: '#4338CA' }}>{req.itemType === 'INGREDIENT' ? '🧪 Ingredient' : '🛒 Product'}</div>
+                            </div>
+                          </div>
+
+                          {req.notes && (
+                            <div style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', padding: '8px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 6 }}>
+                              📝 {req.notes}
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleApproveWarehouse(req.transferId)}
+                              style={{
+                                flex: 1, minWidth: 120, padding: '10px 16px',
+                                background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                                color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✅ Approve → Send to Storekeeper
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reason = window.prompt('Rejection reason (optional):')
+                                if (reason !== null) handleRejectWarehouse(req.transferId, reason)
+                              }}
+                              style={{
+                                flex: 1, minWidth: 120, padding: '10px 16px',
+                                background: 'rgba(239,68,68,0.08)', color: '#DC2626',
+                                border: '1.5px solid rgba(239,68,68,0.3)', borderRadius: 8, fontWeight: 700, fontSize: 13,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ❌ Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+            </div>
+          )}
+        </>
+      ) : null}
+
       {tab === 'eod' && canAccessTab(role, 'eod') ? (
         (() => {
           if (!overview || !dailyRows) {
@@ -4722,18 +5041,12 @@ export default function Owner() {
                   </div>
 
                   {(() => {
-                    // Create a map from accurate API eodStockList
-                    const stockMapByKey = {};
-                    eodStockList.forEach(es => {
-                      const key = (es.name || 'Unknown').toLowerCase().trim();
-                      stockMapByKey[key] = es;
-                    });
-
-                    // Filter stock items by search query
+                    // Filter eodStockList directly by search query (not stockItems)
+                    // This prevents data mismatch when menu updates
                     const searchLower = eodStockSearch.toLowerCase().trim();
                     const filteredStockItems = searchLower 
-                      ? stockItems.filter(item => item.name.toLowerCase().includes(searchLower))
-                      : stockItems;
+                      ? eodStockList.filter(item => (item.name || '').toLowerCase().includes(searchLower))
+                      : eodStockList;
 
                     // Show message if search returns no results
                     if (searchLower && filteredStockItems.length === 0) {
@@ -4799,38 +5112,24 @@ export default function Owner() {
                                 <span>Added</span>
                                 <span>Closing</span>
                               </div>
-                              {items.map((item, idx) => {
-                                const nameKey = item.name.toLowerCase().trim();
-                                const esData = stockMapByKey[nameKey] || {};
-                                
-                                // Fallbacks: if no history found, opening/closing just show current live stock
-                                const opening = esData.openingStock ?? item.stock;
-                                const closing = esData.closingStock ?? item.stock;
-                                
+                              {items.map((esData, idx) => {
+                                // esData is now directly from eodStockList (API data)
+                                const opening = esData.openingStock ?? 0;
+                                const closing = esData.closingStock ?? 0;
                                 const qtySold = esData.qtySold ?? 0;
-                                const qtyLoan = esData.qtyLoan ?? 0;
                                 const qtyAdded = esData.qtyAdded ?? 0;
+                                const unit = esData.unit || 'pcs';
                                 
-                                const unit = item.unit || 'pcs';
                                 return (
                                   <div key={idx} className="am-eod-table-row" style={{ gridTemplateColumns: '2.5fr 1fr 1fr 1fr 1fr' }}>
                                     <span className="am-eod-cell-name" style={{ fontWeight: 600 }}>
-                                      {item.name}
+                                      {esData.name}
                                     </span>
                                     <span style={{ fontWeight: 600, color: '#1D3557' }}>
                                       {opening} {unit}
                                     </span>
                                     <span style={{ fontWeight: 700, color: qtySold > 0 ? '#E53E3E' : '#94A3B8' }}>
-                                      {qtySold > 0 ? (
-                                        <span>
-                                          − {qtySold} {unit}
-                                          {qtyLoan > 0 && (
-                                            <span style={{ fontSize: 11, display: 'block', color: '#E67E22', marginTop: 2 }}>
-                                              ({qtyLoan} {unit} loan)
-                                            </span>
-                                          )}
-                                        </span>
-                                      ) : '—'}
+                                      {qtySold > 0 ? `− ${qtySold} ${unit}` : '—'}
                                     </span>
                                     <span style={{ fontWeight: 700, color: qtyAdded > 0 ? '#3B82F6' : '#94A3B8' }}>
                                       {qtyAdded > 0 ? `+ ${qtyAdded} ${unit}` : '—'}

@@ -95,8 +95,8 @@ export default function Supplies() {
 
       {error ? <div style={{ background: 'rgba(255,82,82,0.1)', border: '1px solid rgba(255,82,82,0.3)', color: '#FF5252', padding: '10px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div> : null}
       {success ? (
-        <div style={{ background: 'rgba(76,175,80,0.1)', border: '1px solid rgba(76,175,80,0.3)', color: '#4CAF50', padding: '12px 16px', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13 }}>
-          ✅ Request sent to Admin successfully!
+        <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.35)', color: '#6366F1', padding: '12px 16px', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13 }}>
+          ⏳ Requisition submitted! Awaiting owner approval before it goes to the storekeeper.
         </div>
       ) : null}
 

@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { tab: 'stock', label: 'Stock Levels' },
   { tab: 'loans', label: 'Loans' },
   { tab: 'requested_order', label: 'Requisitions', ownerOnly: true },
+  { tab: 'approvals', label: '🔔 Approvals', ownerOnly: true },
   { tab: 'staff', label: 'Staff', ownerOnly: true },
   { tab: 'eod', label: 'EOD Report' },
   { tab: 'audit', label: 'Manager Audit', ownerOnly: true },

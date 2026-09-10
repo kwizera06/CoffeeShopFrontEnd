@@ -271,7 +271,7 @@ function ProductionRecordingScreen() {
         }),
       })
       
-      setSuccess(`✅ Production recorded! Added ${result.quantityAdded} units. New stock: ${result.newStock}`)
+      setSuccess(`⏳ Production submitted for owner approval! ${qty} units of ${selectedProduct.name} will be added to stock once the owner approves.`)
       setQuantityToAdd('')
       setNotes('')
       setSelectedProduct(null)
@@ -522,7 +522,7 @@ function ProductionRecordingScreen() {
           Record Production
         </h3>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#6B7280' }}>
-          Add finished product quantity to stock. Ingredients will be auto-deducted based on recipe.
+          Submit a production request for owner approval. Once approved, ingredients will be deducted and finished stock will be added.
         </p>
         <form onSubmit={handleRecordProduction} style={{ display: 'flex', flexDirection: 'column', gap: 20, position: 'relative', overflow: 'visible', zIndex: 1 }}>
           <div style={{ position: 'relative', zIndex: 100 }}>
@@ -627,10 +627,10 @@ function ProductionRecordingScreen() {
               {quantityToAdd > 0 && scaledIngredients.length > 0 && (
                 <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
                   <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#1D3557' }}>
-                    Ingredients to Deduct ({batchesNeeded.toFixed(2)} batches)
+                    📋 Preview: Ingredients to be Deducted on Approval ({batchesNeeded.toFixed(2)} batches)
                   </p>
                   <p style={{ margin: '0 0 12px', fontSize: 11, color: '#6B7280' }}>
-                    Calculation: {quantityToAdd} units ÷ {standardYield} = {batchesNeeded.toFixed(2)} batches
+                    These amounts will only be deducted once the owner approves this request. ({quantityToAdd} units ÷ {standardYield} = {batchesNeeded.toFixed(2)} batches)
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {scaledIngredients.map((ing, idx) => (
@@ -647,7 +647,7 @@ function ProductionRecordingScreen() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, fontSize: 13 }}>{ing.name}</div>
                           <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                            Stock: {ing.currentStock} → Will deduct: {ing.deduction} → Remaining: {' '}
+                            Stock: {ing.currentStock} → Pending deduction: {ing.deduction} → After approval: {' '}
                             <span style={{ 
                               fontWeight: 700,
                               color: ing.remaining < 0 ? '#DC2626' : ing.remaining < ing.currentStock * 0.1 ? '#F59E0B' : '#10B981'
@@ -689,7 +689,7 @@ function ProductionRecordingScreen() {
                     cursor: (busy || !quantityToAdd || allIngredientsZero || !hasCompleteRecipe || hasInsufficientStock) ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {busy ? 'Recording…' : '✅ Record Production'}
+                  {busy ? 'Submitting…' : '✅ Submit for Approval'}
                 </button>
                 <button
                   type="button"
