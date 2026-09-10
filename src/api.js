@@ -105,6 +105,10 @@ export async function api(path, options = {}, _retryCount = 1) {
     headers.set('Authorization', `Bearer ${token}`)
   }
   
+  // Tunnel bypass headers for mobile data access (localtunnel and ngrok support)
+  headers.set('Bypass-Tunnel-Reminder', 'true')
+  headers.set('ngrok-skip-browser-warning', '69420')
+  
   // Ensure we don't double up on /api/ if path already includes it
   const fullPath = path.startsWith('http') ? path : `${BASE_URL}${path}`
   

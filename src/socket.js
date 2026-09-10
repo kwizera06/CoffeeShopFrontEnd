@@ -16,7 +16,11 @@ const getBaseUrl = () => {
 const BASE_URL = getBaseUrl();
 const socket = io(BASE_URL, {
     autoConnect: false,
-    transports: ['websocket']
+    transports: ['polling', 'websocket'], // Polling first so it can send bypass headers
+    extraHeaders: {
+        "Bypass-Tunnel-Reminder": "true",
+        "ngrok-skip-browser-warning": "69420"
+    }
 });
 
 export const connectSocket = (tenantId) => {
