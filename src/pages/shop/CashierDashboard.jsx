@@ -3167,6 +3167,11 @@ export default function CashierDashboard() {
                     return
                   }
 
+                  const printedKots = JSON.parse(localStorage.getItem('printed_kots') || '{}');
+                  const isDup = !!printedKots[selectedOrderForTicket.id];
+                  printedKots[selectedOrderForTicket.id] = true;
+                  localStorage.setItem('printed_kots', JSON.stringify(printedKots));
+
                   printKitchenTicket({ 
                     order: {
                       ...selectedOrderForTicket,
@@ -3174,7 +3179,8 @@ export default function CashierDashboard() {
                     },
                     shopName,
                     totalItems: selectedLines.reduce((s, l) => s + l.quantity, 0),
-                    isPartialOrder: selectedLines.length < selectedOrderForTicket.lines.length
+                    isPartialOrder: selectedLines.length < selectedOrderForTicket.lines.length,
+                    isDuplicate: isDup
                   });
                   setSelectedOrderForTicket(null)
                   setSelectedItemsForPrint({})

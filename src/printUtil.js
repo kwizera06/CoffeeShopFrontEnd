@@ -76,7 +76,7 @@ function getLineAst(is80mm) {
   return `<div style="font-family: 'Courier New', Courier, monospace; font-size: 10pt; font-weight: bold; margin: 6px 0; text-align: center; white-space: nowrap; overflow: hidden; letter-spacing: -0.5px;">${chars}</div>`;
 }
 
-export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName, order, totalItems, isPartialOrder }) {
+export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, lines, waiterName, order, totalItems, isPartialOrder, isDuplicate }) {
   // Support both old and new API
   const finalOrderId = orderId || order?.id
   const finalTableNumber = tableNumber || order?.tableNumber
@@ -128,6 +128,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
       <div style="text-align: center; font-size: 14pt; font-weight: bold; padding: 5px 0;">
         *** KITCHEN BAR ***
       </div>
+      ${isDuplicate ? `<div style="color: #000; font-size: 14pt; font-weight: bold; text-align: center; border: 2px solid #000; padding: 4px; margin: 4px 0;">** DUPLICATE **</div>` : ''}
       ${getLineEq(is80mm)}
 
       <div>Server: ${esc(finalWaiterName || 'Staff')}</div>
@@ -143,7 +144,7 @@ export function printKitchenTicket({ orderId, tableNumber, shopName, createdAt, 
 
       <div style="font-size: 14pt; font-weight: bold;">Table: ${esc(finalTableNumber)}</div>
       <div style="font-size: 10pt;">Guests: 1</div>
-      ${isPartialOrder ? `<div style="font-size: 11pt; font-weight: bold; color: #c00; padding: 4px 0;">⚠ PARTIAL ORDER</div>` : ''}
+      ${isPartialOrder ? `<div style="font-size: 11pt; font-weight: bold; padding: 4px 0;">⚠ PARTIAL ORDER</div>` : ''}
       
       ${getLineDash(is80mm)}
 
