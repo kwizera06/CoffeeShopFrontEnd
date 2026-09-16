@@ -65,7 +65,8 @@ export default function Owner() {
   const [eodProductPage, setEodProductPage] = useState(1)
   const [isExporting, setIsExporting] = useState(false)
   const [dateRange, setDateRange] = useState('daily')
-  const [eodStockList, setEodStockList] = useState([])
+  const [eodStockList, setEodStockList] = useState([]);
+  const [eodStockLoading, setEodStockLoading] = useState(false);
 
   const [overview, setOverview] = useState(null)
   const [menu, setMenu] = useState([])
@@ -693,6 +694,7 @@ export default function Owner() {
   }, [allowed, reportDay, queryClient])
 
   const reloadEOD = useCallback(async () => {
+    setEodStockLoading(true);
     if (!allowed || (tab !== 'reports' && tab !== 'overview' && tab !== 'eod')) {
       return
     }
@@ -2826,7 +2828,7 @@ export default function Owner() {
                                       name: product.name, 
                                       itemType: 'MENU_ITEM',
                                       unit: 'pcs'
-                                    })}
+                                    }) }
                                   >📜 History</button>
                                 </div>
                               </div>
