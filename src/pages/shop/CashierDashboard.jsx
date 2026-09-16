@@ -990,7 +990,8 @@ export default function CashierDashboard() {
   const [pendingItemRemovalId, setPendingItemRemovalId] = useState(null) // Which item is being removed
   const [pendingClearAllItems, setPendingClearAllItems] = useState(false) // Flag for clear all action
   const [qtyById, setQtyById] = useState({})
-  const [initialQtyById, setInitialQtyById] = useState({})
+  const [loadedLines, setLoadedLines] = useState([])
+  const [hasRemovedItems, setHasRemovedItems] = useState(false)
   
   const [showCashierAuthPayload, setShowCashierAuthPayload] = useState(null)
   const [cashierAuthPin, setCashierAuthPin] = useState('')
@@ -1343,10 +1344,9 @@ export default function CashierDashboard() {
       api(`/api/shop/orders/${editId}`).then(order => {
         setTableNumber(String(order.tableNumber))
         setSelectedWaiter(order.waiterId || '')
-        const qtys = {}
-        order.lines.forEach(l => { qtys[l.menuItemId] = l.quantity })
-        setQtyById(qtys)
-        setInitialQtyById(qtys)
+        setLoadedLines(order.lines.map((l, i) => ({ ...l, __originalIndex: i })))
+        setQtyById({})
+        setHasRemovedItems(false)
       }).catch(e => setError(e.message))
     }
   }, [editId])
@@ -1377,18 +1377,7 @@ export default function CashierDashboard() {
 
   // Cart Actions
   function setQty(id, next) {
-    if (editId && (role === 'CASHIER' || role === 'WAITER')) {
-      const initialQty = initialQtyById[id] || 0;
-      // If reducing below initial quantity, require PIN verification
-      if (next < initialQty) {
-        setPendingItemRemovalId(id)
-        setShowRemovalPinModal(true)
-        setPinInput('')
-        setPinError('')
-        return
-      }
-    }
-    // Allow adding items without PIN
+    // Allow adding/decreasing NEW items directly
     setQtyById(m => {
       const copy = { ...m, [id]: next }
       if (next <= 0) delete copy[id]
@@ -1397,7 +1386,17 @@ export default function CashierDashboard() {
   }
   
   const cartLines = useMemo(() => {
-    return Object.entries(qtyById).map(([id, qty]) => {
+    const loaded = loadedLines.map((l, i) => ({
+      ...l,
+      isLoaded: true,
+      __originalIndex: i,
+      menuItemId: l.menuItemId || l.productId,
+      name: l.itemName || l.name,
+      quantity: Number(l.quantity),
+      price: Number(l.price),
+    }))
+    
+    const newItems = Object.entries(qtyById).map(([id, qty]) => {
       const mi = menu.find(x => x.id === id)
       if (!mi) return null;
 
@@ -1407,9 +1406,11 @@ export default function CashierDashboard() {
         unit: ri.unit
       })).filter(i => i.name);
 
-      return { menuItemId: mi.id, quantity: qty, name: mi.name, price: Number(mi.price), ingredients }
+      return { menuItemId: mi.id, quantity: qty, name: mi.name, price: Number(mi.price), ingredients, isLoaded: false }
     }).filter(Boolean)
-  }, [qtyById, menu])
+    
+    return [...loaded, ...newItems]
+  }, [loadedLines, qtyById, menu])
   const cartTotal = cartLines.reduce((acc, l) => acc + (l.quantity * l.price), 0)
 
   const serviceStaff = useMemo(
@@ -1483,15 +1484,25 @@ export default function CashierDashboard() {
       if (pendingClearAllItems) {
         // Clear all items
         setQtyById({})
+        setLoadedLines([])
+        setHasRemovedItems(true)
         setPendingClearAllItems(false)
       } else if (pendingItemRemovalId) {
         // Remove single item
-        const initialQty = initialQtyById[pendingItemRemovalId] || 0
-        setQtyById(m => {
-          const copy = { ...m, [pendingItemRemovalId]: initialQty - 1 }
-          if (copy[pendingItemRemovalId] <= 0) delete copy[pendingItemRemovalId]
-          return copy
-        })
+        if (pendingItemRemovalId.type === 'loaded') {
+          setLoadedLines(prev => prev.map((line, idx) => {
+            if (idx === pendingItemRemovalId.id) return { ...line, quantity: Number(line.quantity) - 1 }
+            return line
+          }).filter(line => line.quantity > 0))
+          setHasRemovedItems(true)
+        } else {
+          setQtyById(m => {
+            const next = (m[pendingItemRemovalId.id] || 0) - 1
+            const copy = { ...m, [pendingItemRemovalId.id]: next }
+            if (next <= 0) delete copy[pendingItemRemovalId.id]
+            return copy
+          })
+        }
         setPendingItemRemovalId(null)
       }
 
@@ -1521,25 +1532,19 @@ export default function CashierDashboard() {
     setBusy(true)
     try {
       if (editId) {
-        // Check if any items were removed - if so, user must have passed PIN verification
-        const originalQtys = initialQtyById || {};
-        const currentQtys = qtyById || {};
-        let hasRemoval = false;
+        // Remap any previously printed indices if items were removed/shifted
+        const printedKots = JSON.parse(localStorage.getItem('printed_kots_idx') || '{}')
+        const printedIndices = printedKots[editId] || []
         
-        for (const [itemId, originalQty] of Object.entries(originalQtys)) {
-          const currentQty = currentQtys[itemId] || 0;
-          if (currentQty < originalQty) {
-            hasRemoval = true;
-            break;
-          }
-        }
-        
-        // Check if items were completely removed
-        for (const [itemId, originalQty] of Object.entries(originalQtys)) {
-          if (!(itemId in currentQtys) && originalQty > 0) {
-            hasRemoval = true;
-            break;
-          }
+        if (printedIndices.length > 0) {
+           const newPrintedIndices = [];
+           cartLines.forEach((line, newIdx) => {
+              if (line.isLoaded && printedIndices.includes(line.__originalIndex)) {
+                 newPrintedIndices.push(newIdx);
+              }
+           })
+           printedKots[editId] = newPrintedIndices;
+           localStorage.setItem('printed_kots_idx', JSON.stringify(printedKots));
         }
         
         await api(`/api/shop/orders/${editId}`, {
@@ -1548,10 +1553,15 @@ export default function CashierDashboard() {
             tableNumber: tn, 
             items: cartLines, 
             waiterId: selectedWaiter,
-            itemsRemoved: hasRemoval  // Flag indicating removals were made
+            itemsRemoved: hasRemovedItems
           }),
         })
         if (printKitchen) {
+          // Global print everything button used: mark ALL indices as printed
+          const pk = JSON.parse(localStorage.getItem('printed_kots_idx') || '{}')
+          pk[editId] = cartLines.map((_, i) => i)
+          localStorage.setItem('printed_kots_idx', JSON.stringify(pk))
+          
           printKitchenTicket({
             orderId: editId,
             tableNumber: tn,
@@ -1563,7 +1573,8 @@ export default function CashierDashboard() {
         await loadBilling()
         setSearchParams({ tab: 'pending' })
         setQtyById({})
-        setInitialQtyById({})
+        setLoadedLines([])
+        setHasRemovedItems(false)
         setTableNumber('1')
         setSelectedWaiter('')
       } else {
@@ -1587,7 +1598,8 @@ export default function CashierDashboard() {
         setPending(prev => [created, ...prev])
         // Don't auto-switch tabs - user stays on current tab
         setQtyById({})
-        setInitialQtyById({})
+        setLoadedLines([])
+        setHasRemovedItems(false)
         setTableNumber('1')
         setSelectedWaiter('')
         void loadBilling()
@@ -1873,7 +1885,7 @@ export default function CashierDashboard() {
               
               <div className="cashier-grid">
                 {filteredMenu.map(m => {
-                  const qty = qtyById[m.id] || 0;
+                  const qty = cartLines.filter(c => c.menuItemId === m.id).reduce((s, c) => s + c.quantity, 0);
                   const theme = getCategoryColors(m.category);
                   
                   // Enforcement: Stock restrictions apply ONLY to these specific categories
@@ -1896,7 +1908,7 @@ export default function CashierDashboard() {
                             alert(`Not enough stock for ${m.name}. Only ${m.stock_level} left.`);
                             return;
                         }
-                        setQty(m.id, qty + 1);
+                        setQty(m.id, (qtyById[m.id] || 0) + 1);
                       }}
                       style={{
                         background: isOutOfStock ? '#f3f4f6' : theme.bg,
@@ -1925,7 +1937,7 @@ export default function CashierDashboard() {
                     </div>
                     {editId && (
                       <button 
-                        onClick={() => { setSearchParams({}); setQtyById({}); setInitialQtyById({}); setTableNumber('1'); }}
+                        onClick={() => { setSearchParams({}); setQtyById({}); setLoadedLines([]); setHasRemovedItems(false); setTableNumber('1'); }}
                         style={{ background: 'transparent', border: 'none', color: '#E53935', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                       >
                         Cancel
@@ -1946,8 +1958,8 @@ export default function CashierDashboard() {
                       <span>Tap items to add.</span>
                     </div>
                  ) : (
-                     cartLines.map(l => (
-                       <div key={l.menuItemId} className="cashier-ticket-item">
+                     cartLines.map((l, idx) => (
+                       <div key={`${l.menuItemId}_${idx}`} className="cashier-ticket-item">
                           <div style={{ flex: 1 }}>
                              <div style={{ fontWeight: 600, marginBottom: 4 }}>{l.name}</div>
                              <div style={{ color: '#A0A0A0', fontSize: 12 }}>{(l.quantity * l.price).toLocaleString()} RWF</div>
@@ -1955,32 +1967,60 @@ export default function CashierDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                              <button 
                                onClick={() => {
-                                 const nextQty = qtyById[l.menuItemId] - 1
-                                 setQty(l.menuItemId, nextQty)
+                                 if (l.isLoaded) {
+                                   if (editId && (role === 'CASHIER' || role === 'WAITER')) {
+                                     setPendingItemRemovalId({ type: 'loaded', id: l.__originalIndex })
+                                     setShowRemovalPinModal(true)
+                                     setPinInput('')
+                                     setPinError('')
+                                   } else {
+                                     setLoadedLines(prev => prev.map((line, i) => {
+                                       if (i === l.__originalIndex) return { ...line, quantity: Number(line.quantity) - 1 }
+                                       return line
+                                     }).filter(line => line.quantity > 0))
+                                     setHasRemovedItems(true)
+                                   }
+                                 } else {
+                                   const nextQty = qtyById[l.menuItemId] - 1
+                                   setQty(l.menuItemId, nextQty)
+                                 }
                                }}
                                style={{ background: 'transparent', border: 'none', color: '#A0A0A0', cursor: 'pointer', display: 'flex', fontSize: 32 }}
                              >
                                <HiOutlineMinusCircle />
                              </button>
                              <span style={{ fontWeight: 700, minWidth: 24, textAlign: 'center', color: '#E6CCB2', fontSize: 24 }}>{l.quantity}</span>
-                             <button 
-                               onClick={() => {
-                                 const mi = menu.find(x => x.id === l.menuItemId);
-                                 if (mi && mi.is_recipe === false && qtyById[l.menuItemId] >= mi.stock_level) {
-                                    alert(`Not enough stock for ${mi.name}. Only ${mi.stock_level} left.`);
-                                    return;
-                                 }
-                                 setQty(l.menuItemId, qtyById[l.menuItemId] + 1)
-                               }}
-                               style={{ background: 'transparent', border: 'none', color: '#E6CCB2', cursor: 'pointer', display: 'flex', fontSize: 32 }}
-                             >
-                               <HiOutlinePlusCircle />
-                             </button>
+                             {!l.isLoaded && (
+                               <button 
+                                 onClick={() => {
+                                   const mi = menu.find(x => x.id === l.menuItemId);
+                                   if (mi && mi.is_recipe === false && (qtyById[l.menuItemId] || 0) >= mi.stock_level) {
+                                      alert(`Not enough stock for ${mi.name}. Only ${mi.stock_level} left.`);
+                                      return;
+                                   }
+                                   setQty(l.menuItemId, (qtyById[l.menuItemId] || 0) + 1)
+                                 }}
+                                 style={{ background: 'transparent', border: 'none', color: '#E6CCB2', cursor: 'pointer', display: 'flex', fontSize: 32 }}
+                               >
+                                 <HiOutlinePlusCircle />
+                               </button>
+                             )}
                              {editId && (
                                <button
                                  onClick={() => {
-                                   const nextQty = qtyById[l.menuItemId] - 1;
-                                   setQty(l.menuItemId, nextQty);
+                                   if (l.isLoaded) {
+                                     if (role === 'CASHIER' || role === 'WAITER') {
+                                       setPendingItemRemovalId({ type: 'loaded', id: l.__originalIndex })
+                                       setShowRemovalPinModal(true)
+                                       setPinInput('')
+                                       setPinError('')
+                                     } else {
+                                       setLoadedLines(prev => prev.filter((_, i) => i !== l.__originalIndex))
+                                       setHasRemovedItems(true)
+                                     }
+                                   } else {
+                                     setQty(l.menuItemId, 0)
+                                   }
                                  }}
                                  style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', fontSize: 20, marginLeft: 8 }}
                                  title="Remove item"
@@ -3159,18 +3199,31 @@ export default function CashierDashboard() {
             <div style={{ display: 'flex', gap: 12, flexDirection: 'column' }}>
               <button 
                 onClick={() => {
-                  // Get selected lines only
-                  const selectedLines = selectedOrderForTicket.lines.filter((_, idx) => selectedItemsForPrint[idx])
+                  const printedKotsObj = JSON.parse(localStorage.getItem('printed_kots_idx') || '{}');
+                  const printedIndices = printedKotsObj[selectedOrderForTicket.id] || [];
                   
+                  let allSelectedAreDuplicates = true;
+                  const newPrintedIndices = [...printedIndices];
+                  
+                  // Get selected lines only
+                  const selectedLines = []
+                  selectedOrderForTicket.lines.forEach((line, idx) => {
+                    if (selectedItemsForPrint[idx]) {
+                      selectedLines.push(line);
+                      if (!printedIndices.includes(idx)) {
+                         allSelectedAreDuplicates = false;
+                         newPrintedIndices.push(idx);
+                      }
+                    }
+                  })
+
                   if (selectedLines.length === 0) {
                     alert('⚠️ Please select at least one item to print')
                     return
                   }
-
-                  const printedKots = JSON.parse(localStorage.getItem('printed_kots') || '{}');
-                  const isDup = !!printedKots[selectedOrderForTicket.id];
-                  printedKots[selectedOrderForTicket.id] = true;
-                  localStorage.setItem('printed_kots', JSON.stringify(printedKots));
+                  
+                  printedKotsObj[selectedOrderForTicket.id] = newPrintedIndices;
+                  localStorage.setItem('printed_kots_idx', JSON.stringify(printedKotsObj));
 
                   printKitchenTicket({ 
                     order: {
@@ -3180,7 +3233,7 @@ export default function CashierDashboard() {
                     shopName,
                     totalItems: selectedLines.reduce((s, l) => s + l.quantity, 0),
                     isPartialOrder: selectedLines.length < selectedOrderForTicket.lines.length,
-                    isDuplicate: isDup
+                    isDuplicate: allSelectedAreDuplicates
                   });
                   setSelectedOrderForTicket(null)
                   setSelectedItemsForPrint({})
