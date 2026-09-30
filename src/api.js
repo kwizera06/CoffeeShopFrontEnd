@@ -9,6 +9,25 @@ const AUTH = {
   email: 'olitech_auth_email',
 }
 
+// Global maintenance state
+let maintenanceState = {
+  active: false,
+  showPage: false
+}
+
+export function getMaintenanceState() {
+  return maintenanceState
+}
+
+export function setMaintenancePageVisible(visible) {
+  maintenanceState.showPage = visible
+}
+
+export function triggerMaintenanceMode() {
+  maintenanceState.active = true
+  maintenanceState.showPage = true
+}
+
 export function getToken() {
   return sessionStorage.getItem(AUTH.token)
 }
@@ -122,6 +141,23 @@ export async function api(path, options = {}, _retryCount = 1) {
   try {
     const res = await fetch(fullPath, { ...options, headers, signal: controller.signal })
     clearTimeout(timeoutId)
+    
+    // Handle maintenance mode (503 with maintenance flag)
+    if (res.status === 503) {
+      try {
+        const body = await res.json()
+        if (body.maintenance === true) {
+          triggerMaintenanceMode()
+          const err = new Error('System is under maintenance')
+          err.status = 503
+          err.isMaintenance = true
+          throw err
+        }
+      } catch (e) {
+        if (e.isMaintenance) throw e
+        // If not valid maintenance response, continue with normal 503 error handling
+      }
+    }
     
     if (res.status === 401) {
       clearSession()

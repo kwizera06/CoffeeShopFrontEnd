@@ -99,7 +99,7 @@ function Shell() {
       <>
         <div className="admin-pos-bridge">
           <span className="admin-pos-bridge-label">POS Mode</span>
-          <button type="button" className="admin-pos-bridge-btn" onClick={() => nav('/app/admin?tab=overview')}>
+          <button type="button" className="admin-pos-bridge-btn" onClick={() => nav('/app/admin/overview')}>
             ← {dashboardLabel}
           </button>
         </div>
@@ -121,11 +121,25 @@ function Shell() {
 
         {showDashboard && (
           <nav className="modern-nav-tabs">
-            {visibleNav.slice(0, 4).map(item => (
-              <NavLink key={item.tab} to={`/app/admin?tab=${item.tab}`} className={() => `modern-tab ${loc.search.includes(`tab=${item.tab}`) ? 'active' : ''}`}>
-                {item.label}
-              </NavLink>
-            ))}
+            {visibleNav.slice(0, 4).map(item => {
+              const pathMap = {
+                overview: '/app/admin/overview',
+                menu: '/app/admin/menu',
+                inventory: '/app/admin/inventory',
+                stock: '/app/admin/stock-levels',
+                loans: '/app/admin/loans',
+                requested_order: '/app/admin/requisitions',
+                approvals: '/app/admin/approvals',
+                staff: '/app/admin/staff',
+                eod: '/app/admin/eod-report',
+                audit: '/app/admin/manager-audit',
+              }
+              return (
+                <NavLink key={item.tab} to={pathMap[item.tab]} className={({ isActive }) => `modern-tab ${isActive ? 'active' : ''}`}>
+                  {item.label}
+                </NavLink>
+              )
+            })}
           </nav>
         )}
 
@@ -139,7 +153,7 @@ function Shell() {
              <NavLink to="/app/billing" className="pos-btn-modern" style={{ background: '#2196F3', borderColor: '#2196F3', marginRight: '8px' }}>Billing / Refunds</NavLink>
           )}
           {(role !== 'STOREKEEPER' && role !== 'AUDITOR') && (
-            <NavLink to="/app/cashier" className="pos-btn-modern">POS</NavLink>
+            <NavLink to="/app/pos/new-order" className="pos-btn-modern">POS</NavLink>
           )}
           <div className="user-avatar-modern" title="Click to logout" onClick={logout} style={{ cursor: 'pointer' }}>{initials}</div>
         </div>
@@ -161,16 +175,30 @@ function Shell() {
            </div>
            
            <nav className="am-sidebar-nav">
-              {visibleNav.map(item => (
-                <NavLink
-                  key={item.tab}
-                  to={`/app/admin?tab=${item.tab}`}
-                  className={() => `am-nav-link ${loc.search.includes(`tab=${item.tab}`) ? 'active' : ''}`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+              {visibleNav.map(item => {
+                const pathMap = {
+                  overview: '/app/admin/overview',
+                  menu: '/app/admin/menu',
+                  inventory: '/app/admin/inventory',
+                  stock: '/app/admin/stock-levels',
+                  loans: '/app/admin/loans',
+                  requested_order: '/app/admin/requisitions',
+                  approvals: '/app/admin/approvals',
+                  staff: '/app/admin/staff',
+                  eod: '/app/admin/eod-report',
+                  audit: '/app/admin/manager-audit',
+                }
+                return (
+                  <NavLink
+                    key={item.tab}
+                    to={pathMap[item.tab]}
+                    className={({ isActive }) => `am-nav-link ${isActive ? 'active' : ''}`}
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    {item.label}
+                  </NavLink>
+                )
+              })}
            </nav>
 
            <div style={{ flex: 1 }} />
@@ -194,16 +222,30 @@ function Shell() {
 
       {showDashboard && (
         <nav className="am-bottom-nav">
-          {visibleNav.slice(0, 4).map(item => (
-            <NavLink
-              key={item.tab}
-              to={`/app/admin?tab=${item.tab}`}
-              className={`am-bottom-nav-item ${loc.search.includes(`tab=${item.tab}`) || (item.tab === 'overview' && !loc.search.includes('tab=')) ? 'active' : ''}`}
-            >
-              <HiOutlineSquares2X2 />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {visibleNav.slice(0, 4).map(item => {
+            const pathMap = {
+              overview: '/app/admin/overview',
+              menu: '/app/admin/menu',
+              inventory: '/app/admin/inventory',
+              stock: '/app/admin/stock-levels',
+              loans: '/app/admin/loans',
+              requested_order: '/app/admin/requisitions',
+              approvals: '/app/admin/approvals',
+              staff: '/app/admin/staff',
+              eod: '/app/admin/eod-report',
+              audit: '/app/admin/manager-audit',
+            }
+            return (
+              <NavLink
+                key={item.tab}
+                to={pathMap[item.tab]}
+                className={({ isActive }) => `am-bottom-nav-item ${isActive ? 'active' : ''}`}
+              >
+                <HiOutlineSquares2X2 />
+                <span>{item.label}</span>
+              </NavLink>
+            )
+          })}
           <button className="am-bottom-nav-item" onClick={() => setSidebarOpen(true)}>
             <HiOutlineBars3 />
             <span>More</span>

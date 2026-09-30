@@ -202,16 +202,16 @@ function navigateByRole(nav, role) {
   if (role === 'PLATFORM_ADMIN') {
     nav('/admin', { replace: true })
   } else if (role === 'SHOP_ADMIN' || role === 'MANAGER') {
-    nav('/app/admin?tab=overview', { replace: true })
+    nav('/app/admin/overview', { replace: true })
   } else if (role === 'AUDITOR') {
     nav('/app/auditor', { replace: true })
   } else if (role === 'WAITER') {
-    nav('/app/cashier', { replace: true })
+    nav('/app/pos/new-order', { replace: true })
   } else if (role === 'CHEF') {
     nav('/app/chef', { replace: true })
   } else if (role === 'STOREKEEPER') {
     nav('/app/storekeeper', { replace: true })
   } else {
-    nav('/app/cashier', { replace: true })
+    nav('/app/pos/new-order', { replace: true })
   }
 }

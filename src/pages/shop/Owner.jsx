@@ -5,6 +5,7 @@ import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2'
 import { NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, getSession } from '../../api'
 import { useShopContext } from '../../shop/ShopContext'
+import { usePageTitle } from '../../hooks/usePageTitle'
 import { supabase } from '../../supabaseClient'
 import { getKigaliToday, formatShiftRange } from '../../utils/kigaliDate.js'
 import {
@@ -51,13 +52,30 @@ import socket, { connectSocket, disconnectSocket } from '../../socket'
 import './OwnerModern.css'
 import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole, staffRoleLabel, staffRoleStyle } from '../../utils/roles.js'
 
-export default function Owner() {
+export default function Owner({ initialTab }) {
   const nav = useNavigate()
   const { role } = getSession()
   const { isShopAdmin, context } = useShopContext()
+  
+  // Get initial tab from prop or fallback to query param or 'overview'
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') || 'overview'
-  const setTab = (t) => setSearchParams({ tab: t })
+  const tab = initialTab || searchParams.get('tab') || 'overview'
+  
+  // Set page title
+  const tabTitles = {
+    overview: 'Overview',
+    menu: 'Menu',
+    inventory: 'Inventory',
+    bakery: 'Bakery',
+    stock: 'Stock Levels',
+    loans: 'Loans',
+    requested_order: 'Requisitions',
+    approvals: 'Approvals',
+    staff: 'Staff',
+    eod: 'EOD Report',
+    audit: 'Manager Audit'
+  }
+  usePageTitle(tabTitles[tab] || 'Dashboard')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [search, setSearch] = useState('')
@@ -477,7 +495,7 @@ export default function Owner() {
 
   useEffect(() => {
     if (role && !allowed) {
-      nav('/app/cashier', { replace: true })
+      nav('/app/pos/new-order', { replace: true })
     }
   }, [role, allowed, nav])
 
@@ -1515,6 +1533,184 @@ export default function Owner() {
                   {topStaff.length === 0 && <div className="muted italic text-sm">No activity recorded for staff today.</div>}
                 </div>
               </div>
+            </div>
+
+            {/* Approvals History Card */}
+            <div className="am-table-card" style={{ marginTop: 24, padding: 24 }}>
+              <div className="am-chart-header" style={{ marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>📋 Approvals History</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-muted)', fontWeight: 500 }}>
+                    All requests you've received, approved, or rejected
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    value={reportDay}
+                    onChange={(e) => setReportDay(e.target.value)}
+                    max={getKigaliToday()}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #E5E7EB',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer'
+                    }}
+                  />
+                  {reportDay !== getKigaliToday() && (
+                    <button
+                      onClick={() => setReportDay(getKigaliToday())}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(76,175,80,0.15)',
+                        border: '1px solid rgba(76,175,80,0.3)',
+                        color: '#1D3557',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Today
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Pending</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#F59E0B' }}>
+                    {(() => {
+                      const allApprovals = [...pendingProductions, ...pendingWarehouse];
+                      return allApprovals.filter(a => {
+                        const itemDate = a.created_at || a.createdAt;
+                        if (!itemDate) return false;
+                        const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                        return itemDateStr === reportDay && (!a.status || a.status === 'PENDING');
+                      }).length;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>awaiting your action</div>
+                </div>
+                <div style={{ background: '#F0FDF4', border: '1px solid #DCFCE7', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#15803D', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Approved</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#16A34A' }}>
+                    {(() => {
+                      const allApprovals = [...pendingProductions, ...pendingWarehouse];
+                      return allApprovals.filter(a => {
+                        const itemDate = a.created_at || a.createdAt;
+                        if (!itemDate) return false;
+                        const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                        return itemDateStr === reportDay && a.status === 'APPROVED';
+                      }).length;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#86EFAC', marginTop: 4 }}>confirmed today</div>
+                </div>
+                <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: '#DC2626', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Rejected</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#EF4444' }}>
+                    {(() => {
+                      const allApprovals = [...pendingProductions, ...pendingWarehouse];
+                      return allApprovals.filter(a => {
+                        const itemDate = a.created_at || a.createdAt;
+                        if (!itemDate) return false;
+                        const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                        return itemDateStr === reportDay && a.status === 'REJECTED';
+                      }).length;
+                    })()}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#F87171', marginTop: 4 }}>denied today</div>
+                </div>
+              </div>
+
+              {/* Approvals List */}
+              <div className="am-order-list" style={{ maxHeight: 400, overflowY: 'auto', margin: '0 -24px', padding: '0 24px' }}>
+                {approvalLoading ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <div className="loading-spinner" style={{ margin: '0 auto 8px' }}></div>
+                    Loading approvals...
+                  </div>
+                ) : (() => {
+                  // Filter approvals by date
+                  const filteredApprovals = [...pendingProductions, ...pendingWarehouse].filter(item => {
+                    const itemDate = item.created_at || item.createdAt;
+                    if (!itemDate) return false;
+                    const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                    return itemDateStr === reportDay;
+                  });
+                  
+                  return filteredApprovals.length === 0 ? (
+                    <div style={{ padding: '32px 0', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+                      ✅ No pending requests for {new Date(reportDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Africa/Kigali' })}
+                    </div>
+                  ) : (
+                    filteredApprovals.map((item, idx) => {
+                    const isProd = pendingProductions.includes(item);
+                    const status = item.status || 'PENDING';
+                    const statusColor = status === 'APPROVED' ? '#10B981' : status === 'REJECTED' ? '#EF4444' : '#F59E0B';
+                    const statusBg = status === 'APPROVED' ? '#F0FDF4' : status === 'REJECTED' ? '#FEE2E2' : '#FEF3C7';
+                    
+                    return (
+                      <div key={`${isProd ? 'prod' : 'warehouse'}-${item.id || idx}`} style={{ padding: '16px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: isProd ? '#FB923C' : '#3B82F6', background: isProd ? 'rgba(251,146,60,0.1)' : 'rgba(59,130,246,0.1)', padding: '2px 10px', borderRadius: 20 }}>
+                              {isProd ? '🍳 PRODUCTION' : '📦 WAREHOUSE'}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: statusColor, background: statusBg, padding: '2px 10px', borderRadius: 20 }}>
+                              {status}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1D3557', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {isProd ? (item.menu_items?.name || 'Production') : (item.productName || 'Warehouse Request')}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                            {isProd ? `${item.actual_yield || 0} pcs · ${item.batch_size || 1} batch` : `${item.quantity || 0} units`}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setTab('approvals')}
+                          style={{
+                            padding: '6px 14px',
+                            background: '#EDF2F9',
+                            border: '1px solid #B8CCE4',
+                            color: '#1D3557',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    );
+                  })
+                  );
+                })()}
+              </div>
+
+              {([...pendingProductions, ...pendingWarehouse].filter(item => {
+                const itemDate = item.created_at || item.createdAt;
+                if (!itemDate) return false;
+                const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                return itemDateStr === reportDay;
+              }).length > 0) && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
+                  <button
+                    onClick={() => setTab('approvals')}
+                    className="btn primary"
+                    style={{ fontSize: 13, fontWeight: 700 }}
+                  >
+                    Go to Full Approvals Page
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Production Variance Report */}

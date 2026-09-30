@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useNavigate, useSearchParams, NavLink } from 'react-router-dom'
 import { api, getSession, clearSession } from '../../api'
 import { shouldShowAdminDashboard } from '../../utils/adminAccess.js'
 import { getDashboardLabel } from '../../utils/roles.js'
@@ -915,7 +915,7 @@ function ProductionRecordingScreen() {
 }
 
 
-export default function CashierDashboard() {
+export default function CashierDashboard({ initialTab = null }) {
   const nav = useNavigate()
   const session = getSession()
   const { role } = session
@@ -933,9 +933,10 @@ export default function CashierDashboard() {
   const showAdmin = shouldShowAdminDashboard(session, context) || isShopAdmin
   const canManageShift = role === 'CASHIER' || role === 'SHOP_ADMIN' || role === 'MANAGER' || showAdmin
 
-  // Query Params
+  // Query Params (for backward compatibility with old URLs)
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = searchParams.get('tab') || 'new'
+  // If initialTab is provided (via new routes), use it; otherwise fall back to query params (backward compat)
+  const tab = initialTab || searchParams.get('tab') || 'new'
   const editId = searchParams.get('edit')
   
   const setTab = (t) => {
@@ -1794,7 +1795,7 @@ export default function CashierDashboard() {
           </button>
 
           {showAdmin && (
-             <button className="cashier-btn-admin-dash" onClick={() => nav('/app/admin?tab=overview')}>
+             <button className="cashier-btn-admin-dash" onClick={() => nav('/app/admin/overview')}>
                <HiOutlineChartBar /> <span>{getDashboardLabel(role)}</span>
              </button>
            )}
@@ -1812,32 +1813,32 @@ export default function CashierDashboard() {
 
       {/* Tabs */}
       <div className="cashier-tabs">
-        <button className={`cashier-tab ${tab==='new'?'active':''}`} onClick={()=>setTab('new')}>
+        <NavLink to="/app/pos/new-order" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           + New Order
-        </button>
-        <button className={`cashier-tab ${tab==='pending'?'active':''}`} onClick={()=>setTab('pending')}>
+        </NavLink>
+        <NavLink to="/app/pos/pending" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <HiOutlineShoppingCart /> Pending
           <span className="cashier-tab-badge">{pending.length}</span>
-        </button>
-        <button className={`cashier-tab ${tab==='ready'?'active':''}`} onClick={()=>setTab('ready')}>
+        </NavLink>
+        <NavLink to="/app/pos/awaiting-payment" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <IoCafeOutline /> Awaiting Payment
           <span className="cashier-tab-badge blue">{filteredReadyOrders.length}</span>
-        </button>
-        <button className={`cashier-tab ${tab==='production'?'active':''}`} onClick={()=>setTab('production')}>
+        </NavLink>
+        <NavLink to="/app/pos/record-production" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <HiOutlineBeaker /> Record Production
-        </button>
-        {(role === 'CASHIER' || role === 'MANAGER' || role === 'STOREKEEPER') && (
-        <button className={`cashier-tab ${tab==='warehouse'?'active':''}`} onClick={()=>setTab('warehouse')}>
+        </NavLink>
+        {(role === 'CASHIER' || role === 'MANAGER' || role === 'STOREKEEPER' || role === 'SHOP_ADMIN') && (
+        <NavLink to="/app/pos/warehouse" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <HiOutlineCube /> Warehouse Requests
           <span className="cashier-tab-badge">{warehouseRequests.filter(r => r.status === 'PENDING').length}</span>
-        </button>
+        </NavLink>
         )}
-        <button className={`cashier-tab ${tab==='history'?'active':''}`} onClick={()=>setTab('history')}>
+        <NavLink to="/app/pos/history" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <HiOutlineClock /> History
-        </button>
-        <button className={`cashier-tab ${tab==='loans'?'active':''}`} onClick={()=>setTab('loans')}>
+        </NavLink>
+        <NavLink to="/app/pos/loans" className={({ isActive }) => isActive ? 'cashier-tab active' : 'cashier-tab'}>
           <HiOutlineReceiptPercent /> Loans
-        </button>
+        </NavLink>
       </div>
 
       <div className="cashier-main-area">

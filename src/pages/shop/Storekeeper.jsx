@@ -1870,7 +1870,7 @@ export default function Storekeeper() {
 
   useEffect(() => {
     const allowed = ['STOREKEEPER', 'SHOP_ADMIN', 'MANAGER']
-    if (role && !allowed.includes(role)) nav('/app/cashier', { replace: true })
+    if (role && !allowed.includes(role)) nav('/app/pos/new-order', { replace: true })
   }, [role, nav])
 
   useEffect(() => {

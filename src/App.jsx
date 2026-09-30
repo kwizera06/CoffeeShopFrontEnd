@@ -1,49 +1,36 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import Login from './pages/Login.jsx'
-import AdminHome from './pages/admin/AdminHome.jsx'
-import ShopLayout from './shop/ShopLayout.jsx'
-import Supplies from './pages/shop/Supplies.jsx'
-import Owner from './pages/shop/Owner.jsx'
-import Auditor from './pages/shop/Auditor.jsx'
-import Orders from './pages/shop/Orders.jsx'
-import Billing from './pages/shop/Billing.jsx'
-import ChefDashboard from './pages/shop/ChefDashboard.jsx'
-import CashierDashboard from './pages/shop/CashierDashboard.jsx'
-import Storekeeper from './pages/shop/Storekeeper.jsx'
-import { getSession } from './api'
+import { RouterProvider } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import router from './router.jsx'
+import { MaintenancePage } from './components/MaintenancePage.jsx'
+import { getMaintenanceState } from './api.js'
 import './screenshot-ui.css'
 
-function AppIndex() {
-  const { role } = getSession()
-  if (role === 'SHOP_ADMIN' || role === 'MANAGER') return <Navigate to="admin?tab=overview" replace />
-  if (role === 'AUDITOR') return <Navigate to="auditor" replace />
-  if (role === 'STOREKEEPER') return <Navigate to="storekeeper" replace />
-  if (role === 'CHEF') return <Navigate to="chef" replace />
-  return <Navigate to="cashier" replace />
-}
-
+/**
+ * App Component
+ * Uses RouterProvider with createBrowserRouter for better routing support
+ * The router configuration is defined in ./router.jsx
+ * 
+ * Wraps the app with maintenance mode detection to show MaintenancePage
+ * when a 503 maintenance response is received
+ */
 export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/admin" element={<AdminHome />} />
+  const [maintenanceActive, setMaintenanceActive] = useState(false)
 
-        <Route path="/app" element={<ShopLayout />}>
-          <Route index element={<AppIndex />} />
-          <Route path="cashier" element={<CashierDashboard />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="billing" element={<Billing />} />
-          <Route path="supplies" element={<Supplies />} />
-          <Route path="admin" element={<Owner />} />
-          <Route path="auditor" element={<Auditor />} />
-          <Route path="storekeeper" element={<Storekeeper />} />
-          <Route path="chef" element={<ChefDashboard />} />
-        </Route>
+  useEffect(() => {
+    // Check maintenance state periodically
+    const checkInterval = setInterval(() => {
+      const state = getMaintenanceState()
+      if (state.showPage) {
+        setMaintenanceActive(true)
+      }
+    }, 100)
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
-  )
+    return () => clearInterval(checkInterval)
+  }, [])
+
+  if (maintenanceActive) {
+    return <MaintenancePage onMaintenanceEnd={() => setMaintenanceActive(false)} />
+  }
+
+  return <RouterProvider router={router} />
 }
