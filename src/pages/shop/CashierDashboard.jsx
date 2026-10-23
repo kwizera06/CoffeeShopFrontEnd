@@ -935,21 +935,21 @@ export default function CashierDashboard({ initialTab = null }) {
 
   // Query Params (for backward compatibility with old URLs)
   const [searchParams, setSearchParams] = useSearchParams()
-  // If initialTab is provided (via new routes), use it; otherwise fall back to query params (backward compat)
-  const tab = initialTab || searchParams.get('tab') || 'new'
+  // If URL has tab param, use it (for edit functionality); else use initialTab; else default to 'new'
+  const tab = searchParams.get('tab') || initialTab || 'new'
   const editId = searchParams.get('edit')
   
   const setTab = (t) => {
-    // Gate the ready tab — only CASHIER, MANAGER, SHOP_ADMIN can enter directly
+    // Gate the ready tab — ALL users must verify with shift opener's PIN
     if (t === 'ready') {
-      const canEnterDirectly = role === 'CASHIER' || role === 'MANAGER' || role === 'SHOP_ADMIN'
-      if (!canEnterDirectly) {
-        // Waiter — show PIN gate
+      // Waiters are completely blocked - show informational modal
+      if (role === 'WAITER') {
         setShowReadyPinModal(true)
         setReadyPinInput('')
         setReadyPinError('')
         return
       }
+      // Everyone else (CASHIER, MANAGER, SHOP_ADMIN) must unlock with PIN
       if (!readyTabUnlocked) {
         setShowReadyPinModal(true)
         setReadyPinInput('')
@@ -1348,9 +1348,44 @@ export default function CashierDashboard({ initialTab = null }) {
         setLoadedLines(order.lines.map((l, i) => ({ ...l, __originalIndex: i })))
         setQtyById({})
         setHasRemovedItems(false)
-      }).catch(e => setError(e.message))
+      }).catch(e => {
+        setError(e.message)
+      })
     }
   }, [editId])
+
+  // Guard the Ready tab - enforce PIN check when navigating to it
+  useEffect(() => {
+    if (tab === 'ready') {
+      // Waiters are completely blocked
+      if (role === 'WAITER') {
+        setShowReadyPinModal(true)
+        setReadyPinInput('')
+        setReadyPinError('')
+        // Redirect back to pending tab
+        setSearchParams(prev => {
+          const next = new URLSearchParams(prev)
+          next.set('tab', 'pending')
+          return next
+        })
+        return
+      }
+      
+      // Everyone else must unlock with PIN if not already unlocked
+      if (!readyTabUnlocked) {
+        setShowReadyPinModal(true)
+        setReadyPinInput('')
+        setReadyPinError('')
+        // Redirect back to pending tab
+        setSearchParams(prev => {
+          const next = new URLSearchParams(prev)
+          next.set('tab', 'pending')
+          return next
+        })
+        return
+      }
+    }
+  }, [tab, readyTabUnlocked, role])
 
   /* --- ACTIONS --- */
 
@@ -1471,12 +1506,9 @@ export default function CashierDashboard({ initialTab = null }) {
         return
       }
 
-      // IMPORTANT: Only allow PIN from the cashier who opened the current shift
-      // Debug logs
-      console.log('Shift opened_by:', shift?.opened_by, 'Approver ID:', approver?.id, 'Match:', shift?.opened_by === approver?.id)
-      
-      if (shift && shift.opened_by && shift.opened_by !== approver.id) {
-        setPinError('This PIN belongs to a different cashier. Only the shift opener can modify orders.')
+      // Only allow PIN from the waiter/cashier assigned to this order
+      if (selectedWaiter && selectedWaiter !== approver.id) {
+        setPinError('This PIN belongs to a different waiter. Only the assigned waiter can modify this order.')
         setPinInput('')
         return
       }
@@ -2071,14 +2103,6 @@ export default function CashierDashboard({ initialTab = null }) {
                     >
                       {editId ? '📝 Update Order' : '✈️ Post Order'}
                     </button>
-                    <button
-                      className={`cashier-btn-submit ${cartLines.length > 0 ? 'active' : ''}`}
-                      disabled={cartLines.length === 0 || busy}
-                      onClick={() => submitOrder(true)}
-                      style={{ background: '#E8751A', borderColor: '#D06612' }}
-                    >
-                      {editId ? '🖨️ Update + Kitchen Ticket' : '🖨️ Post + Kitchen Ticket'}
-                    </button>
                   </div>
                </div>
             </div>
@@ -2170,7 +2194,14 @@ export default function CashierDashboard({ initialTab = null }) {
                      }}>
                         🖨️
                      </button>
-                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: '8px', borderColor: '#8B7355', color: '#E6CCB2', fontSize: '12px', minWidth: '100px'}} onClick={() => setSearchParams({ tab: 'new', edit: o.id })}>
+                     <button className="cashier-btn-close-shift" style={{flex: 1, padding: '8px', borderColor: '#8B7355', color: '#E6CCB2', fontSize: '12px', minWidth: '100px'}} onClick={() => {
+                        console.log('🔧 Edit button clicked for order:', o.id)
+                        const params = new URLSearchParams()
+                        params.set('tab', 'new')
+                        params.set('edit', o.id)
+                        console.log('🔧 Setting search params:', params.toString())
+                        setSearchParams(params)
+                     }}>
                         ✏️ Edit
                      </button>
                      <button className="cashier-btn-close-shift" style={{padding: '8px 10px', color: '#EF4444', borderColor: '#EF4444', fontSize: '14px'}} onClick={() => cancelOrderRequest(o.id)} title="Delete Order">
@@ -2971,8 +3002,8 @@ export default function CashierDashboard({ initialTab = null }) {
             <h3 style={{ marginBottom: 8 }}>🔒 {pendingClearAllItems ? 'Confirm Clear All Items' : 'Confirm Item Removal'}</h3>
             <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
               {pendingClearAllItems 
-                ? 'Enter the cashier/manager PIN to remove all items from this order'
-                : 'Enter the cashier/manager PIN (same as Awaiting Payment tab) to remove this item from the order'
+                ? 'Enter the waiter/cashier PIN (assigned to this table) to remove all items from this order'
+                : 'Enter the waiter/cashier PIN (assigned to this table) to remove this item from the order'
               }
             </p>
             <form onSubmit={confirmRemovalPin}>
@@ -3055,16 +3086,7 @@ export default function CashierDashboard({ initialTab = null }) {
                   s.security_key === readyPinInput.trim()
                 )
                 
-                // Debug logs
-                console.log('Ready Tab - Shift opened_by:', shift?.opened_by, 'Approver ID:', approver?.id, 'Match:', shift?.opened_by === approver?.id)
-                
-                // IMPORTANT: Only allow PIN from the cashier who opened the current shift
-                if (approver && shift && shift.opened_by && shift.opened_by !== approver.id) {
-                  setReadyPinError('This PIN belongs to a different cashier. Only the shift opener can access Ready tab.')
-                  setReadyPinInput('')
-                  return
-                }
-                
+                // Allow any valid CASHIER/MANAGER/SHOP_ADMIN PIN to access Ready tab
                 if (approver) {
                   setReadyTabUnlocked(true)
                   setShowReadyPinModal(false)
