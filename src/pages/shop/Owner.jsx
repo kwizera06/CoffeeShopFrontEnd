@@ -1059,7 +1059,7 @@ export default function Owner({ initialTab }) {
   // Helper function to update history date range
   function handleHistoryDateModeChange(mode) {
     const today = new Date().toISOString().split('T')[0]
-    let from, to
+    let from = historyFromDate, to = historyToDate
     
     if (mode === 'today') {
       from = today
