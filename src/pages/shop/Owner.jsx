@@ -388,6 +388,13 @@ export default function Owner({ initialTab }) {
   const [approvalLoading, setApprovalLoading]           = useState(false)
   const [approvalFilter, setApprovalFilter]             = useState('ALL') // ALL | PRODUCTION | WAREHOUSE
   
+  // Approval History
+  const [approvalsHistory, setApprovalsHistory]         = useState([])
+  const [historyLoading, setHistoryLoading]             = useState(false)
+  const [historyFromDate, setHistoryFromDate]           = useState(new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]) // Last 7 days
+  const [historyToDate, setHistoryToDate]               = useState(new Date().toISOString().split('T')[0]) // Today
+  const [historyDateMode, setHistoryDateMode]           = useState('custom') // 'today' | 'week' | 'month' | 'custom'
+  
   const [staffSearch, setStaffSearch] = useState('')
   const [staffFilter, setStaffFilter] = useState('ALL')
   const [staffAddType, setStaffAddType] = useState('WAITER')
@@ -986,6 +993,7 @@ export default function Owner({ initialTab }) {
     }
     if (allowed && ownerAccess && tab === 'approvals') {
       fetchPendingApprovals();
+      fetchApprovalsHistory(historyFromDate, historyToDate);
     }
   }, [allowed, ownerAccess, tab, fetchRequestedOrders]);
 
@@ -1034,6 +1042,42 @@ export default function Owner({ initialTab }) {
       setPendingWarehouse(data?.warehouseRequests || [])
     } catch (e) { setError(e.message) }
     finally { setApprovalLoading(false) }
+  }
+
+  async function fetchApprovalsHistory(fromDate, toDate) {
+    setHistoryLoading(true)
+    try {
+      const data = await api(`/api/shop/owner/approvals-history?fromDate=${fromDate}&toDate=${toDate}`)
+      setApprovalsHistory(data || [])
+    } catch (e) { 
+      setError(e.message)
+      setApprovalsHistory([])
+    }
+    finally { setHistoryLoading(false) }
+  }
+
+  // Helper function to update history date range
+  function handleHistoryDateModeChange(mode) {
+    const today = new Date().toISOString().split('T')[0]
+    let from, to
+    
+    if (mode === 'today') {
+      from = today
+      to = today
+    } else if (mode === 'week') {
+      to = today
+      from = new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]
+    } else if (mode === 'month') {
+      to = today
+      from = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]
+    }
+    
+    setHistoryDateMode(mode)
+    if (mode !== 'custom') {
+      setHistoryFromDate(from)
+      setHistoryToDate(to)
+      fetchApprovalsHistory(from, to)
+    }
   }
 
   async function handleApproveProduction(productionId) {
@@ -4493,6 +4537,139 @@ export default function Owner({ initialTab }) {
                   )}
                 </section>
               )}
+
+              {/* ── Approval History ── */}
+              <section style={{ marginTop: 48 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1D3557' }}>📋 Approval History</h2>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => handleHistoryDateModeChange('today')}
+                      style={{
+                        padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: historyDateMode === 'today' ? '#6366F1' : 'rgba(99,102,241,0.1)',
+                        color: historyDateMode === 'today' ? '#fff' : '#6366F1',
+                        border: 'none', cursor: 'pointer'
+                      }}
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => handleHistoryDateModeChange('week')}
+                      style={{
+                        padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: historyDateMode === 'week' ? '#6366F1' : 'rgba(99,102,241,0.1)',
+                        color: historyDateMode === 'week' ? '#fff' : '#6366F1',
+                        border: 'none', cursor: 'pointer'
+                      }}
+                    >
+                      This Week
+                    </button>
+                    <button
+                      onClick={() => handleHistoryDateModeChange('month')}
+                      style={{
+                        padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: historyDateMode === 'month' ? '#6366F1' : 'rgba(99,102,241,0.1)',
+                        color: historyDateMode === 'month' ? '#fff' : '#6366F1',
+                        border: 'none', cursor: 'pointer'
+                      }}
+                    >
+                      This Month
+                    </button>
+                  </div>
+                </div>
+
+                {historyDateMode === 'custom' && (
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#6B7280' }}>From:</label>
+                      <input
+                        type="date"
+                        value={historyFromDate}
+                        onChange={(e) => setHistoryFromDate(e.target.value)}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--admin-border)', fontSize: 12 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#6B7280' }}>To:</label>
+                      <input
+                        type="date"
+                        value={historyToDate}
+                        onChange={(e) => setHistoryToDate(e.target.value)}
+                        style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--admin-border)', fontSize: 12 }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => fetchApprovalsHistory(historyFromDate, historyToDate)}
+                      style={{
+                        padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                        background: '#6366F1', color: '#fff', border: 'none', cursor: 'pointer'
+                      }}
+                    >
+                      Filter
+                    </button>
+                  </div>
+                )}
+
+                {historyLoading ? (
+                  <div style={{ textAlign: 'center', padding: 40, color: '#6B7280' }}>
+                    <div className="loading-spinner" style={{ margin: '0 auto 12px' }}></div>
+                    Loading history...
+                  </div>
+                ) : approvalsHistory.length === 0 ? (
+                  <div style={{ background: 'var(--admin-card-bg)', border: '1px solid var(--admin-border)', borderRadius: 12, padding: 32, textAlign: 'center', color: '#9CA3AF' }}>
+                    📭 No approvals in this period
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {approvalsHistory.map((item, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: 'var(--admin-card-bg)',
+                          border: `1.5px solid ${item.status === 'APPROVED' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                          borderRadius: 12,
+                          padding: 16,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: 12
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#1D3557' }}>
+                            {item.item_name}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>
+                            {new Date(item.decision_date).toLocaleDateString('en-GB', { 
+                              day: '2-digit', month: 'short', year: 'numeric', 
+                              hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kigali' 
+                            })}
+                            {item.decided_by && ` • By ${item.decided_by}`}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800,
+                              background: item.status === 'APPROVED' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                              color: item.status === 'APPROVED' ? '#15803D' : '#DC2626'
+                            }}
+                          >
+                            {item.status === 'APPROVED' ? '✅ Approved' : '❌ Rejected'}
+                          </span>
+                          {item.batch_size && (
+                            <span style={{ fontSize: 12, color: '#6B7280', fontWeight: 600 }}>
+                              Batch: {item.batch_size}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
 
             </div>
           )}
