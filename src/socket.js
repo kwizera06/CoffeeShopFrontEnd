@@ -52,5 +52,9 @@ export const disconnectSocket = () => {
         socket.disconnect();
     }
 };
+export const onSocketEvent = (event, handler) => {
+  socket.off(event);
+  socket.on(event, handler);
+};
 
 export default socket;

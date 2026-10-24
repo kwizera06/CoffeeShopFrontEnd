@@ -28,6 +28,10 @@ import autoTable from 'jspdf-autotable'
 import { 
   HiOutlineCalendarDays,
   HiOutlineCurrencyDollar,
+} from 'react-icons/hi2'
+
+import useProcessing from '../../hooks/useProcessing';
+import { 
   HiOutlineBanknotes,
   HiOutlineDevicePhoneMobile,
   HiOutlineCreditCard,
@@ -48,7 +52,7 @@ import {
 import { IoCafeOutline } from 'react-icons/io5'
 import { MdOutlineLocalFireDepartment, MdOutlineReceiptLong } from 'react-icons/md'
 
-import socket, { connectSocket, disconnectSocket } from '../../socket'
+import socket, { connectSocket, disconnectSocket, onSocketEvent } from '../../socket'
 import './OwnerModern.css'
 import { canAccessDashboard, canAccessTab, getDashboardLabel, isManagerRole, isOwnerRole, staffRoleLabel, staffRoleStyle } from '../../utils/roles.js'
 
