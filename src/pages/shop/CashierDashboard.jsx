@@ -552,6 +552,72 @@ function ProductionRecordingScreen() {
                   }}
                 />
               </div>
+
+              {/* Dropdown list of filtered products */}
+              {productionSearch && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: '#FFFFFF',
+                  border: '1px solid #D1D5DB',
+                  borderTop: 'none',
+                  borderRadius: '0 0 8px 8px',
+                  maxHeight: 300,
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                }}>
+                  {products
+                    .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
+                    .length === 0 ? (
+                    <div style={{ padding: 12, fontSize: 13, color: '#6B7280', textAlign: 'center' }}>
+                      No products found matching "{productionSearch}"
+                    </div>
+                  ) : (
+                    products
+                      .filter(p => p.name.toLowerCase().includes(productionSearch.toLowerCase()))
+                      .map((product) => (
+                        <div
+                          key={product.id}
+                          onClick={() => {
+                            onProductSelect(product.id)
+                            setProductionSearch('')
+                          }}
+                          style={{
+                            padding: '10px 12px',
+                            borderBottom: '1px solid #E5E7EB',
+                            cursor: 'pointer',
+                            background: selectedProduct?.id === product.id ? '#F0F9FF' : '#FFFFFF',
+                            transition: 'background 0.15s',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = '#F3F4F6';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = selectedProduct?.id === product.id ? '#F0F9FF' : '#FFFFFF';
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>
+                              {product.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                              {product.category} • Stock: {product.currentStock.toFixed(2)}
+                            </div>
+                          </div>
+                          {product.hasRecipe && (
+                            <span style={{ fontSize: 20, marginLeft: 8 }}>✓</span>
+                          )}
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
