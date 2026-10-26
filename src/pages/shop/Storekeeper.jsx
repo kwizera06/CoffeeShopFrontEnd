@@ -1349,7 +1349,7 @@ function StockRequestScreen() {
                 <div style={{ fontSize: 12, color: '#374151' }}>
                   {(r.requisition_items || []).map(it => (
                     <span key={it.id} style={{ display: 'inline-block', marginRight: 12 }}>
-                      {it.item_name} — {it.approved_qty ?? it.quantity} {it.unit}
+                      {it.item_name} — {Number(it.quantity || 0)} {it.unit}
                     </span>
                   ))}
                 </div>
@@ -1591,7 +1591,7 @@ function ReceiveDeliveryScreen() {
                     </div>
                     <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
                       {(r.requisition_items || []).map(it =>
-                        `${it.item_name} (${it.sent_qty ?? it.approved_qty ?? it.quantity} ${it.unit})`
+                        `${it.item_name} (${Number(it.quantity || 0)} ${it.unit})`
                       ).join(' · ')}
                     </div>
                   </div>
